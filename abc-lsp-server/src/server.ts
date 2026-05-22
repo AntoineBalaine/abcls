@@ -215,11 +215,7 @@ connection.onInitialize((params: InitializeParams) => {
     };
   }
 
-  const hasFormattingCapability = !!capabilities.textDocument?.formatting?.dynamicRegistration;
-
-  if (hasFormattingCapability) {
-    result.capabilities.documentFormattingProvider = true;
-  }
+  result.capabilities.documentFormattingProvider = true;
 
   return result;
 });

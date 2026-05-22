@@ -527,8 +527,10 @@ function generateEditCommands(edits: LspTextEdit[], lines: string[], selectionRa
       continue; // Skip invalid ranges
     }
 
-    // Base64 encode the replacement text
-    const base64Text = Buffer.from(edit.newText, "utf8").toString("base64");
+    // Escape single quotes for Kakscript single-quoted strings (' → '').
+    // This avoids %sh{} which strips trailing newlines (like POSIX command substitution),
+    // which would silently eat any \n at the end of the replacement text.
+    const kakEscaped = edit.newText.replace(/'/g, "''");
 
     if (isInsert) {
       // For insertions, we need to position cursor and insert
@@ -536,12 +538,12 @@ function generateEditCommands(edits: LspTextEdit[], lines: string[], selectionRa
       const line = edit.range.start.line + 1; // 1-indexed
       const col = utf16ToByteOffset(lines[edit.range.start.line] || "", edit.range.start.character) + 1;
       commands.push(`select ${line}.${col},${line}.${col}`);
-      commands.push(`set-register a %sh{printf '%s' '${base64Text}' | base64 -d}`);
+      commands.push(`set-register a '${kakEscaped}'`);
       commands.push(`execute-keys '"aP'`);
     } else {
       // For replacements
       commands.push(`select ${kakRange}`);
-      commands.push(`set-register a %sh{printf '%s' '${base64Text}' | base64 -d}`);
+      commands.push(`set-register a '${kakEscaped}'`);
       commands.push(`execute-keys '"aR'`);
     }
 
