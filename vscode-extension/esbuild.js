@@ -33,7 +33,7 @@ async function main() {
     sourcesContent: !production,
     platform: "node",
     outfile: "dist/extension.js",
-    external: ["vscode", "abcls-native"],
+    external: ["vscode", "abcls-native", "jazz-midi"],
     logLevel: "silent",
     plugins: [esbuildProblemMatcherPlugin],
   });

@@ -3,6 +3,7 @@
 src/**
 out/**
 node_modules
+!node_modules/jazz-midi/**
 .gitignore
 .yarnrc
 .npmrc

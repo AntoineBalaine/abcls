@@ -246,10 +246,9 @@ export namespace MIDIIn {
   };
 
   const getInputMIDIDevices = async () => {
-    const inputs: string[] = JZZ()
-      .info()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .inputs.map((x: any) => x.name);
+    const engine = await JZZ();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const inputs: string[] = engine.info().inputs.map((x: any) => x.name);
     return inputs;
   };
 
