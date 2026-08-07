@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.10 (2026-08-07)
+
+### fix
+
+- enharmonize on a selected chord was a no-op: the redundant per-note cursor flipped each note straight back to its original spelling
+- octave transpose on a selected chord applied the shift twice (e.g. octave-down on [fa] produced [F,A,] instead of [FA])
+
 ## 0.1.9 (2026-08-07)
 
 ### fix
