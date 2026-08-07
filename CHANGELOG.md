@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8 (2026-08-07)
+
+### chore
+
+- VS Code extension publishing: switched from a Personal Access Token to Microsoft Entra ID workload identity federation, since the PAT had expired and Azure DevOps retires global PATs on 2026-12-01
+
 ## 0.1.7 (2026-08-07)
 
 ### fix
