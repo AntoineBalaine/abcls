@@ -2,7 +2,7 @@
   "name": "abc-ls",
   "displayName": "abc-ls",
   "description": "",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "publisher": "antoinebalaine",
   "repository": "https://github.com/AntoineBalaine/abcls",
   "engines": {
