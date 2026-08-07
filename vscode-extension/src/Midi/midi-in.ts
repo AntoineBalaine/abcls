@@ -156,42 +156,47 @@ export namespace MIDIIn {
     }
   };
   export const processNote = (MIDINoteNumber: number, keyDown: boolean, MIDIInputConfig: MIDIInputConfig) => (outputNoteFn: OutputNotesFnType) => {
-    const { accidentals, relativeMode } = MIDIInputConfig;
+    const { accidentals, relativeMode, chordMode, chordTimeWindow } = MIDIInputConfig;
 
     if (keyDown) {
-      const currentTime = Date.now();
-      // Add note to active notes
+      // Add note to active notes. A newly-pressed note means the current gesture
+      // isn't finished yet, so any pending chord finalization must be cancelled.
       activeNotes.add(MIDINoteNumber);
-      MIDIInState.lastNoteTime = currentTime;
-    } else {
-      // Note is released
-      // If this is the first note being released after the last note was pressed
-      if (activeNotes.has(MIDINoteNumber)) {
-        // Clear any existing timeout
-        if (MIDIInState.chordTimeout) {
-          clearTimeout(MIDIInState.chordTimeout);
-        }
-        outputNoteFn(activeNotes, accidentals, relativeMode);
-
-        // If we've waited longer than the chord window, output everything as a chord
-        // if (timeSinceLastNote > chordTimeWindow) {
-        //   // Output as a chord if we have multiple notes
-        //   outputNoteFn(activeNotes, accidentals, relativeMode);
-        //   activeNotes.clear();
-        // } else {
-        //   // Start a timeout to wait for more possible chord notes
-        //   MIDIInState.chordTimeout = setTimeout(() => {
-        //     if (activeNotes.size > 0) {
-        //       outputNoteFn(activeNotes, accidentals, relativeMode);
-        //       activeNotes.clear();
-        //     }
-        //   }, chordTimeWindow);
-        // }
-
-        // Remove the released note
-        activeNotes.delete(MIDINoteNumber);
+      MIDIInState.lastNoteTime = Date.now();
+      if (MIDIInState.chordTimeout) {
+        clearTimeout(MIDIInState.chordTimeout);
+        MIDIInState.chordTimeout = null;
       }
+      return;
     }
+
+    // Note is released. Ignore releases for notes we weren't tracking.
+    if (!activeNotes.has(MIDINoteNumber)) {
+      return;
+    }
+
+    if (!chordMode) {
+      // Chord grouping is disabled: output this single note as soon as it's released.
+      outputNoteFn(new Set([MIDINoteNumber]), accidentals, relativeMode);
+      activeNotes.delete(MIDINoteNumber);
+      return;
+    }
+
+    // Chord grouping is enabled. Because a chord's notes are rarely released at the
+    // exact same millisecond, we debounce: each release (re)starts the chord window,
+    // and only once no more releases (or presses) happen within that window do we
+    // write out the whole set of notes that were held together. Notes are deliberately
+    // NOT removed from activeNotes here, since the final write needs the full chord.
+    if (MIDIInState.chordTimeout) {
+      clearTimeout(MIDIInState.chordTimeout);
+    }
+    MIDIInState.chordTimeout = setTimeout(() => {
+      if (activeNotes.size > 0) {
+        outputNoteFn(activeNotes, accidentals, relativeMode);
+        activeNotes.clear();
+      }
+      MIDIInState.chordTimeout = null;
+    }, chordTimeWindow);
   };
 
   // ._receive is passed to JZZ from jzz-midi-smf

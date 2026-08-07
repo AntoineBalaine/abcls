@@ -761,9 +761,35 @@
         },
         "abc.midiInput.chordMode": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "group": "MIDI Input",
           "description": "Chord mode in music entry. Registers notes that are pressed and held together as a chord instead of sequential notes.",
+          "scope": "resource"
+        },
+        "abc.midiInput.chordTimeWindow": {
+          "type": "number",
+          "default": 50,
+          "minimum": 0,
+          "group": "MIDI Input",
+          "description": "When chord mode is on, the number of milliseconds to wait after a note is released before writing out the chord. Increase this if chords played on your keyboard are being split into several separate chords.",
+          "scope": "resource"
+        },
+        "abc.midiInput.accidentals": {
+          "type": "string",
+          "enum": [
+            "sharps",
+            "flats"
+          ],
+          "default": "flats",
+          "group": "MIDI Input",
+          "description": "Whether accidentals are written as sharps or flats when transcribing MIDI input.",
+          "scope": "resource"
+        },
+        "abc.midiInput.relativeMode": {
+          "type": "boolean",
+          "default": false,
+          "group": "MIDI Input",
+          "description": "Write notes in ABC relative-octave notation instead of absolute octave marks.",
           "scope": "resource"
         },
         "abc.renderer.responsive": {
