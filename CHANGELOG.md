@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9 (2026-08-07)
+
+### fix
+
+- MIDI chord input inserting an extra leading space before the chord bracket
+
 ## 0.1.8 (2026-08-07)
 
 ### chore

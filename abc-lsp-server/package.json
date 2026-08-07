@@ -1,6 +1,6 @@
 {
   "name": "abcls-server",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Language Server for ABC music notation",
   "main": "../out/abc-lsp-server/server.js",
   "scripts": {
