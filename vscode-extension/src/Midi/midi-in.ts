@@ -127,7 +127,7 @@ export namespace MIDIIn {
         return midiNumberToNoteName(noteArray[0], accidentals, relativeMode);
       } else if (notes.size > 1) {
         // chord
-        return ` [${noteArray.map((note) => midiNumberToNoteName(note, accidentals, relativeMode)).join("")}]`;
+        return `[${noteArray.map((note) => midiNumberToNoteName(note, accidentals, relativeMode)).join("")}]`;
       }
     } catch (err) {
       logger(`Error outputting note: ${err}`, LogLevel.error, false);
