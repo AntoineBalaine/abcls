@@ -56,6 +56,10 @@ jobs:
   publish-vscode:
     needs: build-and-test
     runs-on: ubuntu-latest
+    environment: vsce-publish
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -64,12 +68,15 @@ jobs:
           cache: "npm"
       - run: npm install
       - run: npm run build:ci
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - name: Package and publish VS Code extension
         run: |
           npm run package:vscode
-          npx vsce publish --packagePath abc-ls-*.vsix
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          npx vsce publish --packagePath abc-ls-*.vsix --azure-credential
 
   deploy-docs:
     needs: build-and-test
