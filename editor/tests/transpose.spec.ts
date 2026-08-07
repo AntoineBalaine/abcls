@@ -304,6 +304,36 @@ describe("transpose", () => {
       expect(midis[2]).to.equal(74); // d
     });
 
+    it("octave-down on [fa] yields [FA]", () => {
+      const { root, ctx, snapshots } = toCSTreeWithSnapshots("X:1\nK:C\n[fa]|\n");
+      const chords = findByTag(root, TAGS.Chord);
+      const sel: Selection = { root, cursors: [new Set([chords[0].id])] };
+      transpose(sel, -12, ctx, snapshots);
+      const formatted = formatSelection(sel);
+      expect(formatted).to.contain("[FA]");
+    });
+
+    // Regression test: the LSP builds cursors from a range match against the
+    // default [Note, Chord] tag set, which matches both a Chord and its child
+    // Notes independently. That produced one cursor for the Chord and one more
+    // per Note, all pointing at the same notes. Since transposition is additive
+    // (not a toggle like enharmonize), the redundant per-note cursor applied
+    // the shift a second time, so octave-down on a selected chord shifted it
+    // down two octaves instead of one (e.g. [fa] -> [F,A,] instead of [FA]).
+    // See commit 43af3ab.
+    it("octave-down on [fa] via overlapping Chord + Note cursors still yields [FA] (not a double shift)", () => {
+      const { root, ctx, snapshots } = toCSTreeWithSnapshots("X:1\nK:C\n[fa]|\n");
+      const chords = findByTag(root, TAGS.Chord);
+      const notes = findByTag(root, TAGS.Note);
+      const sel: Selection = {
+        root,
+        cursors: [new Set([chords[0].id]), ...notes.map((n) => new Set([n.id]))],
+      };
+      transpose(sel, -12, ctx, snapshots);
+      const formatted = formatSelection(sel);
+      expect(formatted).to.contain("[FA]");
+    });
+
     it("transposes only the selected note when cursor selects one note", () => {
       const { root, ctx, snapshots } = toCSTreeWithSnapshots("X:1\nK:C\nC D E|\n");
       const notes = findByTag(root, TAGS.Note);

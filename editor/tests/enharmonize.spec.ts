@@ -356,6 +356,36 @@ describe("enharmonize", () => {
     });
   });
 
+  describe("example-based (chords)", () => {
+    it("[_E_A] via the Chord node id becomes [^D^G]", () => {
+      const { root, ctx } = toCSTreeWithContext("X:1\nK:C\n[_E_A]|\n");
+      const chords = findByTag(root, TAGS.Chord);
+      const sel: Selection = { root, cursors: [new Set([chords[0].id])] };
+      enharmonize(sel, ctx);
+      const formatted = formatSelection(sel);
+      expect(formatted).to.contain("[^D^G]");
+    });
+
+    // Regression test: the LSP builds cursors from a range match against the
+    // default [Note, Chord] tag set, which matches both a Chord and its child
+    // Notes independently. That produced one cursor for the Chord and one more
+    // per Note, all pointing at the same notes. Because respelling is a toggle,
+    // the redundant per-note cursor flipped each note straight back, making
+    // enharmonize on a selected chord a no-op. See commit 43af3ab.
+    it("[_E_A] via overlapping Chord + Note cursors still becomes [^D^G] (not a no-op)", () => {
+      const { root, ctx } = toCSTreeWithContext("X:1\nK:C\n[_E_A]|\n");
+      const chords = findByTag(root, TAGS.Chord);
+      const notes = findByTag(root, TAGS.Note);
+      const sel: Selection = {
+        root,
+        cursors: [new Set([chords[0].id]), ...notes.map((n) => new Set([n.id]))],
+      };
+      enharmonize(sel, ctx);
+      const formatted = formatSelection(sel);
+      expect(formatted).to.contain("[^D^G]");
+    });
+  });
+
   describe("property-based", () => {
     it("enharmonize preserves the MIDI pitch of every selected note", () => {
       fc.assert(
