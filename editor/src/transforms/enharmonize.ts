@@ -69,16 +69,27 @@ export function fromMidiPitchFlat(midiPitch: number, ctx: ABCContext): Pitch {
 }
 
 export function enharmonize(selection: Selection, ctx: ABCContext): Selection {
+  // A range-based selection can independently match both a Chord and its child
+  // Notes (e.g. the LSP's default tag set is [Note, Chord]), producing separate
+  // cursors for the same notes. Since respelling is a toggle, processing a note
+  // twice would flip it back to its original spelling. Track already-processed
+  // note IDs so a note handled via its parent Chord is not respelled again when
+  // it also shows up as its own cursor.
+  const processedNoteIds = new Set<number>();
+
   for (const cursor of selection.cursors) {
     const nodes = findNodesById(selection.root, cursor);
     for (const csNode of nodes) {
       if (csNode.tag === TAGS.Note) {
+        if (processedNoteIds.has(csNode.id)) continue;
         enharmonizePitchChild(csNode, ctx);
+        processedNoteIds.add(csNode.id);
       } else if (csNode.tag === TAGS.Chord) {
         let current = csNode.firstChild;
         while (current !== null) {
-          if (current.tag === TAGS.Note) {
+          if (current.tag === TAGS.Note && !processedNoteIds.has(current.id)) {
             enharmonizePitchChild(current, ctx);
+            processedNoteIds.add(current.id);
           }
           current = current.nextSibling;
         }

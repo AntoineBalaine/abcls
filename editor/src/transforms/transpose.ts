@@ -40,16 +40,26 @@ import { findNodesById } from "./types";
 export function transpose(selection: Selection, semitones: number, ctx: ABCContext, snapshots: DocumentSnapshots): Selection {
   if (semitones === 0) return selection;
 
+  // A range-based selection can independently match both a Chord and its child
+  // Notes (e.g. the LSP's default tag set is [Note, Chord]), producing separate
+  // cursors for the same notes. Without deduplication, a note handled via its
+  // parent Chord would be transposed a second time when it also shows up as
+  // its own cursor. Track already-processed note IDs to guard against this.
+  const processedNoteIds = new Set<number>();
+
   for (const cursor of selection.cursors) {
     const nodes = findNodesById(selection.root, cursor);
     for (const csNode of nodes) {
       if (csNode.tag === TAGS.Note) {
+        if (processedNoteIds.has(csNode.id)) continue;
         transposePitchChild(csNode, semitones, ctx, snapshots);
+        processedNoteIds.add(csNode.id);
       } else if (csNode.tag === TAGS.Chord) {
         let current = csNode.firstChild;
         while (current !== null) {
-          if (current.tag === TAGS.Note) {
+          if (current.tag === TAGS.Note && !processedNoteIds.has(current.id)) {
             transposePitchChild(current, semitones, ctx, snapshots);
+            processedNoteIds.add(current.id);
           }
           current = current.nextSibling;
         }
