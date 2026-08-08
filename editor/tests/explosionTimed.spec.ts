@@ -1107,4 +1107,71 @@ describe("explosion CSTree end-to-end", () => {
       expect(result.cursors.length).to.equal(2);
     });
   });
+
+  describe("multi-tune documents", () => {
+    // Tune 1's content line is line 2, tune 2's is line 6
+    const TWO_DEFERRED = "X:1\nK:C\n[CE] [DF]|\n\nX:2\nK:C\n[EG] [FA]|\n";
+
+    it("selection in the second tune explodes that tune, not the first", () => {
+      const { selection, ctx, snapshots } = createLspStyleTestContext(TWO_DEFERRED, 6, 0, 6, 100);
+
+      const result = explosion(selection, ["1", "2"], ctx, snapshots);
+      const text = serializeSelection(result, ctx);
+
+      expect(text).to.equal("X:1\nK:C\n[CE] [DF]|\n\nX:2\nK:C\n[EG] [FA]|\n[V:1]G A|\n[V:2]E F|\n");
+      expect(result.cursors.length).to.equal(2);
+      expect(result.cursors[0].size).to.be.greaterThan(0);
+    });
+
+    it("selection in the first tune leaves the second tune untouched", () => {
+      const { selection, ctx, snapshots } = createLspStyleTestContext(TWO_DEFERRED, 2, 0, 2, 100);
+
+      const result = explosion(selection, ["1", "2"], ctx, snapshots);
+      const text = serializeSelection(result, ctx);
+
+      expect(text).to.equal("X:1\nK:C\n[CE] [DF]|\n[V:1]E F|\n[V:2]C D|\n\nX:2\nK:C\n[EG] [FA]|\n");
+    });
+
+    it("selection spanning two tunes explodes both", () => {
+      const { selection, ctx, snapshots } = createLspStyleTestContext(TWO_DEFERRED, 2, 0, 6, 100);
+
+      const result = explosion(selection, ["1", "2"], ctx, snapshots);
+      const text = serializeSelection(result, ctx);
+
+      expect(text).to.equal("X:1\nK:C\n[CE] [DF]|\n[V:1]E F|\n[V:2]C D|\n\nX:2\nK:C\n[EG] [FA]|\n[V:1]G A|\n[V:2]E F|\n");
+      // The created IDs of both tunes are merged into one cursor per target voice
+      expect(result.cursors.length).to.equal(2);
+    });
+
+    it("a tune holding no selection is left byte-identical", () => {
+      const source = "X:1\nK:C\n[CE] [DF]|\n\nX:2\nK:C\n[EG] [FA]|\n\nX:3\nK:C\n[GB] [Ac]|\n";
+      // The middle tune's content line is line 6
+      const { selection, ctx, snapshots } = createLspStyleTestContext(source, 6, 0, 6, 100);
+
+      const result = explosion(selection, ["1", "2"], ctx, snapshots);
+      const text = serializeSelection(result, ctx);
+
+      expect(text).to.include("X:1\nK:C\n[CE] [DF]|\n");
+      expect(text).to.include("X:3\nK:C\n[GB] [Ac]|\n");
+      // Only the middle tune gained voice lines
+      expect(text.split("[V:1]").length - 1).to.equal(1);
+    });
+
+    it("each tune is processed by the algorithm its own style calls for", () => {
+      // Tune 1 is deferred, tune 2 is linear. Because ctx.tuneLinear holds only the last
+      // tune's value after parsing, dispatching from it would run the linear algorithm
+      // against tune 1 as well.
+      const source = "X:1\nK:C\n[CE] [DF]|\n\nX:2\n%%abcls-parse linear\nK:C\n[EG] [FA]|\n";
+      const { selection, ctx, snapshots } = createLspStyleTestContext(source, 2, 0, 2, 100);
+
+      const result = explosion(selection, ["1", "2"], ctx, snapshots);
+      const text = serializeSelection(result, ctx);
+
+      // Tune 1 is exploded the deferred way, with the new voices on their own lines
+      expect(text).to.include("X:1\nK:C\n[CE] [DF]|\n[V:1]E F|\n[V:2]C D|\n");
+      // Tune 2 keeps its linear directive and its content
+      expect(text).to.include("%%abcls-parse linear");
+      expect(text).to.include("[EG] [FA]|");
+    });
+  });
 });

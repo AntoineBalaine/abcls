@@ -21,12 +21,12 @@ import {
 import * as barmap from "../context/csBarMap";
 import { CSNode, TAGS, isTokenNode, getTokenData, createCSNode, FormattingData } from "../csTree/types";
 import { Selection } from "../selection";
-import { findFirstByTag, findNodeById, firstTokenData, walkByTag } from "../selectors/treeWalk";
+import { findNodeById, firstTokenData, walkByTag } from "../selectors/treeWalk";
 import { isVoiceMarker, extractVoiceId } from "../selectors/voiceSelector";
 import { computeNodeRange, rangesOverlap } from "../utils/rangeUtils";
 import { consolidateRests } from "./consolidateRests";
 import { collectSiblingIds } from "./explode";
-import { findTuneBody, collectNotesFromChord } from "./lineUtils";
+import { collectNotesFromChord, createEolNode, findBodyOfTune, findTunesWithSelection, isEolNode, nodeOrDescendantInSet } from "./lineUtils";
 import { rhythmToRational, rationalToRhythm } from "./rhythm";
 import { noteToRest, chordToRest } from "./toRest";
 import { getCursorRange } from "./toSlashNotation";
@@ -1009,12 +1009,13 @@ function collectVoiceMarkerCallback(node: CSNode, ctx: VoiceMarkerCtx): void {
 /**
  * Derives the set of source voice IDs from the selection. We compute the
  * selection's bounding range, resolve the starting voice from snapshots,
- * then walk the tree for voice markers that fall within that range.
+ * then walk the given tune body for voice markers that fall within that range.
+ *
+ * The tune body is supplied by the caller rather than resolved here, because the caller
+ * knows which tune the selection belongs to. Resolving it here would walk the first tune of
+ * the document and therefore miss every voice marker in any later tune.
  */
-export function getVoiceIdsFromSelection(selection: Selection, snapshots: DocumentSnapshots): Set<string> {
-  const tuneBody = findTuneBody(selection.root);
-  if (!tuneBody) return new Set();
-
+export function getVoiceIdsFromSelection(selection: Selection, tuneBody: CSNode, snapshots: DocumentSnapshots): Set<string> {
   const allIds = new Set<number>();
   for (const cursor of selection.cursors) {
     for (const id of cursor) {
@@ -1184,20 +1185,25 @@ function explodeParts(
  * clone (no Tune_Body wrapper needed), run the explosion which appends
  * new voice content inside the System, then replace the original System
  * with the modified clone.
+ *
+ * The tune body to work on and the map collecting the created node IDs are both supplied by
+ * the caller, because a single call to the explosion transform may have to process several
+ * tunes and merge their results.
  */
-function explosionLinear(selection: Selection, targetVoiceIds: string[], ctx: ABCContext, snapshots: DocumentSnapshots): Selection {
-  const tuneBody = findTuneBody(selection.root);
-  if (!tuneBody || tuneBody.tag !== TAGS.Tune_Body) return selection;
+function explosionLinear(
+  selection: Selection,
+  tuneBody: CSNode,
+  targetVoiceIds: string[],
+  ctx: ABCContext,
+  snapshots: DocumentSnapshots,
+  outputSelections: Map<string, Set<number>>
+): void {
+  if (tuneBody.tag !== TAGS.Tune_Body) return;
 
-  const sourceVoiceIds = getVoiceIdsFromSelection(selection, snapshots);
-  if (sourceVoiceIds.size > 1) return selection;
+  const sourceVoiceIds = getVoiceIdsFromSelection(selection, tuneBody, snapshots);
+  if (sourceVoiceIds.size > 1) return;
 
   const voiceOrder = tuneBody.data.voices;
-
-  const outputSelections = new Map<string, Set<number>>();
-  for (const id of targetVoiceIds) {
-    outputSelections.set(id, new Set());
-  }
 
   // Iterate cursors in reverse so that earlier positions remain valid
   for (let ci = selection.cursors.length - 1; ci >= 0; ci--) {
@@ -1247,11 +1253,6 @@ function explosionLinear(selection: Selection, targetVoiceIds: string[], ctx: AB
       currentSystem = nextSystem;
     }
   }
-
-  return {
-    root: selection.root,
-    cursors: targetVoiceIds.map((id) => outputSelections.get(id) ?? new Set()),
-  };
 }
 
 // --- explosionDeferred ---
@@ -1261,33 +1262,47 @@ function explosionLinear(selection: Selection, targetVoiceIds: string[], ctx: AB
  * system). We clone the entire Tune_Body, build the bar map from the clone,
  * run the explosion, then replace the original Tune_Body with the modified
  * clone.
+ *
+ * The tune body to work on and the map collecting the created node IDs are both supplied by
+ * the caller, because a single call to the explosion transform may have to process several
+ * tunes and merge their results.
  */
-function explosionDeferred(selection: Selection, targetVoiceIds: string[], ctx: ABCContext, snapshots: DocumentSnapshots): Selection {
-  const tuneBody = findTuneBody(selection.root);
-  if (!tuneBody || tuneBody.tag !== TAGS.Tune_Body) return selection;
+function explosionDeferred(
+  selection: Selection,
+  tuneBody: CSNode,
+  targetVoiceIds: string[],
+  ctx: ABCContext,
+  snapshots: DocumentSnapshots,
+  outputSelections: Map<string, Set<number>>
+): void {
+  if (tuneBody.tag !== TAGS.Tune_Body) return;
 
-  const sourceVoiceIds = getVoiceIdsFromSelection(selection, snapshots);
-  if (sourceVoiceIds.size > 1) return selection;
+  const sourceVoiceIds = getVoiceIdsFromSelection(selection, tuneBody, snapshots);
+  if (sourceVoiceIds.size > 1) return;
 
   const voiceOrder = tuneBody.data.voices;
 
-  const outputSelections = new Map<string, Set<number>>();
-  for (const id of targetVoiceIds) {
-    outputSelections.set(id, new Set());
-  }
-
   // Clone the entire Tune_Body (preserving IDs for position data)
   const clonedTuneBody = cloneSubtree(tuneBody, () => ctx.generateId(), true);
+
+  // Because the voice lines appended below each open on a line of their own, a body whose
+  // final line carries no terminator needs one first, which is the case for every tune but
+  // the last. The body's original ending is restored once the work is done, so that the
+  // newline already following the tune does not become an extra blank line.
+  const bodyNeededTerminator = !bodyEndsWithEol(clonedTuneBody);
+  if (bodyNeededTerminator) {
+    appendEolToBody(clonedTuneBody, ctx);
+  }
 
   // Resolve the starting voice from the first token in the first System
   let firstSystem: CSNode | null = clonedTuneBody.firstChild;
   while (firstSystem !== null && firstSystem.tag !== TAGS.System) {
     firstSystem = firstSystem.nextSibling;
   }
-  if (!firstSystem) return selection;
+  if (!firstSystem) return;
 
   const firstTok = firstTokenData(firstSystem);
-  if (!firstTok) return selection;
+  if (!firstTok) return;
 
   const startingVoiceId = getSnapshotAtPosition(snapshots, encode(firstTok.line, firstTok.position)).voiceId;
   const barMap = barmap.buildMap(clonedTuneBody, startingVoiceId);
@@ -1304,32 +1319,141 @@ function explosionDeferred(selection: Selection, targetVoiceIds: string[], ctx: 
     explodeParts(parts, barMap, barRange, cursorRange, clonedTuneBody, ctx, outputSelections, voiceOrder, "deferred");
   }
 
+  if (bodyNeededTerminator) {
+    removeTrailingEolFromBody(clonedTuneBody);
+  }
+
   // Replace the original Tune_Body with the modified clone
   replace(tuneBody, clonedTuneBody);
+}
 
-  return {
-    root: selection.root,
-    cursors: targetVoiceIds.map((id) => outputSelections.get(id) ?? new Set()),
-  };
+/**
+ * Returns the last System child of a tune body, or null when it has none.
+ */
+function lastSystemOf(tuneBody: CSNode): CSNode | null {
+  let lastSystem: CSNode | null = null;
+  let child = tuneBody.firstChild;
+  while (child !== null) {
+    if (child.tag === TAGS.System) {
+      lastSystem = child;
+    }
+    child = child.nextSibling;
+  }
+  return lastSystem;
+}
+
+/**
+ * Returns the last child of a node, or null when it has none.
+ */
+function lastChildOf(node: CSNode): CSNode | null {
+  let lastChild: CSNode | null = null;
+  let child = node.firstChild;
+  while (child !== null) {
+    lastChild = child;
+    child = child.nextSibling;
+  }
+  return lastChild;
+}
+
+/**
+ * Reports whether a tune body's final line carries a terminator. In every tune but the last
+ * one, the newline that ends the final line is not part of the tune body, so appending a
+ * voice line would run it onto that line instead of giving it a line of its own.
+ */
+function bodyEndsWithEol(tuneBody: CSNode): boolean {
+  const lastSystem = lastSystemOf(tuneBody);
+  if (lastSystem === null) return true;
+  const lastChild = lastChildOf(lastSystem);
+  return lastChild !== null && isEolNode(lastChild);
+}
+
+/**
+ * Appends a terminator to a tune body's final line.
+ */
+function appendEolToBody(tuneBody: CSNode, ctx: ABCContext): void {
+  const lastSystem = lastSystemOf(tuneBody);
+  if (lastSystem === null) return;
+  appendChild(lastSystem, createEolNode(ctx));
+}
+
+/**
+ * Removes the terminator from a tune body's final line, restoring a body that did not carry
+ * one before voice lines were appended to it. Without this the newline that already follows
+ * the tune outside its body would show up as an extra blank line.
+ */
+function removeTrailingEolFromBody(tuneBody: CSNode): void {
+  const lastSystem = lastSystemOf(tuneBody);
+  if (lastSystem === null) return;
+  const lastChild = lastChildOf(lastSystem);
+  if (lastChild !== null && isEolNode(lastChild)) {
+    remove(lastChild);
+  }
 }
 
 // --- explosion (entry dispatcher) ---
 
 /**
- * Dispatches to explosionLinear or explosionDeferred according to the style of the tune
- * being worked on. The explosion transform splits chords into separate voices.
+ * Returns the cursors that address a node inside the given tune.
  *
- * The style is read from the tune node itself rather than from ctx.tuneLinear, because that
- * field is reset once per tune while parsing and therefore ends up holding only whatever
- * the last tune left behind, which misdescribes every earlier tune in the document.
+ * Because both explosion algorithms drive their work from cursor ranges rather than from
+ * line membership, a cursor belonging to another tune cannot simply fail to match. It would
+ * resolve to a bar range computed against the wrong tune's bar map, so the cursors have to
+ * be partitioned before either algorithm sees them.
+ */
+function cursorsInsideTune(cursors: Set<number>[], tune: CSNode): Set<number>[] {
+  return cursors.filter((cursor) => nodeOrDescendantInSet(tune, cursor));
+}
+
+/**
+ * Explodes the selection into the given target voices, splitting chords across them.
+ *
+ * Each tune holding a selected node is processed on its own, against its own body, and by
+ * the algorithm its own style calls for: linear when all voices share a system, deferred
+ * when each voice occupies its own. The style is read from the tune node rather than from
+ * ctx.tuneLinear, because that field is reset once per tune while parsing and therefore ends
+ * up holding only whatever the last tune left behind.
+ *
+ * The created node IDs of every tune are merged per target voice, so the returned selection
+ * holds one cursor per target voice spanning the whole document.
  */
 export function explosion(selection: Selection, targetVoiceIds: string[], ctx: ABCContext, snapshots: DocumentSnapshots): Selection {
-  const tune = findFirstByTag(selection.root, TAGS.Tune);
-  if (tune === null) return selection;
-
-  if ((tune.data as FormattingData).linear) {
-    return explosionLinear(selection, targetVoiceIds, ctx, snapshots);
-  } else {
-    return explosionDeferred(selection, targetVoiceIds, ctx, snapshots);
+  const selectedIds = new Set<number>();
+  for (const cursor of selection.cursors) {
+    for (const id of cursor) {
+      selectedIds.add(id);
+    }
   }
+
+  const tunes = findTunesWithSelection(selection.root, selectedIds);
+  if (tunes.length === 0) return selection;
+
+  const outputSelections = new Map<string, Set<number>>();
+  for (const id of targetVoiceIds) {
+    outputSelections.set(id, new Set());
+  }
+
+  // Process the tunes from last to first, so that an insertion never shifts the position of
+  // content not yet processed.
+  for (let tuneIndex = tunes.length - 1; tuneIndex >= 0; tuneIndex--) {
+    const tune = tunes[tuneIndex];
+
+    const tuneBody = findBodyOfTune(tune);
+    if (tuneBody === null) continue;
+
+    const cursors = cursorsInsideTune(selection.cursors, tune);
+    if (cursors.length === 0) continue;
+
+    const tuneSelection: Selection = { root: selection.root, cursors };
+
+    if ((tune.data as FormattingData).linear) {
+      explosionLinear(tuneSelection, tuneBody, targetVoiceIds, ctx, snapshots, outputSelections);
+    } else {
+      explosionDeferred(tuneSelection, tuneBody, targetVoiceIds, ctx, snapshots, outputSelections);
+    }
+  }
+
+  return {
+    root: selection.root,
+    cursors: targetVoiceIds.map((id) => outputSelections.get(id) ?? new Set()),
+  };
 }
