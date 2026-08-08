@@ -1,6 +1,6 @@
 {
   "name": "abcls",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "ABC notation language server and CLI tools",
   "bin": {
     "abcls": "./abcls.js"

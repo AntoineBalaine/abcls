@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.11 (2026-08-07)
+
+### fix
+
+- scanner undercounted line numbers across section breaks spanning more than one blank line, corrupting LSP syntax highlighting for everything after
+- a standalone y-spacer was never preceded by a space when formatted (y-spacers inside a beam are unaffected)
+
 ## 0.1.10 (2026-08-07)
 
 ### fix
