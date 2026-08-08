@@ -1,6 +1,7 @@
 import assert from "assert";
 import { describe, it } from "mocha";
-import { TT, fileHeader } from "../parsers/scan";
+import { ABCContext } from "../parsers/Context";
+import { TT, fileHeader, Scanner } from "../parsers/scan";
 import { scanTune } from "../parsers/scan_tunebody";
 import { Expr } from "../types/Expr";
 import { createCtx } from "./scn_tuneBodyTokens.spec";
@@ -179,5 +180,62 @@ ABC DEF|
     for (let i = 0; i < expectedTypes.length; i++) {
       assert.equal(ctx.tokens[i].type, expectedTypes[i], `Token at index ${i} should be ${expectedTypes[i]} but was ${ctx.tokens[i].type}`);
     }
+  });
+});
+
+describe("section break line tracking", () => {
+  // A section break can span more than one blank line (`pSectionBrk` matches
+  // one newline followed by one-or-more further newlines). Each additional
+  // blank line must still advance `ctx.line` by the actual number of newlines
+  // consumed, or every token scanned afterwards reports the wrong line.
+  function lineOf(source: string, needle: string): number {
+    const idx = source.indexOf(needle);
+    return source.slice(0, idx).split("\n").length - 1;
+  }
+
+  it("should advance the line count correctly across a single blank line", () => {
+    const source = `X:1\nK:C\nABC|\n\nX:2\nK:C\nDEF|`;
+    const ctx = new ABCContext();
+    const tokens = Scanner(source, ctx);
+
+    const secondTuneHeader = tokens.find((t) => t.type === TT.INF_HDR && t.lexeme === "X:" && t.line >= lineOf(source, "X:2"));
+    assert.ok(secondTuneHeader, "expected to find the second tune's X: token");
+    assert.equal(secondTuneHeader!.line, lineOf(source, "X:2"));
+  });
+
+  it("should advance the line count correctly across two blank lines", () => {
+    const source = `X:1\nK:C\nABC|\n\n\nX:2\nK:C\nDEF|`;
+    const ctx = new ABCContext();
+    const tokens = Scanner(source, ctx);
+
+    const sectBrk = tokens.find((t) => t.type === TT.SCT_BRK)!;
+    assert.equal(sectBrk.lexeme, "\n\n\n");
+
+    const secondTuneHeader = tokens.find((t) => t.type === TT.INF_HDR && t.lexeme === "X:" && t.position === 0 && t.line > sectBrk.line);
+    assert.ok(secondTuneHeader, "expected to find the second tune's X: token");
+    assert.equal(secondTuneHeader!.line, lineOf(source, "X:2"));
+  });
+
+  it("should advance the line count correctly across three blank lines", () => {
+    const source = `X:1\nK:C\nABC|\n\n\n\nX:2\nK:C\nDEF|`;
+    const ctx = new ABCContext();
+    const tokens = Scanner(source, ctx);
+
+    const sectBrk = tokens.find((t) => t.type === TT.SCT_BRK)!;
+    assert.equal(sectBrk.lexeme, "\n\n\n\n");
+
+    const secondTuneHeader = tokens.find((t) => t.type === TT.INF_HDR && t.lexeme === "X:" && t.position === 0 && t.line > sectBrk.line);
+    assert.ok(secondTuneHeader, "expected to find the second tune's X: token");
+    assert.equal(secondTuneHeader!.line, lineOf(source, "X:2"));
+  });
+
+  it("should keep every token's line number correct for content following a multi-blank-line section break", () => {
+    const source = `X:1\nK:C\nABC|\n\n\nX:2\nT:try this\nK:C\nDEF|`;
+    const ctx = new ABCContext();
+    const tokens = Scanner(source, ctx);
+
+    const titleInfoStr = tokens.find((t) => t.type === TT.INFO_STR && t.lexeme === "try this");
+    assert.ok(titleInfoStr, "expected to find the second tune's T: value token");
+    assert.equal(titleInfoStr!.line, lineOf(source, "try this"));
   });
 });

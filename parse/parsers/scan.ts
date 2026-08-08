@@ -141,7 +141,7 @@ export function sectionBreak(ctx: Ctx): boolean {
   if (!match) return false;
   ctx.current += match[0].length;
   ctx.push(TT.SCT_BRK);
-  ctx.line += 2;
+  ctx.line += (match[0].match(/\n/g) || []).length;
   return true;
 }
 
