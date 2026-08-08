@@ -1,10 +1,10 @@
 import { cloneSubtree, appendChild, insertAfter, remove } from "abcls-cstree";
-import { ABCContext, TT } from "abcls-parser";
-import { createCSNode, CSNode, TAGS, isTokenNode, getTokenData } from "../csTree/types";
+import { ABCContext } from "abcls-parser";
+import { createCSNode, CSNode, TAGS } from "../csTree/types";
 import { Selection } from "../selection";
 import { findByTag } from "../selectors/treeWalk";
 import { consolidateRests } from "./consolidateRests";
-import { groupElementsBySourceLine, collectNotesFromChord, nodeOrDescendantInSet } from "./lineUtils";
+import { groupElementsBySourceLine, collectNotesFromChord, nodeOrDescendantInSet, isEolNode, createEolNode } from "./lineUtils";
 import { noteToRest, chordToRest } from "./toRest";
 import { unwrapSingle } from "./unwrapSingle";
 
@@ -107,26 +107,6 @@ function walkAndFilter(treeRoot: CSNode, startNode: CSNode | null, partIndex: nu
 
     current = next;
   }
-}
-
-/**
- * Returns true when the node is an end-of-line Token.
- */
-function isEolNode(node: CSNode): boolean {
-  return isTokenNode(node) && getTokenData(node).tokenType === TT.EOL;
-}
-
-/**
- * Creates an end-of-line Token node. The line and position are -1 because the
- * token has no counterpart in the source text.
- */
-function createEolNode(ctx: ABCContext): CSNode {
-  return createCSNode(TAGS.Token, ctx.generateId(), {
-    lexeme: "\n",
-    tokenType: TT.EOL,
-    line: -1,
-    position: -1,
-  });
 }
 
 /**

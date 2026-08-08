@@ -2,15 +2,28 @@ import { cloneSubtree, appendChild, insertAfter, remove } from "abcls-cstree";
 import { ABCContext, TT } from "abcls-parser";
 import { createCSNode, CSNode, TAGS, isTokenNode, getTokenData } from "../csTree/types";
 import { Selection } from "../selection";
-import { findFirstByTag } from "../selectors/treeWalk";
-import { addVoice } from "./addVoice";
-import { groupElementsBySourceLine, reassignIds, findTuneBody, findTargetNote, nodeOrDescendantInSet } from "./lineUtils";
+import { addVoiceToHeader } from "./addVoice";
+import {
+  groupElementsBySourceLine,
+  reassignIds,
+  findTargetNote,
+  nodeOrDescendantInSet,
+  findTunesWithSelection,
+  findHeaderOfTune,
+  findBodyOfTune,
+  isEolNode,
+  createEolNode,
+} from "./lineUtils";
 import { noteToRest, chordToRest } from "./toRest";
 
 /**
  * Inserts a new voice line by duplicating lines containing selected notes.
  * Non-selected notes are converted to rests, preserving rhythm.
  * If the voice ID doesn't exist in the header, it is added automatically.
+ *
+ * Because a document may contain several tunes, each tune that holds a selected node is
+ * processed on its own, against its own header and its own body. A selection spanning two
+ * tunes therefore inserts a voice line in both of them.
  */
 export function insertVoiceLine(selection: Selection, voiceName: string, ctx: ABCContext): Selection {
   // Flatten all cursor sets into a single Set of selected node IDs
@@ -25,89 +38,109 @@ export function insertVoiceLine(selection: Selection, voiceName: string, ctx: AB
     return selection;
   }
 
-  // Add voice to header if missing
-  if (!voiceExistsInHeader(selection.root, voiceName)) {
-    addVoice(selection, voiceName, {}, ctx);
-  }
-
-  // Find the Tune_Body
-  const tuneBody = findTuneBody(selection.root);
-  if (!tuneBody) {
+  const tunes = findTunesWithSelection(selection.root, selectedIds);
+  if (tunes.length === 0) {
     return selection;
   }
 
-  // Group Tune_Body children by their source line number
-  const elementsByLine = groupElementsBySourceLine(tuneBody);
+  // Process the tunes from last to first, for the same reason we process lines from last to
+  // first: an insertion must not shift the position of content not yet processed.
+  for (let tuneIndex = tunes.length - 1; tuneIndex >= 0; tuneIndex--) {
+    const tune = tunes[tuneIndex];
 
-  // Find which source lines contain selected nodes
-  const linesWithSelection = new Set<number>();
-  for (const [lineNum, elements] of elementsByLine) {
-    for (const elem of elements) {
-      if (nodeOrDescendantInSet(elem, selectedIds)) {
-        linesWithSelection.add(lineNum);
-        break;
+    const tuneBody = findBodyOfTune(tune);
+    if (!tuneBody) continue;
+
+    // Add the voice to this tune's own header if it declares no such voice
+    const tuneHeader = findHeaderOfTune(tune);
+    if (tuneHeader !== null && !voiceExistsInHeader(tuneHeader, voiceName)) {
+      addVoiceToHeader(tuneHeader, voiceName, {}, ctx);
+    }
+
+    // Group Tune_Body children by their source line number
+    const elementsByLine = groupElementsBySourceLine(tuneBody);
+
+    // Find which source lines contain selected nodes
+    const linesWithSelection = new Set<number>();
+    for (const [lineNum, elements] of elementsByLine) {
+      for (const elem of elements) {
+        if (nodeOrDescendantInSet(elem, selectedIds)) {
+          linesWithSelection.add(lineNum);
+          break;
+        }
       }
     }
-  }
 
-  // Sort line numbers in descending order to process from end to start
-  const sortedLines = Array.from(linesWithSelection).sort((a, b) => b - a);
+    // Sort line numbers in descending order to process from end to start
+    const sortedLines = Array.from(linesWithSelection).sort((a, b) => b - a);
 
-  // Process each line that has selections
-  for (const lineNum of sortedLines) {
-    const elements = elementsByLine.get(lineNum);
-    if (!elements || elements.length === 0) continue;
+    // Process each line that has selections
+    for (const lineNum of sortedLines) {
+      const elements = elementsByLine.get(lineNum);
+      if (!elements || elements.length === 0) continue;
 
-    // Clone all elements on this line using cloneSubtree (preserves IDs for now, reassigned later)
-    const clonedElements: CSNode[] = elements.map((e) => cloneSubtree(e, () => e.id, true));
+      // Clone all elements on this line using cloneSubtree (preserves IDs for now, reassigned later)
+      const clonedElements: CSNode[] = elements.map((e) => cloneSubtree(e, () => e.id, true));
 
-    // Build a temporary container to hold the chain during processing
-    const tempContainer = createCSNode(TAGS.System, -1, null);
+      // Build a temporary container to hold the chain during processing
+      const tempContainer = createCSNode(TAGS.System, -1, null);
 
-    // Build the cloned chain: voice marker, space, then cloned elements
-    const voiceMarker = createInlineVoiceMarker(voiceName, ctx);
-    const spaceAfterMarker = createCSNode(TAGS.Token, ctx.generateId(), {
-      lexeme: " ",
-      tokenType: TT.WS,
-      line: 0,
-      position: 0,
-    });
+      // Build the cloned chain: voice marker, space, then cloned elements
+      const voiceMarker = createInlineVoiceMarker(voiceName, ctx);
+      const spaceAfterMarker = createCSNode(TAGS.Token, ctx.generateId(), {
+        lexeme: " ",
+        tokenType: TT.WS,
+        line: 0,
+        position: 0,
+      });
 
-    // Link nodes into temp container using appendChild
-    appendChild(tempContainer, voiceMarker);
-    appendChild(tempContainer, spaceAfterMarker);
-    for (const cloned of clonedElements) {
-      appendChild(tempContainer, cloned);
-    }
+      // Link nodes into temp container using appendChild
+      appendChild(tempContainer, voiceMarker);
+      appendChild(tempContainer, spaceAfterMarker);
+      for (const cloned of clonedElements) {
+        appendChild(tempContainer, cloned);
+      }
 
-    // Remove grace groups before non-selected notes (must be done before note-to-rest conversion)
-    removeUnselectedGraceGroups(spaceAfterMarker, selectedIds);
+      // Remove grace groups before non-selected notes (must be done before note-to-rest conversion)
+      removeUnselectedGraceGroups(spaceAfterMarker, selectedIds);
 
-    // Process cloned elements: convert non-selected to rests
-    let processNode: CSNode | null = spaceAfterMarker.nextSibling;
-    while (processNode !== null) {
-      processElementForVoiceInsert(processNode, selectedIds, ctx);
-      processNode = processNode.nextSibling;
-    }
+      // Process cloned elements: convert non-selected to rests
+      let processNode: CSNode | null = spaceAfterMarker.nextSibling;
+      while (processNode !== null) {
+        processElementForVoiceInsert(processNode, selectedIds, ctx);
+        processNode = processNode.nextSibling;
+      }
 
-    // Reassign IDs to voice marker, space, and all cloned elements
-    reassignIds(voiceMarker, ctx);
-    spaceAfterMarker.id = ctx.generateId();
-    for (const cloned of clonedElements) {
-      reassignIds(cloned, ctx);
-    }
+      // Reassign IDs to voice marker, space, and all cloned elements
+      reassignIds(voiceMarker, ctx);
+      spaceAfterMarker.id = ctx.generateId();
+      for (const cloned of clonedElements) {
+        reassignIds(cloned, ctx);
+      }
 
-    // Insert the chain after the last original element on this line.
-    // Detach all nodes from the temp container and insert them after lastOriginal.
-    const lastOriginal = elements[elements.length - 1];
-    let insertAnchor = lastOriginal;
-    let toMove = tempContainer.firstChild;
-    while (toMove !== null) {
-      const next = toMove.nextSibling;
-      remove(toMove);
-      insertAfter(insertAnchor, toMove);
-      insertAnchor = toMove;
-      toMove = next;
+      // Insert the chain after the last original element on this line.
+      // Detach all nodes from the temp container and insert them after lastOriginal.
+      const lastOriginal = elements[elements.length - 1];
+      let insertAnchor: CSNode = lastOriginal;
+
+      // In every tune but the last, the newline terminating the line is not part of the tune
+      // body, so the clone carries none either. We open a new line ahead of the clone rather
+      // than terminating it, because the newline that closes the inserted line already sits
+      // outside the tune body.
+      if (!isEolNode(lastOriginal)) {
+        const eol = createEolNode(ctx);
+        insertAfter(insertAnchor, eol);
+        insertAnchor = eol;
+      }
+
+      let toMove = tempContainer.firstChild;
+      while (toMove !== null) {
+        const next = toMove.nextSibling;
+        remove(toMove);
+        insertAfter(insertAnchor, toMove);
+        insertAnchor = toMove;
+        toMove = next;
+      }
     }
   }
 
@@ -187,14 +220,9 @@ function removeUnselectedNotesFromChord(chord: CSNode, selectedIds: Set<number>)
 }
 
 /**
- * Checks if a voice with the given ID exists in the tune header.
+ * Checks if a voice with the given ID is declared in the given tune header.
  */
-function voiceExistsInHeader(root: CSNode, voiceId: string): boolean {
-  const tuneHeader = findTuneHeader(root);
-  if (!tuneHeader) {
-    return false;
-  }
-
+function voiceExistsInHeader(tuneHeader: CSNode, voiceId: string): boolean {
   let current = tuneHeader.firstChild;
   while (current !== null) {
     if (current.tag === TAGS.Info_line) {
@@ -247,13 +275,6 @@ function extractVoiceIdFromValueChild(valueChild: CSNode): string | null {
   }
 
   return null;
-}
-
-/**
- * Finds the Tune_header in the tree.
- */
-function findTuneHeader(root: CSNode): CSNode | null {
-  return findFirstByTag(root, TAGS.Tune_header);
 }
 
 /**

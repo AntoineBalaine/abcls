@@ -190,6 +190,59 @@ describe("insertVoiceLine", () => {
     });
   });
 
+  describe("multi-tune documents", () => {
+    const TWO_TUNES = "X:1\nT:first\nK:C\nC D E |\n\nX:2\nT:second\nK:C\nG A B |\n";
+
+    it("selection in the second tune inserts the voice line there, not in the first", () => {
+      const { root, ctx } = toCSTreeWithContext(TWO_TUNES);
+      const notes = findByTag(root, TAGS.Note);
+      // The second tune's notes are G, A, B, which follow the first tune's C, D, E
+      const sel: Selection = { root, cursors: [new Set([notes[3].id])] };
+
+      insertVoiceLine(sel, "V2", ctx);
+
+      const result = formatSelection(sel);
+      // The voice line and its V: declaration belong to the second tune
+      expect(result).to.include("[V:V2]");
+      const firstTuneText = result.slice(0, result.indexOf("X:2"));
+      expect(firstTuneText).to.not.include("[V:V2]");
+      expect(firstTuneText).to.not.include("V:V2\n");
+    });
+
+    it("selection spanning two tunes inserts a voice line in each", () => {
+      const { root, ctx } = toCSTreeWithContext(TWO_TUNES);
+      const notes = findByTag(root, TAGS.Note);
+      const sel: Selection = {
+        root,
+        cursors: [new Set([notes[0].id]), new Set([notes[3].id])],
+      };
+
+      insertVoiceLine(sel, "V2", ctx);
+
+      const result = formatSelection(sel);
+      const markerCount = result.split("[V:V2]").length - 1;
+      expect(markerCount).to.equal(2);
+      // Each tune declares the voice in its own header
+      const headers = findByTag(root, TAGS.Tune_header);
+      expect(headers.length).to.equal(2);
+    });
+
+    it("the inserted line in a non-final tune stands on its own line", () => {
+      const { root, ctx } = toCSTreeWithContext(TWO_TUNES);
+      const notes = findByTag(root, TAGS.Note);
+      const sel: Selection = { root, cursors: [new Set([notes[0].id])] };
+
+      insertVoiceLine(sel, "V2", ctx);
+
+      const result = formatSelection(sel);
+      // The voice line must not be appended onto the original line (no barline followed by
+      // the marker on the same line), and the blank line separating the tunes must survive
+      expect(result).to.not.match(/\|[ \t]*\[V:V2\]/);
+      expect(result).to.match(/C D E \|\n\[V:V2\]/);
+      expect(result).to.include("\n\nX:2");
+    });
+  });
+
   describe("property-based tests", () => {
     it("duplicated line has same number of note/rest elements as original", () => {
       fc.assert(

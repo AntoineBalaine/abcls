@@ -1,6 +1,6 @@
-import { ABCContext } from "abcls-parser";
-import { CSNode, TAGS, isTokenNode, getTokenData } from "../csTree/types";
-import { findFirstByTag } from "../selectors/treeWalk";
+import { ABCContext, TT } from "abcls-parser";
+import { createCSNode, CSNode, TAGS, isTokenNode, getTokenData } from "../csTree/types";
+import { findByTag, findFirstByTag } from "../selectors/treeWalk";
 
 /**
  * Recursively collects elements from a container node into a line number map.
@@ -70,9 +70,56 @@ export function reassignIds(node: CSNode, ctx: ABCContext): void {
 
 /**
  * Finds the Tune_Body in the tree.
+ *
+ * Because this returns the first Tune_Body in document order, it is only correct for a
+ * document holding a single tune. A transform driven by a selection must instead resolve
+ * the tune that holds the selection, using findTunesWithSelection.
  */
 export function findTuneBody(root: CSNode): CSNode | null {
   return findFirstByTag(root, TAGS.Tune_Body);
+}
+
+/**
+ * Returns the tunes that contain at least one of the given node IDs, in document order.
+ * Because nodeOrDescendantInSet stops at the first match, a tune holding no selected node
+ * is discarded without its subtree being walked in full.
+ */
+export function findTunesWithSelection(root: CSNode, selectedIds: Set<number>): CSNode[] {
+  return findByTag(root, TAGS.Tune).filter((tune) => nodeOrDescendantInSet(tune, selectedIds));
+}
+
+/**
+ * Finds the Tune_header of a single tune.
+ */
+export function findHeaderOfTune(tune: CSNode): CSNode | null {
+  return findFirstByTag(tune, TAGS.Tune_header);
+}
+
+/**
+ * Finds the Tune_Body of a single tune.
+ */
+export function findBodyOfTune(tune: CSNode): CSNode | null {
+  return findFirstByTag(tune, TAGS.Tune_Body);
+}
+
+/**
+ * Returns true when the node is an end-of-line Token.
+ */
+export function isEolNode(node: CSNode): boolean {
+  return isTokenNode(node) && getTokenData(node).tokenType === TT.EOL;
+}
+
+/**
+ * Creates an end-of-line Token node. The line and position are -1 because the token has no
+ * counterpart in the source text.
+ */
+export function createEolNode(ctx: ABCContext): CSNode {
+  return createCSNode(TAGS.Token, ctx.generateId(), {
+    lexeme: "\n",
+    tokenType: TT.EOL,
+    line: -1,
+    position: -1,
+  });
 }
 
 /**
