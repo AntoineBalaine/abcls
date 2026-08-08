@@ -58,8 +58,9 @@ function createCsNodeFromAst(node: Expr | Token): CSNode {
       position: node.position,
     });
   }
-  if (node instanceof File_structure) return createCSNode(TAGS.File_structure, node.id, null);
-  if (node instanceof Tune) return createCSNode(TAGS.Tune, node.id, null);
+  if (node instanceof File_structure)
+    return createCSNode(TAGS.File_structure, node.id, { linear: node.linear, formatterConfig: structuredClone(node.formatterConfig) });
+  if (node instanceof Tune) return createCSNode(TAGS.Tune, node.id, { linear: node.linear, formatterConfig: structuredClone(node.formatterConfig) });
   if (node instanceof Tune_header) return createCSNode(TAGS.Tune_header, node.id, null);
   if (node instanceof Tune_Body) return createCSNode(TAGS.Tune_Body, node.id, { voices: node.voices });
   if (node instanceof Info_line) return createCSNode(TAGS.Info_line, node.id, null);

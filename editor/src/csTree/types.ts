@@ -1,5 +1,5 @@
 import type { CSNode as CSTNode, CSNodeOf, ParentRef } from "abcls-cstree";
-import { TT } from "abcls-parser";
+import { TT, FormatterConfig } from "abcls-parser";
 
 export type { ParentRef, CSNodeOf };
 
@@ -14,7 +14,19 @@ export interface TuneBodyData {
   voices: string[];
 }
 
-export type NodeData = TokenData | TuneBodyData | null;
+/**
+ * The two properties that govern how a tune is formatted. A Tune node carries its own
+ * values, and the File_structure node carries the file-level values that each tune starts
+ * from. Because both are lost when the tree is converted back to an AST unless they are
+ * stored here, they must travel with the node rather than being read from the ABCContext,
+ * whose tuneLinear field holds only whatever the last parsed tune left behind.
+ */
+export interface FormattingData {
+  linear: boolean;
+  formatterConfig: FormatterConfig;
+}
+
+export type NodeData = TokenData | TuneBodyData | FormattingData | null;
 
 export enum TAGS {
   File_structure = "File_structure",
@@ -64,8 +76,8 @@ export enum TAGS {
 }
 
 export type EditorDataMap = {
-  [TAGS.File_structure]: null;
-  [TAGS.Tune]: null;
+  [TAGS.File_structure]: FormattingData;
+  [TAGS.Tune]: FormattingData;
   [TAGS.Tune_header]: null;
   [TAGS.Tune_Body]: TuneBodyData;
   [TAGS.System]: null;

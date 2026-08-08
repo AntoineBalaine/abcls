@@ -47,7 +47,7 @@ import {
   tune_body_code,
   Beam_contents,
 } from "abcls-parser";
-import { CSNode, TAGS, isTokenNode, getTokenData, TuneBodyData } from "./types";
+import { CSNode, TAGS, isTokenNode, getTokenData, TuneBodyData, FormattingData } from "./types";
 
 function collectChildren(node: CSNode): CSNode[] {
   const result: CSNode[] = [];
@@ -112,11 +112,11 @@ function buildExpr(node: CSNode, children: Array<Expr | Token>): Expr {
     case TAGS.SymbolLine:
       return buildSymbolLine(node.id, children);
     case TAGS.Tune:
-      return buildTune(node.id, children);
+      return buildTune(node, children);
     case TAGS.Tune_header:
       return buildTuneHeader(node.id, children);
     case TAGS.File_structure:
-      return buildFileStructure(node.id, children);
+      return buildFileStructure(node, children);
     case TAGS.File_header:
       return buildFileHeader(node.id, children);
     case TAGS.Rhythm:
@@ -718,13 +718,16 @@ function buildTuneBody(id: number, children: Array<Expr | Token>): Tune_Body {
   return new Tune_Body(id, [children as tune_body_code[]], []);
 }
 
-function buildTune(id: number, children: Array<Expr | Token>): Tune {
+function buildTune(node: CSNode, children: Array<Expr | Token>): Tune {
   const header = children[0] as Tune_header;
   const body = children.length > 1 ? (children[1] as Tune_Body) : undefined;
-  return new Tune(id, header, body ?? null);
+  // The tune's own linear flag and formatter config are restored from the node, because
+  // letting them fall back to their defaults would re-serialize a linear tune as deferred.
+  const formatting = node.data as FormattingData;
+  return new Tune(node.id, header, body ?? null, formatting.linear, structuredClone(formatting.formatterConfig));
 }
 
-function buildFileStructure(id: number, children: Array<Expr | Token>): File_structure {
+function buildFileStructure(node: CSNode, children: Array<Expr | Token>): File_structure {
   let fileHeader: File_header | null = null;
   let contentsStart = 0;
   if (children.length > 0 && children[0] instanceof File_header) {
@@ -732,5 +735,6 @@ function buildFileStructure(id: number, children: Array<Expr | Token>): File_str
     contentsStart = 1;
   }
   const contents = children.slice(contentsStart) as Array<Tune | Token>;
-  return new File_structure(id, fileHeader, contents);
+  const formatting = node.data as FormattingData;
+  return new File_structure(node.id, fileHeader, contents, formatting.linear, structuredClone(formatting.formatterConfig));
 }

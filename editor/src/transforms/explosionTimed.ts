@@ -19,9 +19,9 @@ import {
   isInfiniteRational,
 } from "abcls-parser/Visitors/fmt/rational";
 import * as barmap from "../context/csBarMap";
-import { CSNode, TAGS, isTokenNode, getTokenData, createCSNode } from "../csTree/types";
+import { CSNode, TAGS, isTokenNode, getTokenData, createCSNode, FormattingData } from "../csTree/types";
 import { Selection } from "../selection";
-import { findNodeById, firstTokenData, walkByTag } from "../selectors/treeWalk";
+import { findFirstByTag, findNodeById, firstTokenData, walkByTag } from "../selectors/treeWalk";
 import { isVoiceMarker, extractVoiceId } from "../selectors/voiceSelector";
 import { computeNodeRange, rangesOverlap } from "../utils/rangeUtils";
 import { consolidateRests } from "./consolidateRests";
@@ -1316,11 +1316,18 @@ function explosionDeferred(selection: Selection, targetVoiceIds: string[], ctx: 
 // --- explosion (entry dispatcher) ---
 
 /**
- * Dispatches to explosionLinear or explosionDeferred based on ctx.tuneLinear.
- * The explosion transform splits chords into separate voices.
+ * Dispatches to explosionLinear or explosionDeferred according to the style of the tune
+ * being worked on. The explosion transform splits chords into separate voices.
+ *
+ * The style is read from the tune node itself rather than from ctx.tuneLinear, because that
+ * field is reset once per tune while parsing and therefore ends up holding only whatever
+ * the last tune left behind, which misdescribes every earlier tune in the document.
  */
 export function explosion(selection: Selection, targetVoiceIds: string[], ctx: ABCContext, snapshots: DocumentSnapshots): Selection {
-  if (ctx.tuneLinear) {
+  const tune = findFirstByTag(selection.root, TAGS.Tune);
+  if (tune === null) return selection;
+
+  if ((tune.data as FormattingData).linear) {
     return explosionLinear(selection, targetVoiceIds, ctx, snapshots);
   } else {
     return explosionDeferred(selection, targetVoiceIds, ctx, snapshots);
