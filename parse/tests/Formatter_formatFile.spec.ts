@@ -228,6 +228,34 @@ K:C
       assert.equal(result, expected);
     });
 
+    it("precedes a standalone y-spacer with a space, even when glued to a barline in the input", () => {
+      const input = `X:1
+K:C
+A |y`;
+
+      const expected = `X:1
+K:C
+A | y`;
+
+      const ast = parseFile(input, ctx);
+      const result = formatter.formatFile(ast);
+      assert.equal(result, expected);
+    });
+
+    it("leaves a y-spacer glued inside a beam alone (beam joining is unaffected)", () => {
+      const input = `X:1
+K:C
+Ay2B|`;
+
+      const expected = `X:1
+K:C
+Ay2B |`;
+
+      const ast = parseFile(input, ctx);
+      const result = formatter.formatFile(ast);
+      assert.equal(result, expected);
+    });
+
     it("preserves comments in tunes", () => {
       const input = `X:1
 T:Tune with Comments

@@ -3,7 +3,7 @@ import { isNote } from "../helpers";
 import { ABCContext } from "../parsers/Context";
 import { ParseCtx, parseTune } from "../parsers/parse";
 import { Scanner, TT } from "../parsers/scan";
-import { BarLine, Beam, Decoration, Grace_group, MultiMeasureRest } from "../types/Expr";
+import { BarLine, Beam, Decoration, Grace_group, MultiMeasureRest, YSPACER } from "../types/Expr";
 import { assignTuneBodyRules, expandMultiMeasureRests, preprocessTune, SpcRul } from "../Visitors/fmt/fmt_rules_assignment";
 import { isBarLine, isToken } from "../Visitors/fmt/fmt_timeMapHelpers";
 
@@ -101,6 +101,33 @@ CDEF|GABC|CDEF|GABC|
           assert.isTrue(!!rules && rules === SpcRul.PRECEDE_SPC);
         }
       });
+    });
+
+    it("assigns PRECEDE_SPC to a standalone y-spacer", () => {
+      let tune = buildTune(`X:1\nA |y|`, ctx);
+
+      tune = preprocessTune(tune, ctx);
+      const ruleMap = assignTuneBodyRules(tune);
+
+      const ySpacers = tune.tune_body!.sequence[0].filter((node): node is YSPACER => node instanceof YSPACER);
+      assert.isAbove(ySpacers.length, 0, "Expected to find a y-spacer node");
+      ySpacers.forEach((node) => {
+        const rules = ruleMap.get(node);
+        assert.isTrue(!!rules && rules === SpcRul.PRECEDE_SPC);
+      });
+    });
+
+    it("does not govern a y-spacer glued inside a beam (beam joining stays untouched)", () => {
+      let tune = buildTune(`X:1\nAy2B|`, ctx);
+
+      tune = preprocessTune(tune, ctx);
+      const ruleMap = assignTuneBodyRules(tune);
+
+      const beam = tune.tune_body!.sequence[0].find((node): node is Beam => node instanceof Beam);
+      assert.ok(beam, "Expected the glued A/y2/B run to parse as a single beam");
+      const ySpacer = beam!.contents.find((node): node is YSPACER => node instanceof YSPACER);
+      assert.ok(ySpacer, "Expected the beam to contain a y-spacer");
+      assert.isFalse(ruleMap.has(ySpacer!), "Beam-internal nodes are never visited by the top-level rule map");
     });
 
     it("handles grace notes", () => {

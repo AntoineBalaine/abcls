@@ -1,7 +1,7 @@
 import { isChord, isNote, isToken } from "../../helpers";
 import { ABCContext } from "../../parsers/Context";
 import { Ctx, Token, TT } from "../../parsers/scan";
-import { BarLine, Beam, Decoration, Expr, Grace_group, MultiMeasureRest, System, Tune, Tune_Body, tune_body_code, Tuplet, YSPACER } from "../../types/Expr";
+import { BarLine, Beam, Decoration, Expr, Grace_group, MultiMeasureRest, System, Tune, Tune_Body, tune_body_code, Tuplet } from "../../types/Expr";
 import { isBarLine, isBeam, isMultiMeasureRest } from "./fmt_timeMapHelpers";
 
 // Types for rules assignment
@@ -76,10 +76,9 @@ export function assignTuneBodyRules(tune: Tune): Map<Expr | Token, SpcRul> {
       if (slurAfterNote(ruleMap, prev, node)) continue;
       if (noteAfterTuplet(ruleMap, prev, node)) continue;
       if (
-        node instanceof YSPACER ||
-        (isToken(node) &&
-          // node.type === TT.SLUR  ||
-          (node.type === TT.EOL || node.type === TT.EOF))
+        isToken(node) &&
+        // node.type === TT.SLUR  ||
+        (node.type === TT.EOL || node.type === TT.EOF)
       ) {
         ruleMap.set(node, SpcRul.NO_SPC);
       } else {
