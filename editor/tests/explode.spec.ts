@@ -398,6 +398,75 @@ describe("explode", () => {
     });
   });
 
+  describe("multi-tune documents", () => {
+    const TWO_TUNES = "X:1\nT:first\nK:C\n[CEG] |\n\nX:2\nT:second\nK:C\n[DFA] |\n";
+
+    it("selection in the second tune explodes that tune, not the first", () => {
+      const { root, ctx } = toCSTreeWithContext(TWO_TUNES);
+      const chords = findByTag(root, TAGS.Chord);
+      const sel: Selection = { root, cursors: [new Set([chords[1].id])] };
+
+      const result = explode(sel, 3, ctx);
+
+      expect(result.cursors.length).to.equal(3);
+
+      const text = formatSelection(sel);
+      // The second tune gains the exploded parts of [DFA]
+      expect(text).to.include("A |\nF |\nD |");
+      // The first tune is untouched
+      expect(text).to.include("K:C\n[CEG] |\n\nX:2");
+    });
+
+    it("selection spanning two tunes explodes both", () => {
+      const { root, ctx } = toCSTreeWithContext(TWO_TUNES);
+      const chords = findByTag(root, TAGS.Chord);
+      const sel: Selection = {
+        root,
+        cursors: [new Set([chords[0].id]), new Set([chords[1].id])],
+      };
+
+      const result = explode(sel, 3, ctx);
+
+      // 2 tunes × 3 parts = 6 cursors
+      expect(result.cursors.length).to.equal(6);
+
+      const text = formatSelection(sel);
+      // First tune's parts come from [CEG], second tune's from [DFA]
+      expect(text).to.include("[CEG] |\nG |\nE |\nC |");
+      expect(text).to.include("[DFA] |\nA |\nF |\nD |");
+    });
+
+    it("selection in the middle tune leaves the outer tunes unchanged", () => {
+      const source = "X:1\nT:one\nK:C\nCDEF |\n\nX:2\nT:two\nK:C\n[CEG] |\n\nX:3\nT:three\nK:C\nGABc |\n";
+      const { root, ctx } = toCSTreeWithContext(source);
+      const chords = findByTag(root, TAGS.Chord);
+      const sel: Selection = { root, cursors: [new Set([chords[0].id])] };
+
+      explode(sel, 2, ctx);
+
+      const text = formatSelection(sel);
+      // The first and third tunes keep their original single content line
+      expect(text).to.include("T:one\nK:C\nCDEF |\n");
+      expect(text).to.include("T:three\nK:C\nGABc |\n");
+      // Only the middle tune gained lines
+      expect(text).to.include("[CEG] |\nG |\nE |");
+    });
+
+    it("created lines in a non-final tune each stand on their own line", () => {
+      const { root, ctx } = toCSTreeWithContext(TWO_TUNES);
+      const chords = findByTag(root, TAGS.Chord);
+      const sel: Selection = { root, cursors: [new Set([chords[0].id])] };
+
+      explode(sel, 3, ctx);
+
+      const text = formatSelection(sel);
+      // The exploded parts must not be appended onto the original line, and the
+      // blank line separating the two tunes must survive intact
+      expect(text).to.not.include("[CEG] |G");
+      expect(text).to.include("[CEG] |\nG |\nE |\nC |\n\nX:2");
+    });
+  });
+
   describe("property-based tests", () => {
     it("element count: each part has same number of rhythm-bearing elements as original", () => {
       fc.assert(
@@ -504,6 +573,60 @@ describe("explode", () => {
             return gracesAfter === gracesBefore * 2;
           }
         ),
+        { numRuns: 50 }
+      );
+    });
+
+    it("exploding one tune leaves every other tune's text untouched", () => {
+      fc.assert(
+        fc.property(fc.integer({ min: 2, max: 4 }), fc.integer({ min: 0, max: 3 }), fc.integer({ min: 2, max: 4 }), (tuneCount, targetSeed, partCount) => {
+          // Each tune carries one chord, so tune N's chord is chords[N]
+          const tunes = Array.from({ length: tuneCount }, (_, i) => `X:${i + 1}\nT:tune${i + 1}\nK:C\n[CEG] |\n`);
+          const abc = tunes.join("\n");
+          const targetIndex = targetSeed % tuneCount;
+
+          const before = toCSTreeWithContext(abc);
+          const beforeTuneTexts = findByTag(before.root, TAGS.Tune).map((t) => formatSelection({ root: t, cursors: [] }));
+
+          const { root, ctx } = toCSTreeWithContext(abc);
+          const chords = findByTag(root, TAGS.Chord);
+          if (chords.length !== tuneCount) return true;
+
+          explode({ root, cursors: [new Set([chords[targetIndex].id])] }, partCount, ctx);
+
+          const afterTuneTexts = findByTag(root, TAGS.Tune).map((t) => formatSelection({ root: t, cursors: [] }));
+          if (afterTuneTexts.length !== beforeTuneTexts.length) return false;
+
+          for (let i = 0; i < afterTuneTexts.length; i++) {
+            if (i === targetIndex) {
+              // The targeted tune must have grown
+              if (afterTuneTexts[i] === beforeTuneTexts[i]) return false;
+            } else if (afterTuneTexts[i] !== beforeTuneTexts[i]) {
+              // Every other tune must be byte-identical
+              return false;
+            }
+          }
+          return true;
+        }),
+        { numRuns: 50 }
+      );
+    });
+
+    it("cursor count equals partCount times the number of tunes holding a selection", () => {
+      fc.assert(
+        fc.property(fc.integer({ min: 2, max: 4 }), fc.integer({ min: 2, max: 4 }), (tuneCount, partCount) => {
+          const tunes = Array.from({ length: tuneCount }, (_, i) => `X:${i + 1}\nT:tune${i + 1}\nK:C\n[CEG] |\n`);
+          const abc = tunes.join("\n");
+
+          const { root, ctx } = toCSTreeWithContext(abc);
+          const chords = findByTag(root, TAGS.Chord);
+          if (chords.length !== tuneCount) return true;
+
+          // Select the chord of every tune, so every tune holds a selection
+          const result = explode({ root, cursors: chords.map((c) => new Set([c.id])) }, partCount, ctx);
+
+          return result.cursors.length === partCount * tuneCount;
+        }),
         { numRuns: 50 }
       );
     });

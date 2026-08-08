@@ -1,9 +1,10 @@
 import { cloneSubtree, appendChild, insertAfter, remove } from "abcls-cstree";
-import { ABCContext } from "abcls-parser";
-import { createCSNode, CSNode, TAGS } from "../csTree/types";
+import { ABCContext, TT } from "abcls-parser";
+import { createCSNode, CSNode, TAGS, isTokenNode, getTokenData } from "../csTree/types";
 import { Selection } from "../selection";
+import { findByTag } from "../selectors/treeWalk";
 import { consolidateRests } from "./consolidateRests";
-import { groupElementsBySourceLine, findTuneBody, collectNotesFromChord, nodeOrDescendantInSet } from "./lineUtils";
+import { groupElementsBySourceLine, collectNotesFromChord, nodeOrDescendantInSet } from "./lineUtils";
 import { noteToRest, chordToRest } from "./toRest";
 import { unwrapSingle } from "./unwrapSingle";
 
@@ -109,6 +110,26 @@ function walkAndFilter(treeRoot: CSNode, startNode: CSNode | null, partIndex: nu
 }
 
 /**
+ * Returns true when the node is an end-of-line Token.
+ */
+function isEolNode(node: CSNode): boolean {
+  return isTokenNode(node) && getTokenData(node).tokenType === TT.EOL;
+}
+
+/**
+ * Creates an end-of-line Token node. The line and position are -1 because the
+ * token has no counterpart in the source text.
+ */
+function createEolNode(ctx: ABCContext): CSNode {
+  return createCSNode(TAGS.Token, ctx.generateId(), {
+    lexeme: "\n",
+    tokenType: TT.EOL,
+    line: -1,
+    position: -1,
+  });
+}
+
+/**
  * Collects all node IDs from a sibling chain, recursing into children.
  */
 export function collectSiblingIds(startNode: CSNode | null): Set<number> {
@@ -137,6 +158,11 @@ export function collectSiblingIds(startNode: CSNode | null): Set<number> {
  * The original line is preserved, and new lines are inserted after it.
  * Consecutive rests in each created line are consolidated.
  *
+ * Because a document may contain several tunes, the selection is resolved against
+ * every tune body that holds a selected node, and each such tune is exploded
+ * independently. A selection spanning two tunes therefore produces created lines
+ * in both of them.
+ *
  * Returns a new Selection where each cursor contains all element IDs
  * from one created line (in document order).
  */
@@ -157,71 +183,95 @@ export function explode(selection: Selection, partCount: number, ctx: ABCContext
     return selection;
   }
 
-  // Find the Tune_Body
-  const tuneBody = findTuneBody(selection.root);
-  if (!tuneBody) {
+  // Keep only the tune bodies that contain a selected node. Because a document may hold
+  // several tunes, we cannot assume the selection lives in the first one.
+  // nodeOrDescendantInSet stops at the first matching ID inside a body.
+  const retainedBodies = findByTag(selection.root, TAGS.Tune_Body).filter((body) => nodeOrDescendantInSet(body, selectedIds));
+
+  if (retainedBodies.length === 0) {
     return selection;
   }
-
-  // Group Tune_Body children by their source line number
-  const elementsByLine = groupElementsBySourceLine(tuneBody);
-
-  // Find which source lines contain selected nodes
-  const linesWithSelection = new Set<number>();
-  for (const [lineNum, elements] of elementsByLine) {
-    for (const elem of elements) {
-      if (nodeOrDescendantInSet(elem, selectedIds)) {
-        linesWithSelection.add(lineNum);
-        break;
-      }
-    }
-  }
-
-  // Sort line numbers in descending order to process from end to start
-  const sortedLines = Array.from(linesWithSelection).sort((a, b) => b - a);
 
   // Accumulate cursors for each created line
   const createdLineCursors: Set<number>[] = [];
 
-  // Process each line that has selections
-  for (const lineNum of sortedLines) {
-    const elements = elementsByLine.get(lineNum);
-    if (!elements || elements.length === 0) continue;
+  // Process the bodies from last to first, for the same reason we process lines from last
+  // to first: an insertion must not shift the position of content not yet processed.
+  for (let bodyIndex = retainedBodies.length - 1; bodyIndex >= 0; bodyIndex--) {
+    const tuneBody = retainedBodies[bodyIndex];
 
-    // Create partCount copies, from last to first (so they end up in order)
-    for (let partIndex = partCount - 1; partIndex >= 0; partIndex--) {
-      // Clone all elements on this line using cloneSubtree to avoid stale parentRefs
-      const clonedElements: CSNode[] = elements.map((e) => cloneSubtree(e, () => ctx.generateId()));
+    // Group Tune_Body children by their source line number
+    const elementsByLine = groupElementsBySourceLine(tuneBody);
 
-      // Create a System node to hold the cloned chain during processing.
-      // This allows unwrapSingle to find the parent of chords correctly.
-      const systemNode = createCSNode(TAGS.System, ctx.generateId(), null);
-      for (const cloned of clonedElements) {
-        appendChild(systemNode, cloned);
+    // Find which source lines contain selected nodes
+    const linesWithSelection = new Set<number>();
+    for (const [lineNum, elements] of elementsByLine) {
+      for (const elem of elements) {
+        if (nodeOrDescendantInSet(elem, selectedIds)) {
+          linesWithSelection.add(lineNum);
+          break;
+        }
       }
+    }
 
-      // Walk and filter the cloned elements
-      walkAndFilter(systemNode, systemNode.firstChild, partIndex, ctx);
+    // Sort line numbers in descending order to process from end to start
+    const sortedLines = Array.from(linesWithSelection).sort((a, b) => b - a);
 
-      // Consolidate consecutive rests in the processed chain
-      const allIds = collectSiblingIds(systemNode.firstChild);
-      const lineSelection: Selection = { root: systemNode, cursors: [allIds] };
-      consolidateRests(lineSelection, ctx);
+    // Process each line that has selections
+    for (const lineNum of sortedLines) {
+      const elements = elementsByLine.get(lineNum);
+      if (!elements || elements.length === 0) continue;
 
-      // After consolidation, allIds has been updated (consumed IDs removed)
-      createdLineCursors.push(allIds);
-
-      // Insert the processed chain after the last original element on this line.
-      // Detach each node from systemNode and insert after lastOriginal.
+      // In every tune but the last one, the newline that terminates the line is not part
+      // of the tune body, so the line's last element is not an EOL. Each created line must
+      // then open its own line, otherwise the clones are appended onto the original line.
       const lastOriginal = elements[elements.length - 1];
-      let insertAnchor = lastOriginal;
-      let toMove = systemNode.firstChild;
-      while (toMove !== null) {
-        const next = toMove.nextSibling;
-        remove(toMove);
-        insertAfter(insertAnchor, toMove);
-        insertAnchor = toMove;
-        toMove = next;
+      const lineEndsWithEol = isEolNode(lastOriginal);
+
+      // Create partCount copies, from last to first (so they end up in order)
+      for (let partIndex = partCount - 1; partIndex >= 0; partIndex--) {
+        // Clone all elements on this line using cloneSubtree to avoid stale parentRefs
+        const clonedElements: CSNode[] = elements.map((e) => cloneSubtree(e, () => ctx.generateId()));
+
+        // Create a System node to hold the cloned chain during processing.
+        // This allows unwrapSingle to find the parent of chords correctly.
+        const systemNode = createCSNode(TAGS.System, ctx.generateId(), null);
+        for (const cloned of clonedElements) {
+          appendChild(systemNode, cloned);
+        }
+
+        // Walk and filter the cloned elements
+        walkAndFilter(systemNode, systemNode.firstChild, partIndex, ctx);
+
+        // Consolidate consecutive rests in the processed chain
+        const allIds = collectSiblingIds(systemNode.firstChild);
+        const lineSelection: Selection = { root: systemNode, cursors: [allIds] };
+        consolidateRests(lineSelection, ctx);
+
+        // After consolidation, allIds has been updated (consumed IDs removed)
+        createdLineCursors.push(allIds);
+
+        // Insert the processed chain after the last original element on this line.
+        // Detach each node from systemNode and insert after lastOriginal.
+        let insertAnchor: CSNode = lastOriginal;
+
+        // When the original line carried no EOL, the clone carries none either. We open a
+        // new line ahead of the clone rather than terminating it, because the newline that
+        // closes the last created line already sits outside the tune body.
+        if (!lineEndsWithEol) {
+          const eol = createEolNode(ctx);
+          insertAfter(insertAnchor, eol);
+          insertAnchor = eol;
+        }
+
+        let toMove = systemNode.firstChild;
+        while (toMove !== null) {
+          const next = toMove.nextSibling;
+          remove(toMove);
+          insertAfter(insertAnchor, toMove);
+          insertAnchor = toMove;
+          toMove = next;
+        }
       }
     }
   }
