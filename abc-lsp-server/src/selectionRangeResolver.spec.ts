@@ -1,8 +1,8 @@
-import { fromAst, createSelection, selectChords, selectNotes, selectTop, selectVoices } from "abcls-editor";
+import { fromAst, createSelection, selectChords, selectNotes, selectTop, selectVoices, TAGS } from "abcls-editor";
 import { Scanner, parse, ABCContext, File_structure } from "abcls-parser";
 import { expect } from "chai";
 import { describe, it } from "mocha";
-import { resolveSelectionRanges, resolveContiguousRanges, findNodeById } from "./selectionRangeResolver";
+import { resolveSelectionRanges, resolveContiguousRanges, findNodeById, findNodesInRange, computeNodeRange } from "./selectionRangeResolver";
 
 function parseAbc(source: string): { ast: File_structure; ctx: ABCContext } {
   const ctx = new ABCContext();
@@ -97,6 +97,40 @@ describe("resolveSelectionRanges", () => {
     const selection = { root, cursors: [new Set([999999])] };
     const ranges = resolveSelectionRanges(selection);
     expect(ranges).to.have.length(0);
+  });
+});
+
+describe("findNodesInRange", () => {
+  it("selects a chord as a single node without also selecting its inner notes", () => {
+    const { ast, ctx } = parseAbc("X:1\nK:C\n[GBce]|\n");
+    const root = fromAst(ast, ctx);
+    const range = computeNodeRange(root)!;
+    const ids = findNodesInRange(root, range, [TAGS.Note, TAGS.Chord]);
+    // Only the chord itself should be selected, not the G/B/c/e notes inside it.
+    expect(ids).to.have.length(1);
+    const found = findNodeById(root, ids[0]);
+    expect(found?.tag).to.equal(TAGS.Chord);
+  });
+
+  it("includes rests and y-spacers when they are passed among the requested tags", () => {
+    const { ast, ctx } = parseAbc("X:1\nK:C\nC z y D|\n");
+    const root = fromAst(ast, ctx);
+    const range = computeNodeRange(root)!;
+    const ids = findNodesInRange(root, range, [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER]);
+    const tags = ids.map((id) => findNodeById(root, id)?.tag);
+    expect(tags).to.include(TAGS.Rest);
+    expect(tags).to.include(TAGS.YSPACER);
+    expect(tags.filter((t) => t === TAGS.Note)).to.have.length(2);
+  });
+
+  it("excludes rests and y-spacers when they are not among the requested tags", () => {
+    const { ast, ctx } = parseAbc("X:1\nK:C\nC z y D|\n");
+    const root = fromAst(ast, ctx);
+    const range = computeNodeRange(root)!;
+    const ids = findNodesInRange(root, range, [TAGS.Note, TAGS.Chord]);
+    const tags = ids.map((id) => findNodeById(root, id)?.tag);
+    expect(tags).to.not.include(TAGS.Rest);
+    expect(tags).to.not.include(TAGS.YSPACER);
   });
 });
 

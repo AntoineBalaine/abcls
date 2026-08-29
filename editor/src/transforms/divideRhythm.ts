@@ -6,7 +6,7 @@ import { findRhythmChild, replaceRhythm } from "./treeUtils";
 import { findNodesById } from "./types";
 
 /**
- * Divide the rhythm of selected notes/chords/rests by the given factor.
+ * Divide the rhythm of selected notes, chords, rests, and y-spacers by the given factor.
  * For example, with factor 2:
  *   - `a` becomes `a/` (1 / 2 = 1/2)
  *   - `a2` becomes `a` (2 / 2 = 1)
@@ -18,7 +18,7 @@ export function divideRhythm(selection: Selection, factor: number = 2, ctx: ABCC
   for (const cursor of selection.cursors) {
     const nodes = findNodesById(selection.root, cursor);
     for (const csNode of nodes) {
-      if (csNode.tag === TAGS.Note || csNode.tag === TAGS.Chord || csNode.tag === TAGS.Rest) {
+      if (csNode.tag === TAGS.Note || csNode.tag === TAGS.Chord || csNode.tag === TAGS.Rest || csNode.tag === TAGS.YSPACER) {
         const existingRhythm = findRhythmChild(csNode);
         const brokenToken = existingRhythm ? extractBrokenToken(existingRhythm) : null;
 

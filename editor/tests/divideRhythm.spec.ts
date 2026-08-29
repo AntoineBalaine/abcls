@@ -58,6 +58,25 @@ describe("divideRhythm", () => {
       expect(formatted).to.contain("z|");
     });
 
+    it("works on y-spacers", () => {
+      const { root, ctx } = toCSTreeWithContext("X:1\nK:C\ny2|\n");
+      const ySpacers = findByTag(root, TAGS.YSPACER);
+      const sel: Selection = { root, cursors: [new Set([ySpacers[0].id])] };
+      divideRhythm(sel, 2, ctx);
+      const formatted = formatSelection(sel);
+      expect(formatted).to.contain("y|");
+    });
+
+    it("does not halve the notes inside a selected chord", () => {
+      const { root, ctx } = toCSTreeWithContext("X:1\nK:C\n[CEG]4|\n");
+      const chords = findByTag(root, TAGS.Chord);
+      const sel: Selection = { root, cursors: [new Set([chords[0].id])] };
+      divideRhythm(sel, 2, ctx);
+      const formatted = formatSelection(sel);
+      // Only the chord as a whole should carry the rhythm; the inner notes must stay bare.
+      expect(formatted).to.contain("[CEG]2");
+    });
+
     it("divides multiple selected notes", () => {
       const { root, ctx } = toCSTreeWithContext("X:1\nK:C\na2 b2 c2|\n");
       const notes = findByTag(root, TAGS.Note);

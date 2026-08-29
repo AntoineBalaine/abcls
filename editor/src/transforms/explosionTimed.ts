@@ -171,6 +171,8 @@ export function getMaxChordSize(startNode: CSNode | null): number {
     if (current.tag === TAGS.Chord) {
       const noteCount = collectNotesFromChord(current).length;
       maxSize = Math.max(maxSize, noteCount);
+    } else if (current.tag === TAGS.Beam || current.tag === TAGS.Tuplet) {
+      maxSize = Math.max(maxSize, getMaxChordSize(current.firstChild));
     }
     current = current.nextSibling;
   }

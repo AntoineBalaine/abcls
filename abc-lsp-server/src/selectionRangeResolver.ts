@@ -149,6 +149,9 @@ function collectNodesInRange(node: CSNode, editorRange: Range, tags: Set<string>
     const nodeRange = computeNodeRange(node);
     if (nodeRange && rangesOverlap(editorRange, nodeRange)) {
       result.push(node.id);
+      // Because a matched node's descendants (e.g. a Chord's inner Notes) are part of
+      // that node's own scope, we must not also collect them as separate selection targets.
+      return;
     }
   }
 

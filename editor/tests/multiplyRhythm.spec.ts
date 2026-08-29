@@ -58,6 +58,25 @@ describe("multiplyRhythm", () => {
       expect(formatted).to.contain("z|");
     });
 
+    it("works on y-spacers", () => {
+      const { root, ctx } = toCSTreeWithContext("X:1\nK:C\ny/|\n");
+      const ySpacers = findByTag(root, TAGS.YSPACER);
+      const sel: Selection = { root, cursors: [new Set([ySpacers[0].id])] };
+      multiplyRhythm(sel, 2, ctx);
+      const formatted = formatSelection(sel);
+      expect(formatted).to.contain("y|");
+    });
+
+    it("does not double the notes inside a selected chord", () => {
+      const { root, ctx } = toCSTreeWithContext("X:1\nK:C\n[CEG]|\n");
+      const chords = findByTag(root, TAGS.Chord);
+      const sel: Selection = { root, cursors: [new Set([chords[0].id])] };
+      multiplyRhythm(sel, 2, ctx);
+      const formatted = formatSelection(sel);
+      // Only the chord as a whole should carry the rhythm; the inner notes must stay bare.
+      expect(formatted).to.contain("[CEG]2");
+    });
+
     it("multiplies multiple selected notes", () => {
       const { root, ctx } = toCSTreeWithContext("X:1\nK:C\na/ b/ c/|\n");
       const notes = findByTag(root, TAGS.Note);

@@ -73,8 +73,9 @@ export function parseKV(ctx: ParseCtx): KV | null {
   // Skip whitespace between equals and value
   while (ctx.match(TT.WS)) {}
 
-  // Parse the value as an expression (handles unary operators like -2)
-  const value = parsePrimary(ctx);
+  // Parse the value as an expression (handles unary operators like -2, and
+  // trailing binary modifiers like the octave shift in clef=treble+8/treble-8)
+  const value = prsBinaryExpr(ctx);
   if (!value) {
     ctx.report("Expected value after '='");
     return null;
@@ -84,7 +85,7 @@ export function parseKV(ctx: ParseCtx): KV | null {
 }
 
 /**
- * Parse binary expressions: handles both + and / operators with proper precedence.
+ * Parse binary expressions: handles +, -, and / operators with proper precedence.
  * Whitespace around operators is allowed (e.g., "4 / 4" is valid).
  */
 export function prsBinaryExpr(ctx: ParseCtx): Expr | null {
@@ -96,7 +97,7 @@ export function prsBinaryExpr(ctx: ParseCtx): Expr | null {
 
   while (ctx.match(TT.WS)) {}
 
-  while (ctx.check(TT.PLUS) || ctx.check(TT.SLASH)) {
+  while (ctx.check(TT.PLUS) || ctx.check(TT.MINUS) || ctx.check(TT.SLASH)) {
     const operator = ctx.advance();
     while (ctx.match(TT.WS)) {}
     const right = parsePrimary(ctx);

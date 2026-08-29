@@ -48,4 +48,6 @@ export const TRANSFORM_NODE_TAGS: Record<string, string[]> = {
   voiceInlineToInfoLine: [TAGS.Inline_field],
   legato: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER],
   toSlashNotation: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.MultiMeasureRest],
+  multiplyRhythm: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER],
+  divideRhythm: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER],
 };
