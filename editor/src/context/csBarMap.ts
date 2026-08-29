@@ -132,6 +132,7 @@ const NON_CONTENT_TAGS = new Set<string>([
   TAGS.Inline_field,
   TAGS.SystemBreak,
   TAGS.Line_continuation,
+  TAGS.Comment,
   TAGS.Pitch,
   TAGS.Rhythm,
   TAGS.KV,

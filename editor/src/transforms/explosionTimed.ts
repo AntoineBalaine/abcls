@@ -186,6 +186,27 @@ function isBoundaryNode(node: CSNode): boolean {
   return false;
 }
 
+/**
+ * Walks up from a node to find its nearest ancestor System node, if any.
+ * CSNode has no direct parent pointer -- parentRef either points to the
+ * previous sibling (walk left until we reach the first child) or, at the
+ * first child, to the actual parent node.
+ */
+function findEnclosingSystem(node: CSNode): CSNode | null {
+  let current: CSNode | null = node;
+  while (current !== null) {
+    const ref = current.parentRef;
+    if (ref === null) return null;
+    if (ref.tag === "firstChild") {
+      if (ref.parent.tag === TAGS.System) return ref.parent;
+      current = ref.parent;
+    } else {
+      current = ref.prev;
+    }
+  }
+  return null;
+}
+
 export function getBarSlice(systemNode: CSNode, barEntry: barmap.BarEntry): BarSlice | null {
   const endNode = findNodeById(systemNode, barEntry.closingNodeId);
   if (endNode === null) return null;
@@ -872,15 +893,21 @@ export function createVoiceLineNodes(voiceId: string, ctx: ABCContext): VoiceLin
 }
 
 /**
- * Registers a new voice in the bar map with a single bar entry at bar 0,
- * using the given closingNodeId as the bar's anchor. This creates a seed
- * bar only -- explodeParts then calls createBar in a loop to fill in any
- * missing bars up to the target bar number.
+ * Registers a new voice in the bar map with a single seed bar entry, using
+ * the given closingNodeId as the bar's anchor. This creates a seed bar only
+ * -- explodeParts then calls createBar in a loop to fill in any missing bars
+ * up to the target bar number.
+ *
+ * The seed is registered under startBarNum (default 0) rather than always 0
+ * because a voice's bar numbers are cumulative across every System it
+ * appears in: exploding a System other than the voice's first leaves
+ * barRange.start above 0, and seeding at 0 would leave a stray extra bar
+ * behind that no later bar number ever targets or replaces.
  */
-export function registerVoiceInBarMap(barMap: barmap.BarMap, voiceId: string, closingNodeId: number): void {
+export function registerVoiceInBarMap(barMap: barmap.BarMap, voiceId: string, closingNodeId: number, startBarNum = 0): void {
   const voiceEntries = new Map<number, barmap.BarEntry>();
-  voiceEntries.set(0, {
-    barNumber: 0,
+  voiceEntries.set(startBarNum, {
+    barNumber: startBarNum,
     closingNodeId,
   });
   barMap.set(voiceId, voiceEntries);
@@ -891,7 +918,7 @@ export function registerVoiceInBarMap(barMap: barmap.BarMap, voiceId: string, cl
  * position according to voiceOrder. Used by deferred mode where each voice
  * occupies its own System.
  */
-export function createVoiceLine(barMap: barmap.BarMap, voiceId: string, tuneBody: CSNode, voiceOrder: string[], ctx: ABCContext): void {
+export function createVoiceLine(barMap: barmap.BarMap, voiceId: string, tuneBody: CSNode, voiceOrder: string[], ctx: ABCContext, startBarNum = 0): void {
   const nodes = createVoiceLineNodes(voiceId, ctx);
   const systemNode = createCSNode(TAGS.System, ctx.generateId(), null);
   appendChild(systemNode, nodes.inlineField);
@@ -923,29 +950,37 @@ export function createVoiceLine(barMap: barmap.BarMap, voiceId: string, tuneBody
     }
   }
 
-  registerVoiceInBarMap(barMap, voiceId, nodes.barlineNode.id);
+  registerVoiceInBarMap(barMap, voiceId, nodes.barlineNode.id, startBarNum);
 }
 
 /**
  * Creates a rest-filled bar (Z rest + barline) for a voice and registers
- * it in the bar map. The new content is inserted after the voice's last
- * bar entry's closing node.
+ * it in the bar map.
+ *
+ * The new bar is inserted at its correct numeric position among the voice's
+ * existing entries, not simply appended after whichever entry has the
+ * largest barNumber: the trailing padding loop in explodeParts can create
+ * bars out of numeric order relative to bars a prior pass in the same call
+ * already created (e.g. padding an earlier bar in the same System after a
+ * later bar has already been filled in), so we look for the immediate
+ * numeric predecessor and successor among existing entries and insert
+ * relative to whichever is found.
  */
 export function createBar(barMap: barmap.BarMap, voiceId: string, barNum: number, rootNode: CSNode, ctx: ABCContext): void {
   const voiceEntries = barMap.get(voiceId);
   if (!voiceEntries || voiceEntries.size === 0) return;
 
-  // Find the last entry to determine where to append
-  let lastEntry: barmap.BarEntry | null = null;
+  let predecessor: barmap.BarEntry | null = null;
+  let successor: barmap.BarEntry | null = null;
   for (const entry of voiceEntries.values()) {
-    if (lastEntry === null || entry.barNumber > lastEntry.barNumber) {
-      lastEntry = entry;
+    if (entry.barNumber < barNum && (predecessor === null || entry.barNumber > predecessor.barNumber)) {
+      predecessor = entry;
+    }
+    if (entry.barNumber > barNum && (successor === null || entry.barNumber < successor.barNumber)) {
+      successor = entry;
     }
   }
-  if (!lastEntry) return;
-
-  const anchorNode = findNodeById(rootNode, lastEntry.closingNodeId);
-  if (!anchorNode) return;
+  if (predecessor === null && successor === null) return;
 
   // Create Z rest
   const mmrNode = createCSNode(TAGS.MultiMeasureRest, ctx.generateId(), null);
@@ -967,20 +1002,36 @@ export function createBar(barMap: barmap.BarMap, voiceId: string, barNum: number
   });
   appendChild(barlineNode, barlineToken);
 
-  // Find the insertion point: after the anchor but before the next voice
-  // marker, so we stay within the correct voice's content region.
-  let insertionPoint: CSNode | null = anchorNode.nextSibling;
-  while (insertionPoint !== null) {
-    if (isVoiceMarker(insertionPoint)) break;
-    insertionPoint = insertionPoint.nextSibling;
-  }
+  if (predecessor !== null) {
+    const anchorNode = findNodeById(rootNode, predecessor.closingNodeId);
+    if (!anchorNode) return;
 
-  if (insertionPoint !== null) {
+    // Find the insertion point: after the anchor but before the next voice
+    // marker, so we stay within the correct voice's content region.
+    let insertionPoint: CSNode | null = anchorNode.nextSibling;
+    while (insertionPoint !== null) {
+      if (isVoiceMarker(insertionPoint)) break;
+      insertionPoint = insertionPoint.nextSibling;
+    }
+
+    if (insertionPoint !== null) {
+      insertBefore(insertionPoint, mmrNode);
+      insertBefore(insertionPoint, barlineNode);
+    } else {
+      insertAfter(anchorNode, mmrNode);
+      insertAfter(mmrNode, barlineNode);
+    }
+  } else {
+    // No numeric predecessor exists yet: insert immediately before the
+    // successor bar's own content, so the new bar lands ahead of it.
+    const successorAnchor = findNodeById(rootNode, successor!.closingNodeId);
+    if (!successorAnchor) return;
+    const successorSystem = findEnclosingSystem(successorAnchor);
+    const successorSlice = successorSystem ? getBarSlice(successorSystem, successor!) : null;
+    const insertionPoint = successorSlice?.startNode ?? successorAnchor;
+
     insertBefore(insertionPoint, mmrNode);
     insertBefore(insertionPoint, barlineNode);
-  } else {
-    insertAfter(anchorNode, mmrNode);
-    insertAfter(mmrNode, barlineNode);
   }
 
   voiceEntries.set(barNum, {
@@ -1111,9 +1162,9 @@ function explodeParts(
           appendChild(rootNode, nodes.multiMeasureRestNode);
           appendChild(rootNode, nodes.barlineNode);
           appendChild(rootNode, nodes.eolToken);
-          registerVoiceInBarMap(barMap, part.targetVoiceId, nodes.barlineNode.id);
+          registerVoiceInBarMap(barMap, part.targetVoiceId, nodes.barlineNode.id, barNum);
         } else {
-          createVoiceLine(barMap, part.targetVoiceId, rootNode, voiceOrder, ctx);
+          createVoiceLine(barMap, part.targetVoiceId, rootNode, voiceOrder, ctx, barNum);
         }
       }
 
@@ -1159,17 +1210,30 @@ function explodeParts(
       }
     }
 
-    // Create rest-filled bars for source bars that fall outside the selection.
-    // Because the main loop only covers barRange.start..barRange.end, the
-    // target voice would be shorter than the source voice without these.
+    // Create rest-filled bars for source bars that fall outside the selection,
+    // but only among bars belonging to the same System as the ones just processed.
+    // Bar numbers are cumulative across a voice's whole tune (spanning every System
+    // it appears in), so without this scoping, a voice whose earlier Systems have more
+    // bars than the System actually being exploded would get padded with bars pulled
+    // from those other Systems -- bars that have nothing to do with the current selection.
     const sourceEntries = barMap.get(part.sourceVoiceId);
     if (sourceEntries) {
+      const boundaryEntry = sourceEntries.get(barRange.start) ?? sourceEntries.get(barRange.end);
+      const boundaryAnchor = boundaryEntry ? findNodeById(rootNode, boundaryEntry.closingNodeId) : null;
+      const currentSystem = boundaryAnchor ? findEnclosingSystem(boundaryAnchor) : null;
+
       let maxSourceBar = 0;
       for (const entry of sourceEntries.values()) {
         if (entry.barNumber > maxSourceBar) maxSourceBar = entry.barNumber;
       }
       for (let barNum = 0; barNum <= maxSourceBar; barNum++) {
         if (barNum >= barRange.start && barNum <= barRange.end) continue;
+        if (currentSystem !== null) {
+          const entry = sourceEntries.get(barNum);
+          const entryAnchor = entry ? findNodeById(rootNode, entry.closingNodeId) : null;
+          const entrySystem = entryAnchor ? findEnclosingSystem(entryAnchor) : null;
+          if (entrySystem !== currentSystem) continue;
+        }
         const existing = findBarEntry(barMap, part.targetVoiceId, barNum);
         if (existing !== null) continue;
         createBar(barMap, part.targetVoiceId, barNum, rootNode, ctx);

@@ -1004,6 +1004,81 @@ describe("explosion CSTree end-to-end", () => {
       expect(result.cursors[1].size).to.be.greaterThan(0);
     });
 
+    it("chord inside a beamed group (no spaces around it) is exploded to all target voices", () => {
+      // The broken rhythm ">" and tie "-" glue this into a single Beam node, so the
+      // chord is a grandchild of the bar content rather than a direct sibling.
+      const abc = "X:1\nK:C\nV:2\nz2 | A,2>[CEGB]2-[CEGB]4 |\n";
+      const { selection, ctx, snapshots } = createExplosionTestContext(abc, 3, 0, 3, 100);
+
+      const result = explosion(selection, ["3", "4"], ctx, snapshots);
+      const text = serializeSelection(result, ctx);
+
+      expect(text).to.include("[V:3]");
+      expect(text).to.include("[V:4]");
+      expect(result.cursors.length).to.equal(2);
+      expect(result.cursors[0].size).to.be.greaterThan(0);
+      expect(result.cursors[1].size).to.be.greaterThan(0);
+    });
+
+    it("two-voice deferred tune, exploding the shorter voice creates exactly as many bars as it has (not the other voice's bar count)", () => {
+      // V:1 has 3 bars, V:2 (the source voice being exploded) has only 2. The exploded
+      // target voices must match V:2's 2 bars, not get padded out to V:1's 3.
+      const abc =
+        'X:1\nK:C\n[V:1] E2 | "Am" c6 BA               | "Bø" A4- "E⁷" A2 ^GB |\n[V:2] z2 |      A,2>[cegb]2-[cegb]4 |\n';
+      const { selection, ctx, snapshots } = createLspStyleTestContext(abc, 3, 0, 3, 100);
+
+      const result = explosion(selection, ["3", "4"], ctx, snapshots);
+      const text = serializeSelection(result, ctx);
+
+      function barCount(line: string): number {
+        return (line.match(/\|/g) || []).length;
+      }
+      const v3Line = text.split("\n").find((l) => l.startsWith("[V:3]"))!;
+      const v4Line = text.split("\n").find((l) => l.startsWith("[V:4]"))!;
+      expect(barCount(v3Line)).to.equal(2);
+      expect(barCount(v4Line)).to.equal(2);
+    });
+
+    it("multi-system deferred tune, exploding only the last system's bars does not pull in bars from earlier systems", () => {
+      // V:2's bar numbers are cumulative across both systems (bars 0-3 in the first system,
+      // bars 4-5 in the second). Selecting only the second system's content must produce
+      // exactly the 2 bars of that system, not get padded out using V:2's full-tune bar count
+      // (which previously produced 5 spurious extra "Z" bars) and must not pick up a phantom
+      // bar from the "%" comment line between the two systems.
+      const abc = [
+        "X:7",
+        "%%gchordfont Times 12",
+        "Q:75",
+        "V:1 clef=treble stem=up style=normal",
+        "V:2 clef=bass octave=-2 style=normal stem=down",
+        '[V:1] E2 | "Am" c6 BA               | "Bø" A4- "E⁷"    A2 ^GB          | "Am" E4 "etc." y2',
+        '[V:2] z2 |      A,2>[cegb]2-[cegb]4 |      B,2>[dfab]2 z [d^^f^gc\']2 E |      A,2>[cegb]2-[cegb]4',
+        "%",
+        '[V:1] E2 | "Am" c6 BA               | "Bø" A4- "E⁷" A2 ^GB |',
+        "[V:2] z2 |      A,2>[cegb]2-[cegb]4 |",
+        "",
+      ].join("\n");
+
+      // Line 9 (0-indexed) is the last system's [V:2] line.
+      const { selection, ctx, snapshots } = createLspStyleTestContext(abc, 9, 0, 9, 100);
+
+      const result = explosion(selection, ["3", "4"], ctx, snapshots);
+      const text = serializeSelection(result, ctx);
+
+      function barCount(line: string): number {
+        return (line.match(/\|/g) || []).length;
+      }
+      const v3Line = text.split("\n").find((l) => l.startsWith("[V:3]"))!;
+      const v4Line = text.split("\n").find((l) => l.startsWith("[V:4]"))!;
+      expect(v3Line).to.not.be.undefined;
+      expect(v4Line).to.not.be.undefined;
+      expect(barCount(v3Line)).to.equal(2);
+      expect(barCount(v4Line)).to.equal(2);
+      // The rest bar comes before the split-chord bar, matching source order.
+      expect(v3Line).to.equal("[V:3]Z|A,2>b2-b4|");
+      expect(v4Line).to.equal("[V:4]Z|z2>[ceg]2-[ceg]4|");
+    });
+
     it("chords with rhythm are preserved in the exploded notes", () => {
       const abc = "X:1\nK:C\n[CE]2 [DF]/|\n";
       const { selection, ctx, snapshots } = createExplosionTestContext(abc, 2, 0, 2, 100);
