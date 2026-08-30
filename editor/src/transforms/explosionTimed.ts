@@ -194,14 +194,13 @@ function isBoundaryNode(node: CSNode): boolean {
  */
 function findEnclosingSystem(node: CSNode): CSNode | null {
   let current: CSNode | null = node;
-  while (current !== null) {
-    const ref = current.parentRef;
-    if (ref === null) return null;
-    if (ref.tag === "firstChild") {
-      if (ref.parent.tag === TAGS.System) return ref.parent;
-      current = ref.parent;
+  while (current !== null && current.parentRef !== null) {
+    if (current.parentRef.tag === "firstChild") {
+      const parent: CSNode = current.parentRef.parent;
+      if (parent.tag === TAGS.System) return parent;
+      current = parent;
     } else {
-      current = ref.prev;
+      current = current.parentRef.prev;
     }
   }
   return null;
@@ -826,10 +825,15 @@ export interface VoiceLineNodes {
 
 /**
  * Creates the nodes for a new voice line: an inline field voice marker
- * [V:voiceId], a Z rest, a barline, and a trailing EOL. The nodes are
- * returned unattached so the caller can decide where to insert them.
+ * [V:voiceId], a placeholder rest, a barline, and a trailing EOL. The nodes
+ * are returned unattached so the caller can decide where to insert them.
+ *
+ * When `barDuration` is given, the placeholder is a plain rest with an
+ * explicit rhythm matching it (e.g. "z2") rather than a bare "Z" multi-measure
+ * rest, so the seed bar reflects the source bar's actual length -- see
+ * `createBar` for the same reasoning applied to later bars.
  */
-export function createVoiceLineNodes(voiceId: string, ctx: ABCContext): VoiceLineNodes {
+export function createVoiceLineNodes(voiceId: string, ctx: ABCContext, barDuration?: IRational): VoiceLineNodes {
   // Create voice marker: [V:voiceId]
   const inlineField = createCSNode(TAGS.Inline_field, ctx.generateId(), null);
   const leftBracket = createCSNode(TAGS.Token, ctx.generateId(), {
@@ -861,15 +865,29 @@ export function createVoiceLineNodes(voiceId: string, ctx: ABCContext): VoiceLin
   appendChild(inlineField, valueToken);
   appendChild(inlineField, rightBracket);
 
-  // Create Z rest
-  const multiMeasureRestNode = createCSNode(TAGS.MultiMeasureRest, ctx.generateId(), null);
-  const multiMeasureRestToken = createCSNode(TAGS.Token, ctx.generateId(), {
-    lexeme: "Z",
-    tokenType: TT.REST,
-    line: -1,
-    position: -1,
-  });
-  appendChild(multiMeasureRestNode, multiMeasureRestToken);
+  // Create the placeholder rest
+  let multiMeasureRestNode: CSNode;
+  if (barDuration) {
+    multiMeasureRestNode = createCSNode(TAGS.Rest, ctx.generateId(), null);
+    const restToken = createCSNode(TAGS.Token, ctx.generateId(), {
+      lexeme: "z",
+      tokenType: TT.REST,
+      line: -1,
+      position: -1,
+    });
+    appendChild(multiMeasureRestNode, restToken);
+    const rhythmNode = rationalToRhythm(barDuration, ctx);
+    if (rhythmNode) appendChild(multiMeasureRestNode, rhythmNode);
+  } else {
+    multiMeasureRestNode = createCSNode(TAGS.MultiMeasureRest, ctx.generateId(), null);
+    const multiMeasureRestToken = createCSNode(TAGS.Token, ctx.generateId(), {
+      lexeme: "Z",
+      tokenType: TT.REST,
+      line: -1,
+      position: -1,
+    });
+    appendChild(multiMeasureRestNode, multiMeasureRestToken);
+  }
 
   // Create barline
   const barlineNode = createCSNode(TAGS.BarLine, ctx.generateId(), null);
@@ -918,8 +936,16 @@ export function registerVoiceInBarMap(barMap: barmap.BarMap, voiceId: string, cl
  * position according to voiceOrder. Used by deferred mode where each voice
  * occupies its own System.
  */
-export function createVoiceLine(barMap: barmap.BarMap, voiceId: string, tuneBody: CSNode, voiceOrder: string[], ctx: ABCContext, startBarNum = 0): void {
-  const nodes = createVoiceLineNodes(voiceId, ctx);
+export function createVoiceLine(
+  barMap: barmap.BarMap,
+  voiceId: string,
+  tuneBody: CSNode,
+  voiceOrder: string[],
+  ctx: ABCContext,
+  startBarNum = 0,
+  barDuration?: IRational
+): void {
+  const nodes = createVoiceLineNodes(voiceId, ctx, barDuration);
   const systemNode = createCSNode(TAGS.System, ctx.generateId(), null);
   appendChild(systemNode, nodes.inlineField);
   appendChild(systemNode, nodes.multiMeasureRestNode);
@@ -954,8 +980,13 @@ export function createVoiceLine(barMap: barmap.BarMap, voiceId: string, tuneBody
 }
 
 /**
- * Creates a rest-filled bar (Z rest + barline) for a voice and registers
- * it in the bar map.
+ * Creates a rest-filled bar for a voice and registers it in the bar map.
+ *
+ * When `barDuration` is given, the rest is written as a plain rest with an
+ * explicit rhythm matching that duration (e.g. "z2") instead of a bare "Z"
+ * multi-measure rest, so a bar padded in to keep a target voice aligned with
+ * its source reflects the source bar's actual length rather than an
+ * arbitrary whole-bar placeholder.
  *
  * The new bar is inserted at its correct numeric position among the voice's
  * existing entries, not simply appended after whichever entry has the
@@ -966,7 +997,7 @@ export function createVoiceLine(barMap: barmap.BarMap, voiceId: string, tuneBody
  * numeric predecessor and successor among existing entries and insert
  * relative to whichever is found.
  */
-export function createBar(barMap: barmap.BarMap, voiceId: string, barNum: number, rootNode: CSNode, ctx: ABCContext): void {
+export function createBar(barMap: barmap.BarMap, voiceId: string, barNum: number, rootNode: CSNode, ctx: ABCContext, barDuration?: IRational): void {
   const voiceEntries = barMap.get(voiceId);
   if (!voiceEntries || voiceEntries.size === 0) return;
 
@@ -982,15 +1013,31 @@ export function createBar(barMap: barmap.BarMap, voiceId: string, barNum: number
   }
   if (predecessor === null && successor === null) return;
 
-  // Create Z rest
-  const mmrNode = createCSNode(TAGS.MultiMeasureRest, ctx.generateId(), null);
-  const mmrToken = createCSNode(TAGS.Token, ctx.generateId(), {
-    lexeme: "Z",
-    tokenType: TT.REST,
-    line: -1,
-    position: -1,
-  });
-  appendChild(mmrNode, mmrToken);
+  // Create the placeholder rest. When the source bar's duration is known, use
+  // a plain rest with an explicit rhythm (e.g. "z2") matching it, instead of
+  // a bare "Z" multi-measure rest whose implicit duration doesn't reflect it.
+  let mmrNode: CSNode;
+  if (barDuration) {
+    mmrNode = createCSNode(TAGS.Rest, ctx.generateId(), null);
+    const restToken = createCSNode(TAGS.Token, ctx.generateId(), {
+      lexeme: "z",
+      tokenType: TT.REST,
+      line: -1,
+      position: -1,
+    });
+    appendChild(mmrNode, restToken);
+    const rhythmNode = rationalToRhythm(barDuration, ctx);
+    if (rhythmNode) appendChild(mmrNode, rhythmNode);
+  } else {
+    mmrNode = createCSNode(TAGS.MultiMeasureRest, ctx.generateId(), null);
+    const mmrToken = createCSNode(TAGS.Token, ctx.generateId(), {
+      lexeme: "Z",
+      tokenType: TT.REST,
+      line: -1,
+      position: -1,
+    });
+    appendChild(mmrNode, mmrToken);
+  }
 
   // Create barline
   const barlineNode = createCSNode(TAGS.BarLine, ctx.generateId(), null);
@@ -1152,43 +1199,51 @@ function explodeParts(
       const sourceSeg = collectBarSegment(sourceCursor);
       sourceCursor = sourceSeg.next;
 
-      // Ensure the target voice exists
-      if (!barMap.has(part.targetVoiceId)) {
-        if (mode === "linear") {
-          // In linear mode, we append the voice content inside the current
-          // System rather than creating a sibling System.
-          const nodes = createVoiceLineNodes(part.targetVoiceId, ctx);
-          appendChild(rootNode, nodes.inlineField);
-          appendChild(rootNode, nodes.multiMeasureRestNode);
-          appendChild(rootNode, nodes.barlineNode);
-          appendChild(rootNode, nodes.eolToken);
-          registerVoiceInBarMap(barMap, part.targetVoiceId, nodes.barlineNode.id, barNum);
-        } else {
-          createVoiceLine(barMap, part.targetVoiceId, rootNode, voiceOrder, ctx, barNum);
-        }
-      }
-
-      // Ensure the target bar exists
-      let targetBarEntry = findBarEntry(barMap, part.targetVoiceId, barNum);
-      if (targetBarEntry === null) {
-        createBar(barMap, part.targetVoiceId, barNum, rootNode, ctx);
-        targetBarEntry = findBarEntry(barMap, part.targetVoiceId, barNum);
-      }
-      if (targetBarEntry === null) continue;
-
       // Compute time range from the unfiltered source bar
       const sourceStart = sourceSeg.nodes.length > 0 ? sourceSeg.nodes[0] : null;
       const sourceEnd = sourceSeg.nodes.length > 0 ? sourceSeg.nodes[sourceSeg.nodes.length - 1] : null;
       const timeRange = cursorRangeToTimeRange(sourceStart, sourceEnd, cursorRange);
 
       // Compute the source bar's total duration so that buildTimeMap can
-      // assign a finite duration to any Z placeholder rests in the target bar.
+      // assign a finite duration to any Z placeholder rests in the target bar,
+      // and so any placeholder bar we create below (seed or padding) can be
+      // written with a rest matching this bar's actual length.
       const sourceTimeMap = buildTimeMap(sourceStart, sourceEnd);
       let sourceBarDuration = createRational(0, 1);
       if (sourceTimeMap.length > 0) {
         const last = sourceTimeMap[sourceTimeMap.length - 1];
         sourceBarDuration = addRational(last.startTime, last.duration);
       }
+
+      // Ensure the target voice exists
+      if (!barMap.has(part.targetVoiceId)) {
+        if (mode === "linear") {
+          // In linear mode, we append the voice content inside the current
+          // System rather than creating a sibling System. The new voice line
+          // needs its own line, so give the System's existing last line a
+          // terminator first if it doesn't already end with one.
+          const lastChild = lastChildOf(rootNode);
+          if (lastChild !== null && !isEolNode(lastChild)) {
+            appendChild(rootNode, createEolNode(ctx));
+          }
+          const nodes = createVoiceLineNodes(part.targetVoiceId, ctx, sourceBarDuration);
+          appendChild(rootNode, nodes.inlineField);
+          appendChild(rootNode, nodes.multiMeasureRestNode);
+          appendChild(rootNode, nodes.barlineNode);
+          appendChild(rootNode, nodes.eolToken);
+          registerVoiceInBarMap(barMap, part.targetVoiceId, nodes.barlineNode.id, barNum);
+        } else {
+          createVoiceLine(barMap, part.targetVoiceId, rootNode, voiceOrder, ctx, barNum, sourceBarDuration);
+        }
+      }
+
+      // Ensure the target bar exists
+      let targetBarEntry = findBarEntry(barMap, part.targetVoiceId, barNum);
+      if (targetBarEntry === null) {
+        createBar(barMap, part.targetVoiceId, barNum, rootNode, ctx, sourceBarDuration);
+        targetBarEntry = findBarEntry(barMap, part.targetVoiceId, barNum);
+      }
+      if (targetBarEntry === null) continue;
 
       // Perform replacement in the target bar
       const targetSlice = findBarSliceInSystems(rootNode, targetBarEntry);
@@ -1228,15 +1283,28 @@ function explodeParts(
       }
       for (let barNum = 0; barNum <= maxSourceBar; barNum++) {
         if (barNum >= barRange.start && barNum <= barRange.end) continue;
+        const entry = sourceEntries.get(barNum);
+        const entryAnchor = entry ? findNodeById(rootNode, entry.closingNodeId) : null;
         if (currentSystem !== null) {
-          const entry = sourceEntries.get(barNum);
-          const entryAnchor = entry ? findNodeById(rootNode, entry.closingNodeId) : null;
           const entrySystem = entryAnchor ? findEnclosingSystem(entryAnchor) : null;
           if (entrySystem !== currentSystem) continue;
         }
         const existing = findBarEntry(barMap, part.targetVoiceId, barNum);
         if (existing !== null) continue;
-        createBar(barMap, part.targetVoiceId, barNum, rootNode, ctx);
+
+        // Give the padding rest the same duration as the source bar it
+        // stands in for, instead of an arbitrary whole-bar "Z".
+        const entrySlice = entryAnchor ? findBarSliceInSystems(rootNode, entry!) : null;
+        let padDuration: IRational | undefined;
+        if (entrySlice) {
+          const entryTimeMap = buildTimeMap(entrySlice.startNode, entrySlice.endNode);
+          if (entryTimeMap.length > 0) {
+            const last = entryTimeMap[entryTimeMap.length - 1];
+            padDuration = addRational(last.startTime, last.duration);
+          }
+        }
+
+        createBar(barMap, part.targetVoiceId, barNum, rootNode, ctx, padDuration);
       }
     }
   }

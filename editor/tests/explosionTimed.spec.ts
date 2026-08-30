@@ -1075,8 +1075,10 @@ describe("explosion CSTree end-to-end", () => {
       expect(barCount(v3Line)).to.equal(2);
       expect(barCount(v4Line)).to.equal(2);
       // The rest bar comes before the split-chord bar, matching source order.
-      expect(v3Line).to.equal("[V:3]Z|A,2>b2-b4|");
-      expect(v4Line).to.equal("[V:4]Z|z2>[ceg]2-[ceg]4|");
+      // The placeholder rest carries the same duration as the source bar it
+      // stands in for ("z2"), not a bare whole-bar "Z".
+      expect(v3Line).to.equal("[V:3]z2|A,2>b2-b4|");
+      expect(v4Line).to.equal("[V:4]z2|z2>[ceg]2-[ceg]4|");
     });
 
     it("chords with rhythm are preserved in the exploded notes", () => {
@@ -1111,6 +1113,38 @@ describe("explosion CSTree end-to-end", () => {
 
       expect(text).to.equal("X:1\n%%abcls-parse linear\nK:C\nV:1\nE F|\nV:2\nG A|\n[V:3]C D|\n");
     });
+
+    it("exploding a middle voice line inserts the new voice line with its own line break, not appended to the end of the source line", () => {
+      const abc = [
+        "%%abcls-parse linear",
+        "X:7",
+        "%%gchordfont Times 12",
+        "Q:75",
+        "V:1 clef=treble stem=up style=normal",
+        "V:2 clef=bass octave=-2 style=normal stem=down",
+        "V:T clef=bass octave=-2 style=normal stem=down",
+        '[V:1] E2 | "Am" c6 BA               | "Bø" A4- "E⁷"    A2 ^GB          |',
+        '[V:2] z2 |      A,2>[cegb]2-[cegb]4 |      B,2>[dfab]2 z [d^^f^gc\']2 E |',
+        "[V:T] z2 |      z2> [cegb]2-[cegb]4 |      z2> [dfab]2 z [d^^f^gc']2 z |",
+        "",
+      ].join("\n");
+
+      // LSP-style cursor (Note/Chord only), matching how the language server
+      // actually drives this transform (see TRANSFORM_NODE_TAGS).
+      const { selection, ctx, snapshots } = createLspStyleTestContext(abc, 9, 0, 9, 100);
+
+      const result = explosion(selection, ["3", "4"], ctx, snapshots);
+      const text = serializeSelection(result, ctx);
+      const lines = text.split("\n");
+
+      const tLineIdx = lines.findIndex((l) => l.startsWith("[V:T]"));
+      const v3LineIdx = lines.findIndex((l) => l.startsWith("[V:3]"));
+
+      expect(tLineIdx).to.be.greaterThan(-1);
+      expect(v3LineIdx).to.equal(tLineIdx + 1);
+      // The [V:T] line must not have [V:3] content appended onto its end.
+      expect(lines[tLineIdx]).to.not.include("[V:3]");
+    });
   });
 
   describe("real-world usage: chords with annotations and multi-bar context", () => {
@@ -1123,9 +1157,10 @@ describe("explosion CSTree end-to-end", () => {
 
       // Only the selected portion ([DGB] "G7" =B) appears in the target voices.
       // Trailing z = rest for the unselected time after the cursor.
-      // The second bar (_BAC) is outside the selection, so the target voices
-      // receive a rest-filled placeholder bar (Z) to match the source voice's length.
-      expect(text).to.equal('X:1\nL:1/4\nK:F\n[V:1] [DGB] "G7" =B "Fm7" B | _BAC\n' + '[V:2]B "G7" =Bz|Z|\n' + '[V:3][DG] "G7" zz|Z|\n');
+      // The second bar (_BAC, 3 quarter notes under L:1/4) is outside the
+      // selection, so the target voices receive a placeholder bar matching
+      // its actual duration ("z3"), not a bare whole-bar "Z".
+      expect(text).to.equal('X:1\nL:1/4\nK:F\n[V:1] [DGB] "G7" =B "Fm7" B | _BAC\n' + '[V:2]B "G7" =Bz|z3|\n' + '[V:3][DG] "G7" zz|z3|\n');
     });
 
     it("LSP-style cursor (Note/Chord only) preserves annotations and whitespace", () => {
@@ -1135,7 +1170,7 @@ describe("explosion CSTree end-to-end", () => {
       const result = explosion(selection, ["2", "3"], ctx, snapshots);
       const text = serializeSelection(result, ctx);
 
-      expect(text).to.equal('X:1\nL:1/4\nK:F\n[V:1] [DGB] "G7" =B "Fm7" B | _BAC\n' + '[V:2]B "G7" =Bz|Z|\n' + '[V:3][DG] "G7" zz|Z|\n');
+      expect(text).to.equal('X:1\nL:1/4\nK:F\n[V:1] [DGB] "G7" =B "Fm7" B | _BAC\n' + '[V:2]B "G7" =Bz|z3|\n' + '[V:3][DG] "G7" zz|z3|\n');
     });
   });
 
