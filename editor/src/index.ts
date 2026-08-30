@@ -77,6 +77,8 @@ export {
   getNodeRhythm,
   remove,
   transpose,
+  dropVoicing,
+  DropVoicing,
   toRest,
   setRhythm,
   sumRhythm,

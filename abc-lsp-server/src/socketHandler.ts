@@ -501,6 +501,7 @@ function handleApplyTransform(
     const needsAccidentals =
       params.transform === "harmonizeVoicing" ||
       params.transform === "transpose" ||
+      params.transform === "dropVoicing" ||
       params.transform === "parallelVoicing" ||
       params.transform === "enharmonizeToKey";
     const snapshots = doc.getSnapshots(needsAccidentals);

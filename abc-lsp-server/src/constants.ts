@@ -41,6 +41,7 @@ export const POSITION_BASED_TRANSFORMS = new Set(["splitSystems"]);
 export const TRANSFORM_NODE_TAGS: Record<string, string[]> = {
   harmonize: [TAGS.Note, TAGS.Chord],
   harmonizeVoicing: [TAGS.Note],
+  dropVoicing: [TAGS.Chord],
   parallelVoicing: [TAGS.Note],
   consolidateRests: [TAGS.Rest],
   insertVoiceLine: [TAGS.Note, TAGS.Chord],

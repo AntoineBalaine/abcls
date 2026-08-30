@@ -3,6 +3,7 @@ export { findChildByTag, findRhythmChild, findTieChild, replaceRhythm, replaceNo
 export { rhythmToRational, rationalToRhythm, extractBrokenToken, getNodeRhythm } from "./rhythm";
 export { remove } from "./remove";
 export { transpose } from "./transpose";
+export { dropVoicing, DropVoicing } from "./revoice";
 export { toRest } from "./toRest";
 export { setRhythm } from "./setRhythm";
 export { sumRhythm } from "./sumRhythm";

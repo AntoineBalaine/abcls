@@ -42,6 +42,8 @@ import {
   ParallelMode,
   splitSystems,
   explosion,
+  dropVoicing,
+  DropVoicing,
 } from "abcls-editor";
 import { ABCContext, IRational, Position } from "abcls-parser";
 import { ChordPosition } from "abcls-parser/interpreter/ChordPositionCollector";
@@ -97,6 +99,8 @@ const TRANSFORM_MAP: Record<string, TransformFn> = {
     const positions = args[1] as Position[];
     return splitSystems(sel, positions, ctx, snapshots);
   },
+  // For dropVoicing, args are: [snapshots, voicing]
+  dropVoicing: (sel, ctx, ...args) => dropVoicing(sel, args[1] as DropVoicing, ctx, args[0] as DocumentSnapshots),
   // For explosion, args are: [snapshots, targetVoiceIds]
   // (snapshots is prepended by socketHandler because it's context-aware)
   explosion: (sel, ctx, ...args) => explosion(sel, args[1] as string[], ctx, args[0] as DocumentSnapshots),
@@ -118,6 +122,7 @@ export const CONTEXT_AWARE_TRANSFORMS = new Set([
   "transpose",
   "toSlashNotation",
   "harmonizeVoicing",
+  "dropVoicing",
   "parallelVoicing",
   "splitSystems",
   "enharmonizeToKey",

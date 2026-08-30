@@ -241,12 +241,11 @@ export function registerTransformCommands(context: vscode.ExtensionContext, clie
     context.subscriptions.push(vscode.commands.registerCommand(commandId, () => applyTransform(client, "harmonize", [steps], statusBarItem)));
   }
 
-  // Chord-symbol-based voicing commands
+  // Chord-symbol-based harmonization commands. These build a chord under a
+  // selected melody note; the drop voicings below rearrange a chord that is
+  // already written, so they are separate commands on a separate transform.
   const voicingPresets: Array<[string, string]> = [
     ["abc.harmonizeClose", "close"],
-    ["abc.harmonizeDrop2", "drop2"],
-    ["abc.harmonizeDrop24", "drop24"],
-    ["abc.harmonizeDrop3", "drop3"],
     ["abc.harmonizeCluster", "cluster"],
   ];
 
@@ -254,10 +253,21 @@ export function registerTransformCommands(context: vscode.ExtensionContext, clie
     context.subscriptions.push(vscode.commands.registerCommand(commandId, () => applyTransform(client, "harmonizeVoicing", [voicing, 4, null], statusBarItem)));
   }
 
+  // Chord revoicing commands: these act on selected chords.
+  const dropPresets: Array<[string, string]> = [
+    ["abc.drop2", "drop2"],
+    ["abc.drop24", "drop24"],
+    ["abc.drop3", "drop3"],
+  ];
+
+  for (const [commandId, voicing] of dropPresets) {
+    context.subscriptions.push(vscode.commands.registerCommand(commandId, () => applyTransform(client, "dropVoicing", [voicing], statusBarItem)));
+  }
+
   // Chord-symbol voicing with voice count prompt
   context.subscriptions.push(
     vscode.commands.registerCommand("abc.harmonizeVoicing", async () => {
-      const voicing = await vscode.window.showQuickPick(["close", "drop2", "drop24", "drop3", "cluster"], {
+      const voicing = await vscode.window.showQuickPick(["close", "cluster"], {
         placeHolder: "Select voicing type",
       });
       if (!voicing) return;

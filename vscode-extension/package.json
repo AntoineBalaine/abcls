@@ -401,18 +401,18 @@
         "category": "ABC"
       },
       {
-        "command": "abc.harmonizeDrop2",
-        "title": "ABC: Harmonize Drop2 Voicing",
+        "command": "abc.drop2",
+        "title": "ABC: Drop 2",
         "category": "ABC"
       },
       {
-        "command": "abc.harmonizeDrop24",
-        "title": "ABC: Harmonize Drop24 Voicing",
+        "command": "abc.drop24",
+        "title": "ABC: Drop 2-4",
         "category": "ABC"
       },
       {
-        "command": "abc.harmonizeDrop3",
-        "title": "ABC: Harmonize Drop3 Voicing",
+        "command": "abc.drop3",
+        "title": "ABC: Drop 3",
         "category": "ABC"
       },
       {
@@ -696,15 +696,15 @@
           "when": "editorLangId == abc"
         },
         {
-          "command": "abc.harmonizeDrop2",
+          "command": "abc.drop2",
           "when": "editorLangId == abc"
         },
         {
-          "command": "abc.harmonizeDrop24",
+          "command": "abc.drop24",
           "when": "editorLangId == abc"
         },
         {
-          "command": "abc.harmonizeDrop3",
+          "command": "abc.drop3",
           "when": "editorLangId == abc"
         },
         {
