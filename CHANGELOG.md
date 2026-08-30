@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.12 (2026-08-30)
+
+### feat
+
+- drop2/drop24/drop3 are now revoicing commands that rearrange an already-written chord's notes, ranking voices by sounding pitch; separate from the harmonize close/cluster commands, which build a new chord under a selected lead note
+
+### fix
+
+- selections in the second or a later tune of a multi-tune document were resolved against the first tune instead, so explode, timed explosion, insertVoiceLine, and addVoice either did nothing or mutated the wrong tune
+- converting between the AST and the CSTree dropped a tune's linear/deferred flag and formatter config, so any transform on a linear tune re-serialized it as though it were deferred
+- timed explosion undercounted chords glued to adjacent notes with no surrounding whitespace, assigning far fewer target voices than requested
+- timed explosion treated a bare `%` comment line between systems as closing a bar for the last-active voice, and padded a new voice line with bars spanning the whole tune instead of just the system being exploded
+- timed explosion inserted new voice lines at the end of a system instead of at the position the tune's declared voice order calls for, and could place a padded bar after the line's closing newline
+- timed explosion's placeholder rest for a padded or newly seeded bar was always a blank whole-bar rest instead of matching the duration of the bar it stood in for
+- the `%%abcls-voices` directive and `V:`/`[V:...]` markers mis-scanned a single-letter voice ID that collided with a note letter (e.g. `B`), so `%%abcls-voices show B` silently filtered nothing
+- a chord selected through the language server's default resolution matched both the chord and its inner notes separately, causing double-processing in transforms that assumed one match per note
+- clef directives using the `-` operator (e.g. `clef=treble-8`) failed to parse
+- multiplyRhythm and divideRhythm now apply to y-spacers, matching the other rhythm transforms
+
 ## 0.1.11 (2026-08-07)
 
 ### fix
