@@ -6,9 +6,6 @@ import {
   ParsedChord,
   buildChord,
   invert,
-  drop2,
-  drop24,
-  drop3,
   isChordTone,
   isChordScaleTone,
   getAvailableTensions,
@@ -265,13 +262,14 @@ export function harmonize(selection: Selection, steps: number, ctx: ABCContext):
 /**
  * Voicing types supported by harmonizeVoicing.
  * - close: Notes placed as close together as possible
- * - drop2: Second-highest note dropped an octave
- * - drop24: Second and fourth notes dropped an octave
- * - drop3: Third-highest note dropped an octave
  * - cluster: Notes placed in a cluster voicing from the chord scale
  * - spread: Jazz spread voicing using decision tree placement
+ *
+ * The drop voicings (drop2, drop24, drop3) rearrange a chord that is already
+ * written, rather than building one under a lead note, so they live in
+ * dropVoicing/DropVoicing (./revoice) instead of here.
  */
-export type VoicingType = "close" | "drop2" | "drop24" | "drop3" | "cluster" | "spread";
+export type VoicingType = "close" | "cluster" | "spread";
 
 /**
  * Snapshot of the harmonic context at a given position.
@@ -488,7 +486,7 @@ export function toCSChord(voicedChord: VoicedNote[], snapshot: HarmonizeSnapshot
  *
  * This transform builds full voiced chords from lead notes using:
  * - The current chord symbol (from snapshots) or a diatonic chord derived from the key
- * - Various voicing types (close, drop2, drop24, drop3, cluster)
+ * - Various voicing types (close, cluster, spread)
  * - Voice count (4, 5, or 6 voices)
  *
  * @param selection The selection containing note node IDs
@@ -573,7 +571,7 @@ export function harmonizeVoicing(
         if (!spreadResult) continue;
         voicedChord = spreadResult;
       } else {
-        // Mechanical voicings (close, drop2, drop24, drop3)
+        // Mechanical close-position voicing
         if (voiceCount === 6) {
           if (!isChordScaleTone(lead.midi, rootPosChord, chord, snapshot.key)) continue;
           tensions = getAvailableTensions(rootPosChord, chord, snapshot.key);
@@ -599,19 +597,6 @@ export function harmonizeVoicing(
           // voiceCount === 4
           if (!isChordTone(lead.midi, rootPosChord)) continue;
           voicedChord = invert(rootPosChord, lead.midi);
-        }
-
-        // Apply drop voicing
-        switch (voicing) {
-          case "drop2":
-            voicedChord = drop2(voicedChord);
-            break;
-          case "drop24":
-            voicedChord = drop24(voicedChord);
-            break;
-          case "drop3":
-            voicedChord = drop3(voicedChord);
-            break;
         }
 
         // Handle 5-voice doubling: double the lead an octave below

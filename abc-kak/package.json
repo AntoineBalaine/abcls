@@ -1,6 +1,6 @@
 {
   "name": "abcls-kak",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "private": true,
   "description": "ABC notation support for Kakoune via kak-lsp",
   "scripts": {

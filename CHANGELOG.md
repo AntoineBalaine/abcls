@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.13 (2026-08-30)
+
+### chore
+
+- docs: transforms reference still listed drop2/drop24/drop3 under harmonizeVoicing after they moved to their own dropVoicing commands in 0.1.12; documented dropVoicing under a new Revoicing section instead
+- removed the now-dead drop2/drop24/drop3 branches from harmonizeVoicing itself, narrowing VoicingType to close/cluster/spread to match
+
 ## 0.1.12 (2026-08-30)
 
 ### feat

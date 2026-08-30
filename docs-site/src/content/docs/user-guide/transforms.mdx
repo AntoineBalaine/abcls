@@ -60,9 +60,9 @@ After (harmonize +3): K:C  [CE] [EG] [GB]
 
 ### harmonizeVoicing
 
-Generates a fully-voiced harmonic arrangement from chord symbols using a specified voicing type. Context-aware.
+Builds a fully-voiced chord under a selected lead note, using the current chord symbol (or a diatonic chord derived from the key). Context-aware.
 
-Available voicing types: `close`, `drop2`, `drop24`, `drop3`, `cluster`, `spread`.
+Available voicing types: `close`, `cluster`. (`spread` also exists but has no dedicated command yet.)
 
 ```
 Before: "Cmaj7"C
@@ -80,6 +80,21 @@ Shifts selected notes to match the voicing of an adjacent chord (previous or nex
 ### parallelChromatic
 
 Shifts selected notes to match the voicing of an adjacent chord (previous or next) using chromatic intervals. Each note is moved by the semitone distance between the current chord root and the reference chord root. Context-aware.
+
+## Revoicing
+
+### dropVoicing
+
+Rearranges the notes of an already-written chord into an open voicing, lowering one or more of its inner voices by an octave. Unlike harmonization, this does not build a new chord: it acts on a chord already present in the selection, ranking its notes by sounding pitch (not by the order they're written in). Context-aware.
+
+Available voicings: `drop2` (lowers the second-highest note), `drop24` (lowers the second and fourth-highest notes), `drop3` (lowers the third-highest note). A chord holding fewer notes than the voicing needs is left unchanged.
+
+```
+Before: [cegb]
+After (drop2):  [ceGb]
+After (drop24): [CeGb]
+After (drop3):  [cEgb]
+```
 
 ## Rhythm
 
