@@ -316,6 +316,44 @@ describe("Directive Scanner Tests", () => {
     });
   });
 
+  describe("Voices directive (%%abcls-voices)", () => {
+    it("should scan a note-letter voice id as an identifier, not a pitch", () => {
+      const ctx = createCtx("%%abcls-voices show B");
+      const result = scanDirective(ctx);
+
+      expect(result).to.equal(true);
+      expect(ctx.tokens[0].type).to.equal(TT.STYLESHEET_DIRECTIVE);
+      expect(ctx.tokens[1].type).to.equal(TT.IDENTIFIER);
+      expect(ctx.tokens[1].lexeme).to.equal("abcls-voices");
+      expect(ctx.tokens[2].type).to.equal(TT.IDENTIFIER);
+      expect(ctx.tokens[2].lexeme).to.equal("show");
+      expect(ctx.tokens[3].type).to.equal(TT.IDENTIFIER);
+      expect(ctx.tokens[3].lexeme).to.equal("B");
+    });
+
+    it("should scan multiple note-letter voice ids as identifiers", () => {
+      const ctx = createCtx("%%abcls-voices show A B C");
+      const result = scanDirective(ctx);
+
+      expect(result).to.equal(true);
+      const contentTokens = ctx.tokens.slice(1).filter((t) => t.type !== TT.WS);
+      expect(contentTokens.every((t) => t.type === TT.IDENTIFIER)).to.equal(true);
+      expect(contentTokens.map((t) => t.lexeme)).to.deep.equal(["abcls-voices", "show", "A", "B", "C"]);
+    });
+
+    it("should still scan a non-voice-letter directive's pitch normally alongside abcls-voices in the same document", () => {
+      // Regression guard: the abcls-voices gate must be scoped to that
+      // directive only, not disable pitch scanning for other directives.
+      const ctx = createCtx("%%key ^c");
+      const result = scanDirective(ctx);
+
+      expect(result).to.equal(true);
+      expect(ctx.tokens[2].type).to.equal(TT.ACCIDENTAL);
+      expect(ctx.tokens[3].type).to.equal(TT.NOTE_LETTER);
+      expect(ctx.tokens[3].lexeme).to.equal("c");
+    });
+  });
+
   describe("Formatter directive (%%abcls-fmt)", () => {
     it("should scan %%abcls-fmt system-comments with expected token sequence", () => {
       const ctx = createCtx("%%abcls-fmt system-comments");
@@ -537,6 +575,19 @@ describe("Directive Scanner Tests", () => {
       expect(contentTokens[1].toString()).to.match(/^musicspace \(id: \d+\)$/);
       expect(contentTokens[2].toString()).to.match(/^5 \(id: \d+\)$/);
       expect(contentTokens[3].toString()).to.match(/^cm \(id: \d+\)$/);
+    });
+
+    it("scanner round-trips %%abcls-voices show B without misreading the voice id as a pitch", () => {
+      const source = "%%abcls-voices show B";
+
+      const ctx = createCtx(source);
+      const result = scanDirective(ctx);
+
+      expect(result).to.equal(true);
+
+      const contentTokens = ctx.tokens.slice(1).filter((t) => t.type !== TT.WS);
+      expect(contentTokens.map((t) => t.type)).to.deep.equal([TT.IDENTIFIER, TT.IDENTIFIER, TT.IDENTIFIER]);
+      expect(contentTokens.map((t) => t.lexeme)).to.deep.equal(["abcls-voices", "show", "B"]);
     });
   });
 });

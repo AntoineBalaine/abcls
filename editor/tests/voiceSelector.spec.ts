@@ -77,6 +77,29 @@ describe("voiceSelector", () => {
       }
     });
 
+    it("selects only elements belonging to voice B (a voice ID that collides with a note letter)", () => {
+      // "B" scans as a note-letter token, not a plain identifier, so voice
+      // extraction must not be fooled into treating it as a pitch.
+      const sel = toSelection("X:1\nK:C\nV:1\nCDEF|\nV:B\nGABc|\n");
+      const result = selectVoices(sel, "B");
+      expect(result.cursors.length).to.be.greaterThan(0);
+      const allIds = new Set<number>();
+      for (const cursor of result.cursors) {
+        for (const id of cursor) {
+          allIds.add(id);
+        }
+      }
+      const infos = findByTag(sel.root, TAGS.Info_line);
+      const v1Info = infos.find((n) => {
+        const firstChild = n.firstChild;
+        if (!firstChild || !isTokenNode(firstChild)) return false;
+        return firstChild.data.lexeme.includes("V:1");
+      });
+      if (v1Info) {
+        expect(allIds.has(v1Info.id)).to.be.false;
+      }
+    });
+
     it("selects default voice content before any V: marker", () => {
       const sel = toSelection("X:1\nK:C\nABC|\nV:1\nDEF|\n");
       const result = selectVoices(sel, "");

@@ -281,6 +281,30 @@ describe("%%abcls-voices Directive Tests", () => {
       expect(data.mode).to.equal("show");
       expect(data.voiceIds).to.deep.equal(["V1", "V2"]);
     });
+
+    it("should handle a voice ID that collides with a note letter (e.g. 'B')", () => {
+      // "B" is a valid ABC note name, so scanDirective() special-cases the
+      // abcls-voices directive to scan it as TT.IDENTIFIER instead of running
+      // it through pitch scanning (which would otherwise produce TT.NOTE_LETTER).
+      const source = "%%abcls-voices show B";
+      const scanCtx = createScanCtx(source);
+      const scanResult = scanDirective(scanCtx);
+
+      expect(scanResult).to.equal(true);
+
+      const parseCtx = new ParseCtx(scanCtx.tokens, context);
+      const directive = parseDirective(parseCtx);
+
+      expect(directive).to.be.an.instanceof(Directive);
+
+      const analyzer = new SemanticAnalyzer(context);
+      const semanticData = analyzeDirective(directive!, analyzer);
+
+      expect(semanticData).to.not.be.null;
+      const data = semanticData!.data as AbclsVoicesDirectiveData;
+      expect(data.mode).to.equal("show");
+      expect(data.voiceIds).to.deep.equal(["B"]);
+    });
   });
 
   describe("Property-based tests", () => {
@@ -415,8 +439,10 @@ describe("%%abcls-voices Directive Tests", () => {
   });
 
   describe("Full tune property-based tests", () => {
-    // Generator for voice IDs (2+ chars to avoid note letter conflicts)
-    const genVoiceId = fc.stringMatching(/^[A-Z][a-zA-Z0-9]+$/).filter((id) => id.length >= 2 && id.length <= 10);
+    // Generator for voice IDs. Includes single-letter IDs (e.g. "B") that collide
+    // with ABC note names -- scanDirective() special-cases abcls-voices so these
+    // still scan as plain identifiers rather than pitches.
+    const genVoiceId = fc.stringMatching(/^[A-Z][a-zA-Z0-9]*$/).filter((id) => id.length >= 1 && id.length <= 10);
 
     // Generator for a minimal tune body
     const genTuneBodyContent = fc.constantFrom("CDEF|", "GABc|", "defg|", "abcd|");

@@ -30,9 +30,13 @@ export function scanDirective(ctx: Ctx): boolean {
   advance(ctx, 2);
   ctx.push(TT.STYLESHEET_DIRECTIVE);
 
+  // Voice IDs (e.g. "B") can look like ABC pitches; abcls-voices takes plain
+  // identifiers only, so its content must never be scanned as a pitch.
+  const isVoicesDirective = ctx.test(/abcls-voices\b/i);
+
   while (!(isAtEnd(ctx) || ctx.test(pEOL) || ctx.test("%"))) {
     if (numberWithUnit(ctx)) continue; // number + unit (must come before number)
-    if (tuneBodyPitch(ctx)) continue; // ABC pitches (^c, _b, =f)
+    if (!isVoicesDirective && tuneBodyPitch(ctx)) continue; // ABC pitches (^c, _b, =f)
 
     // Score/staves directive grouping symbols (check BEFORE identifier)
     if (singleChar(ctx, "(", TT.LPAREN)) continue;
