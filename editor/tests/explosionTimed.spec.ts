@@ -1145,6 +1145,41 @@ describe("explosion CSTree end-to-end", () => {
       // The [V:T] line must not have [V:3] content appended onto its end.
       expect(lines[tLineIdx]).to.not.include("[V:3]");
     });
+
+    it("inserts new voice lines at the position the tune's voice order gives them, not after every existing voice", () => {
+      const abc = [
+        "X:7",
+        "%%gchordfont Times 12",
+        "%%abcls-voices show T B",
+        "%%abcls-parse linear",
+        "Q:75",
+        "V:1 clef=treble stem=up style=normal",
+        "V:2 clef=bass octave=-2 style=normal stem=down",
+        "V:T clef=bass octave=-2 style=normal stem=down",
+        "V:3 clef=bass octave=-2 style=normal stem=down",
+        "V:4 clef=bass octave=-2 style=normal stem=down",
+        "V:5 clef=bass octave=-2 style=normal stem=down",
+        "V:6 clef=bass octave=-2 style=normal stem=down",
+        "V:B clef=bass octave=-2 style=normal stem=down",
+        '[V:1] E2 | "Am" c6 BA               | "Bø" A4- "E⁷"    A2 ^GB          |',
+        "[V:2] z2 |      A,2>[cegb]2-[cegb]4 |      B,2>[dfab]2 z [d^^f^gc']2 E |",
+        "[V:T] z2 |      z2> [cegb]2-[cegb]4 |      z2> [dfab]2 z [d^^f^gc']3   |",
+        "[V:B] z2 |      A,4 z4              |      B,4         z2 z E          |",
+        "",
+      ].join("\n");
+
+      // Explode the [V:T] line (line 15) into voices 3, 4, 5 and 6. The tune
+      // declares those voices between T and B, so the new lines belong there.
+      const { selection, ctx, snapshots } = createLspStyleTestContext(abc, 15, 0, 15, 100);
+
+      const result = explosion(selection, ["3", "4", "5", "6"], ctx, snapshots);
+      const text = serializeSelection(result, ctx);
+      const lines = text.split("\n");
+
+      const voiceLineOrder = lines.filter((l) => l.startsWith("[V:")).map((l) => l.slice(3, l.indexOf("]")));
+
+      expect(voiceLineOrder).to.deep.equal(["1", "2", "T", "3", "4", "5", "6", "B"]);
+    });
   });
 
   describe("real-world usage: chords with annotations and multi-bar context", () => {

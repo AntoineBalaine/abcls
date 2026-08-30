@@ -932,6 +932,30 @@ export function registerVoiceInBarMap(barMap: barmap.BarMap, voiceId: string, cl
 }
 
 /**
+ * Finds the voice line inside a linear-mode System that the tune's voice order
+ * places directly after the given voice. A new line is inserted before that
+ * marker so the system keeps the order the tune declares, rather than being
+ * appended after voices that belong below it. Returns null when the tune
+ * declares no later voice, meaning the new line belongs at the end.
+ */
+function findLinearVoiceSuccessor(systemNode: CSNode, voiceId: string, voiceOrder: string[]): CSNode | null {
+  const targetIdx = voiceOrder.indexOf(voiceId);
+  if (targetIdx === -1) return null;
+
+  let child = systemNode.firstChild;
+  while (child !== null) {
+    if (isVoiceMarker(child)) {
+      const existingId = extractVoiceId(child);
+      if (existingId !== null && voiceOrder.indexOf(existingId) > targetIdx) {
+        return child;
+      }
+    }
+    child = child.nextSibling;
+  }
+  return null;
+}
+
+/**
  * Creates a new voice line and inserts it into a Tune_Body at the correct
  * position according to voiceOrder. Used by deferred mode where each voice
  * occupies its own System.
@@ -1054,10 +1078,12 @@ export function createBar(barMap: barmap.BarMap, voiceId: string, barNum: number
     if (!anchorNode) return;
 
     // Find the insertion point: after the anchor but before the next voice
-    // marker, so we stay within the correct voice's content region.
+    // marker, so we stay within the correct voice's content region. The scan
+    // stops at the line terminator as well, because the bar belongs on its own
+    // voice's line rather than after the newline that closes it.
     let insertionPoint: CSNode | null = anchorNode.nextSibling;
     while (insertionPoint !== null) {
-      if (isVoiceMarker(insertionPoint)) break;
+      if (isVoiceMarker(insertionPoint) || isEolNode(insertionPoint)) break;
       insertionPoint = insertionPoint.nextSibling;
     }
 
@@ -1218,19 +1244,30 @@ function explodeParts(
       // Ensure the target voice exists
       if (!barMap.has(part.targetVoiceId)) {
         if (mode === "linear") {
-          // In linear mode, we append the voice content inside the current
-          // System rather than creating a sibling System. The new voice line
-          // needs its own line, so give the System's existing last line a
-          // terminator first if it doesn't already end with one.
-          const lastChild = lastChildOf(rootNode);
-          if (lastChild !== null && !isEolNode(lastChild)) {
-            appendChild(rootNode, createEolNode(ctx));
-          }
+          // In linear mode the voice lines live inside the current System, so a
+          // new one is placed among them at the position the tune's voice order
+          // gives it rather than after every existing voice.
           const nodes = createVoiceLineNodes(part.targetVoiceId, ctx, sourceBarDuration);
-          appendChild(rootNode, nodes.inlineField);
-          appendChild(rootNode, nodes.multiMeasureRestNode);
-          appendChild(rootNode, nodes.barlineNode);
-          appendChild(rootNode, nodes.eolToken);
+          const successor = findLinearVoiceSuccessor(rootNode, part.targetVoiceId, voiceOrder);
+          if (successor !== null) {
+            // Because each insertion goes immediately before the successor,
+            // inserting in order leaves the nodes in that same order.
+            insertBefore(successor, nodes.inlineField);
+            insertBefore(successor, nodes.multiMeasureRestNode);
+            insertBefore(successor, nodes.barlineNode);
+            insertBefore(successor, nodes.eolToken);
+          } else {
+            // The new line goes at the end of the System, which means the line
+            // currently last needs a terminator if it does not carry one.
+            const lastChild = lastChildOf(rootNode);
+            if (lastChild !== null && !isEolNode(lastChild)) {
+              appendChild(rootNode, createEolNode(ctx));
+            }
+            appendChild(rootNode, nodes.inlineField);
+            appendChild(rootNode, nodes.multiMeasureRestNode);
+            appendChild(rootNode, nodes.barlineNode);
+            appendChild(rootNode, nodes.eolToken);
+          }
           registerVoiceInBarMap(barMap, part.targetVoiceId, nodes.barlineNode.id, barNum);
         } else {
           createVoiceLine(barMap, part.targetVoiceId, rootNode, voiceOrder, ctx, barNum, sourceBarDuration);
