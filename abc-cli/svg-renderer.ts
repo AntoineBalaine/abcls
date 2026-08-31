@@ -104,11 +104,30 @@ If you're running from source:
 export async function renderAbcToSvg(abcContent: string): Promise<SvgRenderResult> {
   // Lazy load dependencies to provide better error messages
   const { createHTMLWindow } = await loadSvgdom();
-  const abcjs = await loadAbcjs();
+  // Because abcjs is a CommonJS module, an ESM import lands its API on `.default`,
+  // so we unwrap that when present to reach renderAbc.
+  const abcjsModule = await loadAbcjs();
+  const abcjs = (abcjsModule as unknown as { default?: typeof abcjsModule }).default ?? abcjsModule;
 
   // Create a fake DOM environment for abcjs using svgdom
   const window = createHTMLWindow();
   const document = window.document;
+
+  // Because svgdom exposes parentNode but not parentElement, and abcjs's
+  // closeGroup calls parentElement.removeChild on empty groups, we add a
+  // parentElement getter mirroring parentNode across the SVG element prototype
+  // chain. Without it, headless rendering throws on the first invisible group.
+  const svgProbe = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  for (let proto = Object.getPrototypeOf(svgProbe); proto && proto !== Object.prototype; proto = Object.getPrototypeOf(proto)) {
+    if (!Object.getOwnPropertyDescriptor(proto, "parentElement")) {
+      Object.defineProperty(proto, "parentElement", {
+        get(): unknown {
+          return (this as { parentNode?: unknown }).parentNode ?? null;
+        },
+        configurable: true,
+      });
+    }
+  }
 
   // Create container element for abcjs to render into
   const container = document.createElement("div");
