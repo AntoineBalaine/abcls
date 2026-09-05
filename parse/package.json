@@ -61,9 +61,10 @@
     "eslint-plugin-n": "^16.3.1",
     "eslint-plugin-promise": "^6.1.1",
     "eslint-plugin-unused-imports": "^4.3.0",
+    "libxmljs2": "^0.37.0",
     "lint-staged": "^13.1.0",
-    "mocha": "^10.2.0",
-    "nyc": "^15.1.0",
+    "mocha": "^12.0.0",
+    "nyc": "^18.0.0",
     "ts-mocha": "^10.0.0",
     "ts-node": "^10.9.1",
     "typescript": "^5.8.2"
@@ -99,8 +100,11 @@
     "report-dir": "../coverage"
   },
   "dependencies": {
+    "@astrojs/starlight": "0.41.10",
     "@typescript-eslint/parser": "^6.11.0",
+    "astro": "7.2.9",
     "fast-check": "^4.0.0",
-    "lodash": "^4.17.21"
+    "lodash": "^4.17.21",
+    "svgdom": "^0.1.28"
   }
 }
