@@ -503,6 +503,18 @@ export function initVxSlot(state: InterpreterState, systemIdx: number, vxStaff: 
   while (staff.voices.length <= voiceIndex) {
     staff.voices.push([]);
   }
+
+  // Keep voiceIds/voiceNames in sync with vxNomenclatures, since voice slots
+  // can be lazily padded out of order (see the while loop above) before the
+  // voice that actually owns a given index has been switched to.
+  if (!staff.voiceIds) staff.voiceIds = [];
+  if (!staff.voiceNames) staff.voiceNames = [];
+  for (const [vid, vxNom] of state.vxNomenclatures.entries()) {
+    if (vxNom.staffNum !== staffNum) continue;
+    staff.voiceIds[vxNom.index] = vid;
+    const name = state.voices.get(vid)?.properties.name;
+    if (name !== undefined) staff.voiceNames[vxNom.index] = name;
+  }
 }
 
 /**

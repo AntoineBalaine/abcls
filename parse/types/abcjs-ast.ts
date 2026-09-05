@@ -530,6 +530,12 @@ export interface Staff {
   meter?: Meter;
   workingClef: ClefProperties;
   voices: VoiceElement[][];
+  // Parallel to `voices`: the original ABC voice id (from V:<id>) and, where
+  // declared, its display name (V:<id> name="..."). TuneInterpreter is the
+  // only writer of these; the underlying `voices` arrays carry no identity
+  // of their own once interpretation is done.
+  voiceIds?: string[];
+  voiceNames?: string[];
   title?: string[];
   bracket?: BracketBracePosition;
   brace?: BracketBracePosition;
