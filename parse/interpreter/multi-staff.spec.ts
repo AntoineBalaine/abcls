@@ -648,4 +648,37 @@ GABA |`;
       expect(system1.staff[1].clef.type).to.equal("bass");
     });
   });
+
+  describe("Voice identity (voiceIds/voiceNames)", () => {
+    it("records each voice's original id and declared name, indexed in parallel with voices", () => {
+      const abc = `X:1
+V:S name="Soprano"
+V:A name="Alto"
+K:C
+V:S
+C D |
+V:A
+E F |`;
+      const tune = interpretABC(abc);
+      const system = tune.systems[0] as StaffSystem;
+      expect(system.staff[0].voiceIds).to.deep.equal(["S"]);
+      expect(system.staff[1].voiceIds).to.deep.equal(["A"]);
+    });
+
+    it("indexes voiceIds in parallel with voices when two voices merge onto one staff", () => {
+      const abc = `X:1
+V:1
+V:2 merge=true
+K:C
+V:1
+C D |
+V:2
+E F |`;
+      const tune = interpretABC(abc);
+      const system = tune.systems[0] as StaffSystem;
+      expect(system.staff.length).to.equal(1);
+      expect(system.staff[0].voiceIds).to.deep.equal(["1", "2"]);
+      expect(system.staff[0].voices.length).to.equal(2);
+    });
+  });
 });
