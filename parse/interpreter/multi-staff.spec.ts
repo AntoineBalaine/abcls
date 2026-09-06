@@ -680,5 +680,28 @@ E F |`;
       expect(system.staff[0].voiceIds).to.deep.equal(["1", "2"]);
       expect(system.staff[0].voices.length).to.equal(2);
     });
+
+    it("never stamps voiceIds/voiceNames past a system's actual voices length, even when a merged voice backfills an earlier system", () => {
+      const abc = `X:1
+V:1
+V:2 merge=true
+K:C
+V:1
+C D |
+V:1
+C D |
+V:2
+E F |
+V:1
+C D |`;
+      const tune = interpretABC(abc);
+      for (const system of tune.systems) {
+        if (!("staff" in system)) continue;
+        for (const staff of system.staff) {
+          expect(staff.voiceIds?.length ?? 0).to.be.at.most(staff.voices.length);
+          expect(staff.voiceNames?.length ?? 0).to.be.at.most(staff.voices.length);
+        }
+      }
+    });
   });
 });
