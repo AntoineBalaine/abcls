@@ -1,0 +1,148 @@
+import { expect } from "chai";
+import fc from "fast-check";
+import { KeyAccidental, KeyRoot } from "../types/abcjs-ast";
+import { ChordQuality, ParsedChord } from "../music-theory/types";
+import { irealTextToParsedChord, parsedChordToIrealText } from "./chordShorthand";
+
+function chord(partial: Partial<ParsedChord>): ParsedChord {
+  return {
+    root: KeyRoot.C,
+    rootAccidental: KeyAccidental.None,
+    quality: ChordQuality.Dominant,
+    qualityExplicit: false,
+    extension: null,
+    alterations: [],
+    bass: null,
+    ...partial,
+  };
+}
+
+describe("iReal chord shorthand", () => {
+  describe("confirmed symbols (parsedChordToIrealText)", () => {
+    it("major seventh uses ^", () => {
+      expect(parsedChordToIrealText(chord({ quality: ChordQuality.Major, qualityExplicit: true, extension: 7 }))).to.equal("C^7");
+    });
+    it("minor uses -", () => {
+      expect(parsedChordToIrealText(chord({ quality: ChordQuality.Minor, qualityExplicit: true, extension: 7 }))).to.equal("C-7");
+    });
+    it("dominant has no quality symbol", () => {
+      expect(parsedChordToIrealText(chord({ quality: ChordQuality.Dominant, qualityExplicit: true, extension: 7 }))).to.equal("C7");
+    });
+    it("diminished uses o", () => {
+      expect(parsedChordToIrealText(chord({ quality: ChordQuality.Diminished, qualityExplicit: true, extension: 7 }))).to.equal("Co7");
+    });
+    it("half-diminished uses h (Cm7b5 becomes Ch7)", () => {
+      expect(parsedChordToIrealText(chord({ quality: ChordQuality.HalfDiminished, qualityExplicit: true, extension: 7 }))).to.equal("Ch7");
+    });
+    it("augmented uses +", () => {
+      expect(parsedChordToIrealText(chord({ quality: ChordQuality.Augmented, qualityExplicit: true, extension: 5 }))).to.equal("C+5");
+    });
+    it("sus4 and sus2 spell out the word", () => {
+      expect(parsedChordToIrealText(chord({ quality: ChordQuality.Suspended4, qualityExplicit: true }))).to.equal("Csus4");
+      expect(parsedChordToIrealText(chord({ quality: ChordQuality.Suspended2, qualityExplicit: true }))).to.equal("Csus2");
+    });
+    it("emits root accidentals and slash bass", () => {
+      expect(
+        parsedChordToIrealText(
+          chord({
+            root: KeyRoot.B,
+            rootAccidental: KeyAccidental.Flat,
+            quality: ChordQuality.Major,
+            qualityExplicit: true,
+            extension: 7,
+            bass: { root: KeyRoot.D, accidental: KeyAccidental.None },
+          })
+        )
+      ).to.equal("Bb^7/D");
+    });
+    it("emits alterations after the extension", () => {
+      expect(
+        parsedChordToIrealText(chord({ quality: ChordQuality.Dominant, qualityExplicit: true, extension: 7, alterations: [{ type: "flat", degree: 9 }] }))
+      ).to.equal("C7b9");
+    });
+  });
+
+  describe("round trip (irealTextToParsedChord after parsedChordToIrealText)", () => {
+    const cases: ParsedChord[] = [
+      chord({ quality: ChordQuality.Major, qualityExplicit: true, extension: 7 }),
+      chord({ quality: ChordQuality.Minor, qualityExplicit: true, extension: 7 }),
+      chord({ quality: ChordQuality.Diminished, qualityExplicit: true, extension: 7 }),
+      chord({ quality: ChordQuality.HalfDiminished, qualityExplicit: true, extension: 7 }),
+      chord({ quality: ChordQuality.Augmented, qualityExplicit: true, extension: 5 }),
+      chord({ quality: ChordQuality.Suspended4, qualityExplicit: true }),
+      chord({ quality: ChordQuality.Suspended2, qualityExplicit: true }),
+      chord({
+        root: KeyRoot.B,
+        rootAccidental: KeyAccidental.Flat,
+        quality: ChordQuality.Major,
+        qualityExplicit: true,
+        extension: 7,
+        bass: { root: KeyRoot.D, accidental: KeyAccidental.None },
+      }),
+      chord({ quality: ChordQuality.Dominant, qualityExplicit: true, extension: 7, alterations: [{ type: "flat", degree: 9 }] }),
+    ];
+
+    for (const c of cases) {
+      it(`round-trips ${parsedChordToIrealText(c)}`, () => {
+        const text = parsedChordToIrealText(c);
+        const reparsed = irealTextToParsedChord(text);
+        expect(reparsed).to.not.be.null;
+        // Dominant chords have no distinct iReal symbol, so qualityExplicit
+        // cannot be recovered from text alone for that one quality; every
+        // other quality's explicitness is fully recoverable.
+        const expected = c.quality === ChordQuality.Dominant ? { ...c, qualityExplicit: false } : c;
+        expect(reparsed).to.deep.equal(expected);
+      });
+    }
+  });
+
+  describe("property-based: ParsedChord generated directly", () => {
+    // KeyRoot also includes HP/Hp (bagpipe key notation), never valid as a
+    // chord symbol root; restrict to the seven real note letters.
+    const rootArb = fc.constantFrom(KeyRoot.A, KeyRoot.B, KeyRoot.C, KeyRoot.D, KeyRoot.E, KeyRoot.F, KeyRoot.G);
+    const accArb = fc.constantFrom(KeyAccidental.None, KeyAccidental.Sharp, KeyAccidental.Flat);
+    const qualityArb = fc.constantFrom(
+      ChordQuality.Major,
+      ChordQuality.Minor,
+      ChordQuality.Dominant,
+      ChordQuality.Diminished,
+      ChordQuality.Augmented,
+      ChordQuality.HalfDiminished,
+      ChordQuality.Suspended2,
+      ChordQuality.Suspended4
+    );
+    const extensionArb = fc.constantFrom(null, 5, 6, 7, 9, 11, 13);
+    const chordArb = fc
+      .record({
+        root: rootArb,
+        rootAccidental: accArb,
+        quality: qualityArb,
+        extension: extensionArb,
+        bass: fc.option(fc.record({ root: rootArb, accidental: accArb }), { nil: null }),
+      })
+      .map(
+        (r): ParsedChord => ({
+          ...r,
+          qualityExplicit: true,
+          alterations: [],
+        })
+      );
+
+    it("round-trips arbitrary confirmed-quality chords with no alterations", () => {
+      fc.assert(
+        fc.property(chordArb, (c) => {
+          // sus2/sus4 do not carry an extension in this mapping's convention.
+          const normalized: ParsedChord = c.quality === ChordQuality.Suspended2 || c.quality === ChordQuality.Suspended4 ? { ...c, extension: null } : c;
+          const text = parsedChordToIrealText(normalized);
+          const reparsed = irealTextToParsedChord(text);
+          const expected = normalized.quality === ChordQuality.Dominant ? { ...normalized, qualityExplicit: false } : normalized;
+          expect(reparsed).to.deep.equal(expected);
+        })
+      );
+    });
+  });
+
+  it("returns null for unparseable text", () => {
+    expect(irealTextToParsedChord("not a chord")).to.be.null;
+  });
+});
