@@ -75,7 +75,7 @@ function buildAttributesXml(attrs: AttributesIR): XmlNode {
     children.push(el("key", undefined, [textEl("fifths", attrs.keyFifths), attrs.keyMode ? textEl("mode", attrs.keyMode) : undefined]));
   }
   if (attrs.timeBeats !== undefined && attrs.timeBeatType !== undefined) {
-    children.push(el("time", undefined, [textEl("beats", attrs.timeBeats), textEl("beat-type", attrs.timeBeatType)]));
+    children.push(el("time", { symbol: attrs.timeSymbol }, [textEl("beats", attrs.timeBeats), textEl("beat-type", attrs.timeBeatType)]));
   }
   if (attrs.clefSign !== undefined) {
     children.push(

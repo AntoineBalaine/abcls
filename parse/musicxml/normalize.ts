@@ -151,14 +151,31 @@ export function keySignatureToModeName(key: KeySignature): string {
   return MODE_NAME[key.mode] ?? "major";
 }
 
-export function meterToBeatsAndType(meter: Meter | undefined): { beats: string; beatType: string } {
+export function meterToBeatsAndType(meter: Meter | undefined): { beats: string; beatType: string; symbol?: "common" | "cut" } {
   if (!meter || !meter.value || meter.value.length === 0) {
-    if (meter?.type === MeterType.CutTime) return { beats: "2", beatType: "2" };
+    if (meter?.type === MeterType.CutTime) return { beats: "2", beatType: "2", symbol: "cut" };
+    if (meter?.type === MeterType.CommonTime) return { beats: "4", beatType: "4", symbol: "common" };
     return { beats: "4", beatType: "4" };
   }
   const total = meter.value.reduce((sum, r) => sum + r.numerator, 0);
   const denominator = meter.value[0].denominator;
-  return { beats: String(total), beatType: String(denominator) };
+  // MeterType.CommonTime/CutTime is reused by info-line-analyzer.ts as a tag
+  // for ABC mensural symbols (o, c, o., c.) whose real value is 3/1, 2/1,
+  // 9/8, or 6/8, not 4/4 or 2/2. Only emit the MusicXML symbol when the
+  // actual value genuinely reduces to a whole note (1/1), which is what both
+  // 4/4 and 2/2 reduce to, rather than trusting the type tag alone. Reduction
+  // is required rather than an exact-value check because OSMD's importer
+  // already reduces a literal 4/4 or 2/2 to 1/1 before this function ever
+  // sees it, while the ABC-side parser (info-line-analyzer.ts) constructs
+  // unreduced 4/4 and 2/2 values directly.
+  const reducesToWholeNote = total !== 0 && denominator !== 0 && (() => {
+    const g = findGCD(Math.abs(total), Math.abs(denominator));
+    return total / g === 1 && denominator / g === 1;
+  })();
+  const isGenuineCommonTime = meter.type === MeterType.CommonTime && reducesToWholeNote;
+  const isGenuineCutTime = meter.type === MeterType.CutTime && reducesToWholeNote;
+  const symbol = isGenuineCommonTime ? "common" : isGenuineCutTime ? "cut" : undefined;
+  return { beats: String(total), beatType: String(denominator), symbol };
 }
 
 const CLEF_SIGN: Partial<Record<ClefType, { sign: string; line: number; octaveChange?: number }>> = {
@@ -242,9 +259,10 @@ function buildMeasureAttributes(elements: VoiceElement[], divisions: number | un
       has = true;
     }
     if (isMeterElement(element)) {
-      const { beats, beatType } = meterToBeatsAndType({ type: element.type, value: element.value, beat_division: element.beat_division });
+      const { beats, beatType, symbol } = meterToBeatsAndType({ type: element.type, value: element.value, beat_division: element.beat_division });
       attrs.timeBeats = beats;
       attrs.timeBeatType = beatType;
+      attrs.timeSymbol = symbol;
       has = true;
     }
     if (isClefElement(element)) {

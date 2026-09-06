@@ -42,6 +42,7 @@ export interface AttributesIR {
   keyMode?: string;
   timeBeats?: string;
   timeBeatType?: string;
+  timeSymbol?: "common" | "cut";
   clefSign?: string;
   clefLine?: number;
   clefOctaveChange?: number;
