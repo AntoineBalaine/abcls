@@ -97,7 +97,9 @@ function buildNotationsXml(note: NoteIR): XmlNode | undefined {
   if (n?.slurStarts) for (const num of n.slurStarts) children.push(el("slur", { type: "start", number: num }));
   if (n?.slurStops) for (const num of n.slurStops) children.push(el("slur", { type: "stop", number: num }));
   if (n?.ornaments && n.ornaments.length) children.push(el("ornaments", undefined, n.ornaments.map((o) => el(o))));
+  if (n?.technical && n.technical.length) children.push(el("technical", undefined, n.technical.map((t) => el(t))));
   if (n?.articulations && n.articulations.length) children.push(el("articulations", undefined, n.articulations.map((a) => el(a))));
+  if (n?.fermata) children.push(el("fermata", n.fermata === "inverted" ? { type: "inverted" } : undefined));
   const present = children.filter((c): c is XmlNode => c !== undefined);
   return present.length ? el("notations", undefined, present) : undefined;
 }

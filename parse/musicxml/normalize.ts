@@ -159,15 +159,9 @@ export function meterToBeatsAndType(meter: Meter | undefined): { beats: string; 
   }
   const total = meter.value.reduce((sum, r) => sum + r.numerator, 0);
   const denominator = meter.value[0].denominator;
-  // MeterType.CommonTime/CutTime is reused by info-line-analyzer.ts as a tag
-  // for ABC mensural symbols (o, c, o., c.) whose real value is 3/1, 2/1,
-  // 9/8, or 6/8, not 4/4 or 2/2. Only emit the MusicXML symbol when the
-  // actual value genuinely reduces to a whole note (1/1), which is what both
-  // 4/4 and 2/2 reduce to, rather than trusting the type tag alone. Reduction
-  // is required rather than an exact-value check because OSMD's importer
-  // already reduces a literal 4/4 or 2/2 to 1/1 before this function ever
-  // sees it, while the ABC-side parser (info-line-analyzer.ts) constructs
-  // unreduced 4/4 and 2/2 values directly.
+  // MeterType.CommonTime/CutTime is also used for ABC mensural symbols
+  // (o, c, o., c.), whose values are not 4/4 or 2/2, so the symbol is only
+  // emitted when the value actually reduces to a whole note.
   const reducesToWholeNote = total !== 0 && denominator !== 0 && (() => {
     const g = findGCD(Math.abs(total), Math.abs(denominator));
     return total / g === 1 && denominator / g === 1;
@@ -221,12 +215,29 @@ function buildPitchIR(pitchNumber: number, accidental: AccidentalType | undefine
   return alter === undefined ? { step, octave } : { step, octave, alter };
 }
 
+// <fermata> is a direct child of <notations>; up-bow/down-bow belong under
+// <technical>, not <articulations>.
+const FERMATA_TYPE: Partial<Record<Decorations, "upright" | "inverted">> = {
+  [Decorations.Fermata]: "upright",
+  [Decorations.InvertedFermata]: "inverted",
+};
+const TECHNICAL_DECORATIONS = new Set<Decorations>([Decorations.Upbow, Decorations.Downbow]);
+
 function buildNotationsIR(decoration: Decorations[] | undefined, startSlurs: number[], endSlurs: number[]): NotationsIR | undefined {
   const notations: NotationsIR = {};
   if (startSlurs.length > 0) notations.slurStarts = startSlurs;
   if (endSlurs.length > 0) notations.slurStops = endSlurs;
   if (decoration) {
     for (const d of decoration) {
+      const fermataType = FERMATA_TYPE[d];
+      if (fermataType) {
+        notations.fermata = fermataType;
+        continue;
+      }
+      if (TECHNICAL_DECORATIONS.has(d)) {
+        notations.technical = [...(notations.technical ?? []), ARTICULATION_MAP[d]!];
+        continue;
+      }
       const articulation = ARTICULATION_MAP[d];
       const ornament = ORNAMENT_MAP[d];
       if (articulation) {
@@ -237,7 +248,8 @@ function buildNotationsIR(decoration: Decorations[] | undefined, startSlurs: num
       }
     }
   }
-  const hasContent = notations.slurStarts || notations.slurStops || notations.articulations || notations.ornaments;
+  const hasContent =
+    notations.slurStarts || notations.slurStops || notations.articulations || notations.ornaments || notations.technical || notations.fermata;
   return hasContent ? notations : undefined;
 }
 
@@ -350,7 +362,8 @@ function buildVoiceMeasureNotes(measureElements: VoiceElement[], voiceNumber: nu
 
 function buildPart(collected: CollectedStaff, partId: string, divisions: number): PartIR {
   const voiceMeasures = collected.voices.map((v) => splitVoiceIntoMeasures(v));
-  const measureCount = voiceMeasures.reduce((max, m) => Math.max(max, m.length), 0);
+  // MusicXML's <part> requires minOccurs="1" on <measure>.
+  const measureCount = Math.max(1, voiceMeasures.reduce((max, m) => Math.max(max, m.length), 0));
   const slurAllocator = new SlurNumberAllocator();
   const measures: MeasureIR[] = [];
   for (let measureIndex = 0; measureIndex < measureCount; measureIndex++) {
