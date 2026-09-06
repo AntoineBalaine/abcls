@@ -21,3 +21,19 @@ export const ORNAMENT_MAP: Partial<Record<Decorations, string>> = {
   [Decorations.Fermata]: "fermata",
   [Decorations.InvertedFermata]: "fermata",
 };
+
+function buildInverseMap(map: Partial<Record<Decorations, string>>): Partial<Record<string, Decorations>> {
+  const inverse: Partial<Record<string, Decorations>> = {};
+  for (const key of Object.keys(map) as Decorations[]) {
+    const value = map[key];
+    if (value === undefined || value in inverse) continue;
+    inverse[value] = key;
+  }
+  return inverse;
+}
+
+// Several Decorations values collide onto the same MusicXML string (mordent/lowerMordent,
+// upperMordent/pralltriller, fermata/invertedFermata); buildInverseMap resolves each
+// collision by keeping whichever Decorations key is declared first in the maps above.
+export const INVERSE_ARTICULATION_MAP = buildInverseMap(ARTICULATION_MAP);
+export const INVERSE_ORNAMENT_MAP = buildInverseMap(ORNAMENT_MAP);
