@@ -33,7 +33,7 @@ describe("userSymbol function", () => {
     assert.equal(tokens[2].type, TT.EQL);
     assert.equal(tokens[2].lexeme, "=");
 
-    assert.equal(tokens[3].type, TT.SYMBOL);
+    assert.equal(tokens[3].type, TT.DECORATION);
     assert.equal(tokens[3].lexeme, "!trill!");
   });
 
@@ -54,7 +54,7 @@ describe("userSymbol function", () => {
     assert.equal(tokens[2].type, TT.EQL);
     assert.equal(tokens[2].lexeme, "=");
 
-    assert.equal(tokens[3].type, TT.SYMBOL);
+    assert.equal(tokens[3].type, TT.DECORATION);
     assert.equal(tokens[3].lexeme, "!fermata!");
   });
 
@@ -68,7 +68,7 @@ describe("userSymbol function", () => {
     const userSymToken = tokens.find((t) => t.type === TT.USER_SY);
     assert.equal(userSymToken?.lexeme, "w");
 
-    const symbolToken = tokens.find((t) => t.type === TT.SYMBOL);
+    const symbolToken = tokens.find((t) => t.type === TT.DECORATION);
     assert.equal(symbolToken?.lexeme, "!accent!");
   });
 
@@ -82,7 +82,7 @@ describe("userSymbol function", () => {
     const userSymToken = tokens.find((t) => t.type === TT.USER_SY);
     assert.equal(userSymToken?.lexeme, "H");
 
-    const symbolToken = tokens.find((t) => t.type === TT.SYMBOL);
+    const symbolToken = tokens.find((t) => t.type === TT.DECORATION);
     assert.equal(symbolToken?.lexeme, "!staccato!");
   });
 
@@ -96,7 +96,7 @@ describe("userSymbol function", () => {
     const userSymToken = tokens.find((t) => t.type === TT.USER_SY);
     assert.equal(userSymToken?.lexeme, "~");
 
-    const symbolToken = tokens.find((t) => t.type === TT.SYMBOL);
+    const symbolToken = tokens.find((t) => t.type === TT.DECORATION);
     assert.equal(symbolToken?.lexeme, "!turn!");
   });
 
@@ -118,7 +118,7 @@ describe("userSymbol function", () => {
     assert.equal(result, true);
 
     const tokens = ctx.tokens.slice(1);
-    const symbolToken = tokens.find((t) => t.type === TT.SYMBOL);
+    const symbolToken = tokens.find((t) => t.type === TT.DECORATION);
     assert.equal(symbolToken?.lexeme, "!trill!");
   });
 

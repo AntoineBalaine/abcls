@@ -121,9 +121,13 @@ export interface VoiceState {
   // Tie tracking (for connecting same pitches across barlines)
   pendingTies: Map<number, {}>; // Map of pitch number to tie object
 
-  // Slur tracking (for phrasing marks)
-  pendingStartSlurs: { label: number; style?: SlurStyle }[]; // Slurs that need to start on next note
-  pendingEndSlurs: number[]; // Labels for slurs that need to end on next note
+  // Slur tracking (for phrasing marks). Single stack, single source of truth:
+  // a '(' token pushes an entry with startApplied false; applyStartSlurs marks
+  // the not-yet-applied entries applied (writing their label onto the next
+  // note) without removing them, since they must stay on the stack until a
+  // later ')' token pops them to set endSlur. This avoids needing two arrays
+  // kept in manual lockstep at every push/pop site.
+  openSlurs: { label: number; style?: SlurStyle; startApplied: boolean }[];
   nextSlurLabel: number; // Counter for generating unique slur labels
 
   // Tuplet tracking (for triplets, quintuplets, etc.)
@@ -311,8 +315,7 @@ export function newVxState(id: string, properties: VoiceProperties, tuneDefaults
     currentMeter: tuneDefaults.meter,
     measureAccidentals: new Map(),
     pendingTies: new Map(),
-    pendingStartSlurs: [],
-    pendingEndSlurs: [],
+    openSlurs: [],
     nextSlurLabel: 101, // abcjs starts at 101
     tupletNotesLeft: 0,
     tupletP: 0,

@@ -79,7 +79,7 @@ describe("Scanner: System Break", () => {
       const systemBreakTokens = tokens.filter((t) => t.type === TT.SYSTEM_BREAK);
       assert.equal(systemBreakTokens.length, 0);
 
-      const symbolToken = tokens.find((t) => t.type === TT.SYMBOL);
+      const symbolToken = tokens.find((t) => t.type === TT.DECORATION);
       assert.ok(symbolToken);
       assert.equal(symbolToken?.lexeme, "!trill!");
     });
@@ -92,7 +92,7 @@ describe("Scanner: System Break", () => {
       const systemBreakTokens = tokens.filter((t) => t.type === TT.SYSTEM_BREAK);
       assert.equal(systemBreakTokens.length, 0);
 
-      const symbolToken = tokens.find((t) => t.type === TT.SYMBOL);
+      const symbolToken = tokens.find((t) => t.type === TT.DECORATION);
       assert.ok(symbolToken);
     });
 
@@ -104,7 +104,7 @@ describe("Scanner: System Break", () => {
       const systemBreakTokens = tokens.filter((t) => t.type === TT.SYSTEM_BREAK);
       assert.equal(systemBreakTokens.length, 1);
 
-      const symbolToken = tokens.find((t) => t.type === TT.SYMBOL);
+      const symbolToken = tokens.find((t) => t.type === TT.DECORATION);
       assert.ok(symbolToken);
       assert.equal(symbolToken?.lexeme, "!trill!");
     });

@@ -427,23 +427,28 @@ function processTieEnd(pitches: ABCJSPitch[], voiceState: VoiceState): void {
 
 /**
  * Applies start slurs to pitches.
- * When we encounter '(' or '.(' tokens, we add slur info to pendingStartSlurs, and then
- * this function applies those to the current note's pitches.
+ * When we encounter '(' or '.(' tokens, we push an entry onto openSlurs, and
+ * this function marks the not-yet-applied entries applied, writing their
+ * label onto the current note's first pitch. Entries stay on openSlurs after
+ * being applied (only their startApplied flag changes) since they must
+ * remain there until a later ')' token pops them to set endSlur.
  */
 function applyStartSlurs(pitches: ABCJSPitch[], voiceState: VoiceState): void {
-  if (voiceState.pendingStartSlurs.length === 0) return;
+  const unapplied = voiceState.openSlurs.filter((slur) => !slur.startApplied);
+  if (unapplied.length === 0) return;
 
   for (const pitch of pitches) {
     if (pitch.pitch !== undefined) {
       // Apply all pending start slurs to this pitch
       // Each slur has { label, style? } - spread to include style if present
-      pitch.startSlur = voiceState.pendingStartSlurs.map((slur) => ({ ...slur }));
+      pitch.startSlur = unapplied.map((slur) => (slur.style ? { label: slur.label, style: slur.style } : { label: slur.label }));
       break; // Only apply to first pitch
     }
   }
 
-  // Clear pending start slurs (they've been applied)
-  voiceState.pendingStartSlurs = [];
+  for (const slur of unapplied) {
+    slur.startApplied = true;
+  }
 }
 
 /**
@@ -1671,24 +1676,27 @@ export class TuneInterpreter implements Visitor<void> {
       const voiceState = this.state.voices.get(this.state.currentVoice);
       if (voiceState) {
         if (token.lexeme === "(") {
-          // Start slur: generate a new label and add to pending
+          // Start slur: push a new entry onto the single open-slur stack.
+          // applyStartSlurs marks it applied once it writes the label onto a
+          // note's startSlur; it stays on the stack, unremoved, until the
+          // matching ')' pops it below.
           const label = voiceState.nextSlurLabel++;
-          voiceState.pendingStartSlurs.push({ label });
+          voiceState.openSlurs.push({ label, startApplied: false });
         } else if (token.lexeme === ")") {
-          // End slur: pop a label from start slurs and retroactively add to last note
+          // End slur: pop the most recently opened slur and retroactively add to last note
           // Because slurs can only be attached to notes, we need to check if any music has been processed yet
           if (this.state.currentSystemNum === -1 || this.state.currentStaffNum === -1 || this.state.currentVoiceIndex === -1) {
             // No music notes have been processed yet, so we skip slur attachment
-            // Pop the pending slur to keep the stack consistent
-            if (voiceState.pendingStartSlurs.length > 0) {
-              voiceState.pendingStartSlurs.pop();
+            // Pop the open slur to keep the stack consistent
+            if (voiceState.openSlurs.length > 0) {
+              voiceState.openSlurs.pop();
             }
             return;
           }
 
           const elements = this.getCurrentVoiceElements();
-          if (voiceState.pendingStartSlurs.length > 0 && elements.length > 0) {
-            const slur = voiceState.pendingStartSlurs.pop()!;
+          if (voiceState.openSlurs.length > 0 && elements.length > 0) {
+            const slur = voiceState.openSlurs.pop()!;
             const lastElement = elements[elements.length - 1];
 
             // Add endSlur to the last note's first pitch
@@ -1707,7 +1715,7 @@ export class TuneInterpreter implements Visitor<void> {
       const voiceState = this.state.voices.get(this.state.currentVoice);
       if (voiceState) {
         const label = voiceState.nextSlurLabel++;
-        voiceState.pendingStartSlurs.push({ label, style: SlurStyle.Dotted });
+        voiceState.openSlurs.push({ label, style: SlurStyle.Dotted, startApplied: false });
       }
     }
   }

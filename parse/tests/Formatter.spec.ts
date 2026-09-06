@@ -48,14 +48,14 @@ describe("AbcFormatter", () => {
         assert.equal(format("X:1\nCDEF GABG|", ctx, formatter), "X:1\nCDEF GABG |");
       });
 
-      it("adds space after decoration", () => {
-        assert.equal(format("X:1\n!p!CDEF|", ctx, formatter), "X:1\n!p! CDEF |");
+      it("glues a bang-delimited decoration to the following note with no space, like single-character decorations", () => {
+        assert.equal(format("X:1\n!p!CDEF|", ctx, formatter), "X:1\n!p!CDEF |");
       });
     });
 
     describe("edge cases", () => {
       it("handles multiple decorations", () => {
-        assert.equal(format("X:1\n!p!!f!CDEF|", ctx, formatter), "X:1\n!p! !f! CDEF |");
+        assert.equal(format("X:1\n!p!!f!CDEF|", ctx, formatter), "X:1\n!p!!f!CDEF |");
       });
 
       it("handles grace notes", () => {
@@ -115,7 +115,7 @@ describe("AbcFormatter", () => {
       });
 
       it("handles symbol decorations", () => {
-        assert.equal(format("X:1\n!trill!C!turn!D|", ctx, formatter), "X:1\n!trill! C!turn!D |");
+        assert.equal(format("X:1\n!trill!C!turn!D|", ctx, formatter), "X:1\n!trill!C!turn!D |");
       });
 
       it("handles multiple voice markers in single voice", () => {
@@ -412,9 +412,9 @@ C DEF|GABC|`,
 V:1
 V:2
 V:1
-!p! C {ag}D   | GABC |
+!p!C {ag}D   | GABC |
 V:2
-    C     DEF | GABC |`
+   C     DEF | GABC |`
         );
       });
 

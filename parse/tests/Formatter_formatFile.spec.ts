@@ -221,7 +221,7 @@ K:C
       const expected = `X:1
 T:Complex Tune
 K:C
-(3ABC DEF | "Chord" [CEG]2 | {fg}a2 | !trill! B2 |`;
+(3ABC DEF | "Chord" [CEG]2 | {fg}a2 | !trill!B2 |`;
 
       const ast = parseFile(input, ctx);
       const result = formatter.formatFile(ast);
