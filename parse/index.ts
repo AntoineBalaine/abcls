@@ -40,3 +40,5 @@ export * from "./abcl";
 export * from "./playback";
 // Music theory module for chord symbol parsing
 export * from "./music-theory";
+// Tune (interpreter output) to ABC text serializer
+export { tuneToAbcText, tuneToAst } from "./tuneToAst";
