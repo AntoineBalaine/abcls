@@ -506,11 +506,17 @@ export function initVxSlot(state: InterpreterState, systemIdx: number, vxStaff: 
 
   // Keep voiceIds/voiceNames in sync with vxNomenclatures, since voice slots
   // can be lazily padded out of order (see the while loop above) before the
-  // voice that actually owns a given index has been switched to.
+  // voice that actually owns a given index has been switched to. Only stamp
+  // indices that actually exist in this system's `voices` array: a voice
+  // known globally via vxNomenclatures may not have written into this
+  // particular system yet (getSystemIdx can backfill it into an earlier
+  // one), and stamping past `voices.length` would break the parallel-array
+  // guarantee documented on Staff.
   if (!staff.voiceIds) staff.voiceIds = [];
   if (!staff.voiceNames) staff.voiceNames = [];
   for (const [vid, vxNom] of state.vxNomenclatures.entries()) {
     if (vxNom.staffNum !== staffNum) continue;
+    if (vxNom.index >= staff.voices.length) continue;
     staff.voiceIds[vxNom.index] = vid;
     const name = state.voices.get(vid)?.properties.name;
     if (name !== undefined) staff.voiceNames[vxNom.index] = name;
