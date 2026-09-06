@@ -17,6 +17,9 @@ export interface NotationsIR {
   slurStops?: number[];
   articulations?: string[];
   ornaments?: string[];
+  technical?: string[];
+  // MusicXML's <fermata> is a direct child of <notations>, not <ornaments>.
+  fermata?: "upright" | "inverted";
 }
 
 export interface GraceIR {

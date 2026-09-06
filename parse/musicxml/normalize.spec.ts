@@ -115,6 +115,22 @@ describe("normalizeForMusicXML", () => {
     expect(notes.some((n) => n.rest === true)).to.equal(true);
     expect(ir.parts[0].measures[0].content.length).to.equal(irAfter.parts[0].measures[0].content.length);
   });
+
+  it("still emits at least one measure for a staff with zero voices", () => {
+    // A MusicXML <staves> count can declare a staff that this particular
+    // excerpt never writes notes to; MusicXML's <part> requires
+    // minOccurs="1" on <measure>, so the part must not come out empty.
+    const abc = "X:1\nV:1\nV:2\nK:C\nV:1\nC D |\nV:2\nC, D, |";
+    const tune = interpretABC(abc);
+    const staff = tune.systems[0];
+    if ("staff" in staff) {
+      staff.staff[1].voices = [];
+    }
+    const ir = normalizeForMusicXML(tune);
+    const emptyPart = ir.parts.find((p) => p.measures.every((m) => m.content.length === 0));
+    expect(emptyPart, "expected one part with zero-content measures").to.not.be.undefined;
+    expect(emptyPart!.measures.length).to.be.at.least(1);
+  });
 });
 
 describe("SlurNumberAllocator overflow", () => {
