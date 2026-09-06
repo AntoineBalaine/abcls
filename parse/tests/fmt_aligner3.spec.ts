@@ -204,9 +204,9 @@ V:2
 C D|`;
 
       const expected = `V:1
-!p! C "swing" D |
+!p!C "swing" D |
 V:2
-    C         D |`;
+   C         D |`;
 
       testAlignment(input, expected);
     });
@@ -513,8 +513,8 @@ V:1
 s: * * * *|`;
 
       const expected = `V:1
-!p! C D !f! E F |
-s:  * *     * * |`;
+!p!C D !f!E F |
+s: * *    * * |`;
 
       testAlignment(input, expected);
     });

@@ -207,6 +207,39 @@ describe("scan2", () => {
       assert.equal(result, false);
       assert.equal(ctx.tokens.length, 0);
     });
+
+    it("should classify a bang-delimited known decoration name as TT.DECORATION, not TT.SYMBOL", () => {
+      const ctx = createCtx("!trill!");
+      const result = symbol(ctx);
+      assert.equal(result, true);
+      assert.equal(ctx.tokens.length, 1);
+      assert.equal(ctx.tokens[0].type, TT.DECORATION);
+      assert.equal(ctx.tokens[0].lexeme, "!trill!");
+    });
+
+    it("should classify a plus-delimited known decoration name as TT.DECORATION, not TT.SYMBOL", () => {
+      const ctx = createCtx("+trill+");
+      const result = symbol(ctx);
+      assert.equal(result, true);
+      assert.equal(ctx.tokens.length, 1);
+      assert.equal(ctx.tokens[0].type, TT.DECORATION);
+      assert.equal(ctx.tokens[0].lexeme, "+trill+");
+    });
+
+    it("should keep an unrecognized bang-delimited run classified as TT.SYMBOL", () => {
+      const ctx = createCtx("!symbol!");
+      const result = symbol(ctx);
+      assert.equal(result, true);
+      assert.equal(ctx.tokens[0].type, TT.SYMBOL);
+    });
+
+    it("should classify a bang-delimited decoration with a position hint (^ or _) as TT.DECORATION", () => {
+      const ctx = createCtx("!^trill!");
+      const result = symbol(ctx);
+      assert.equal(result, true);
+      assert.equal(ctx.tokens[0].type, TT.DECORATION);
+      assert.equal(ctx.tokens[0].lexeme, "!^trill!");
+    });
   });
 
   describe("rhythm", () => {

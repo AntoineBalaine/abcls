@@ -2,6 +2,7 @@ import * as fc from "fast-check";
 import { ABCContext } from "../parsers/Context";
 import { AbcErrorReporter } from "../parsers/ErrorReporter";
 import { Token, TT } from "../parsers/scan";
+import { isKnownDecorationLexeme } from "../parsers/scan_tunebody";
 import {
   genInfoLine2,
   genKeyInfoLine2,
@@ -111,11 +112,18 @@ export const genSystemBreak = fc
   .tuple(genWhitespace, fc.constantFrom(new Token(TT.SYSTEM_BREAK, "!", sharedContext.generateId())), genWhitespace)
   .map(([ws1, rb, ws2]) => [ws1, rb, ws2]);
 
-// Symbol generator
+// Symbol generator. Excludes any generated lexeme that isKnownDecorationLexeme
+// would classify as a decoration (see scan_tunebody.ts's symbol()), since those
+// now scan as TT.DECORATION, not TT.SYMBOL; reusing the real predicate here
+// keeps this generator from drifting out of sync with the scanner again.
 export const genSymbol = fc.oneof(
-  fc.stringMatching(/^![a-zA-Z][^\n!]*!$/).map((sym) => new Token(TT.SYMBOL, sym, sharedContext.generateId())),
+  fc.stringMatching(/^![a-zA-Z][^\n!]*!$/)
+    .filter((sym) => !isKnownDecorationLexeme(sym))
+    .map((sym) => new Token(TT.SYMBOL, sym, sharedContext.generateId())),
   // FIXME: including the `:` here so that tests don't break. This is an edge case.
-  fc.stringMatching(/^\+[^\n:+]*\+$/).map((sym) => new Token(TT.SYMBOL, sym, sharedContext.generateId()))
+  fc.stringMatching(/^\+[^\n:+]*\+$/)
+    .filter((sym) => !isKnownDecorationLexeme(sym))
+    .map((sym) => new Token(TT.SYMBOL, sym, sharedContext.generateId()))
 );
 
 // Y-spacer generator

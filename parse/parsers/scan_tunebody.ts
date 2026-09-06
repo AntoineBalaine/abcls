@@ -1,5 +1,6 @@
 import { scanDirective } from "./infoLines/scanDirective";
 import { absolutePitch, infoLineIdentifier, singleChar, specialLiteral, stringLiteral, unsignedNumber } from "./infoLines/scanInfoLine";
+import { Decorations } from "../types/abcjs-ast";
 import {
   Ctx,
   EOL,
@@ -216,6 +217,22 @@ export function systemBreak(ctx: Ctx): boolean {
   return true;
 }
 
+// The full set of decoration names AbcLs recognizes, used to tell a genuine
+// !decoration! or +decoration+ token apart from other bang/plus-delimited
+// content that symbol() also matches (e.g. unrecognized vendor extensions).
+const KNOWN_DECORATION_NAMES = new Set<string>(Object.values(Decorations));
+
+// Mirrors the delimiter- and position-hint-stripping visitDecorationExpr
+// (TuneInterpreter.ts) applies to a matched !decoration!/+decoration+ lexeme,
+// so this classification stays in sync with what the interpreter accepts.
+export function isKnownDecorationLexeme(delimitedLexeme: string): boolean {
+  let name = delimitedLexeme.slice(1, -1);
+  if (name.startsWith("^") || name.startsWith("_")) {
+    name = name.substring(1);
+  }
+  return KNOWN_DECORATION_NAMES.has(name);
+}
+
 export function symbol(ctx: Ctx): boolean {
   if (!(ctx.test(/![^\n!]*!/) || ctx.test(/\+[^\n+]*\+/))) return false;
   const is_plus_symbol = ctx.test("+");
@@ -224,7 +241,8 @@ export function symbol(ctx: Ctx): boolean {
     advance(ctx);
   }
   advance(ctx);
-  ctx.push(TT.SYMBOL);
+  const lexeme = ctx.source.substring(ctx.start, ctx.current);
+  ctx.push(isKnownDecorationLexeme(lexeme) ? TT.DECORATION : TT.SYMBOL);
   return true;
 }
 
