@@ -80,6 +80,7 @@ describe("iReal chord shorthand", () => {
         bass: { root: KeyRoot.D, accidental: KeyAccidental.None },
       }),
       chord({ quality: ChordQuality.Dominant, qualityExplicit: true, extension: 7, alterations: [{ type: "flat", degree: 9 }] }),
+      chord({ quality: ChordQuality.Power, qualityExplicit: true }),
     ];
 
     for (const c of cases) {
@@ -132,7 +133,18 @@ describe("iReal chord shorthand", () => {
       fc.assert(
         fc.property(chordArb, (c) => {
           // sus2/sus4 do not carry an extension in this mapping's convention.
-          const normalized: ParsedChord = c.quality === ChordQuality.Suspended2 || c.quality === ChordQuality.Suspended4 ? { ...c, extension: null } : c;
+          // A Dominant chord with extension exactly 5 and no other symbol
+          // serializes to the same text ("A5") as a Power chord, an inherent
+          // collision in the shorthand itself (see CHORD_TEXT_PATTERN's "5"
+          // alternative), not something either direction can recover from
+          // text alone; excluded from this fidelity claim the same way
+          // Dominant's own qualityExplicit is already excluded below.
+          const normalized: ParsedChord =
+            c.quality === ChordQuality.Suspended2 || c.quality === ChordQuality.Suspended4
+              ? { ...c, extension: null }
+              : c.quality === ChordQuality.Dominant && c.extension === 5
+                ? { ...c, extension: 7 }
+                : c;
           const text = parsedChordToIrealText(normalized);
           const reparsed = irealTextToParsedChord(text);
           const expected = normalized.quality === ChordQuality.Dominant ? { ...normalized, qualityExplicit: false } : normalized;

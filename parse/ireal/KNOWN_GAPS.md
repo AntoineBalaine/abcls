@@ -82,3 +82,16 @@ ABCx source text directly via string templating, validated by re-parsing
 the generated text through the real ScannerAbcx/parseAbcx pipeline in
 roundtrip.spec.ts. This is a lower-risk choice given the constraints, not
 a finding that Formatter reuse would not have worked.
+
+## "5" chord text is ambiguous between Power and Dominant-with-extension-5
+
+`CHORD_TEXT_PATTERN` in chordShorthand.ts treats a bare "5" after the root
+as the Power chord quality symbol. A Dominant chord (no quality letter)
+with `extension: 5` and no other symbol serializes to that exact same
+text ("A5"), so parsing it back always resolves to Power, never to the
+original Dominant-with-extension-5 shape. This is not a code defect to
+fix; both readings produce identical text, and Power is the far more
+common real-world meaning of a bare "5" on a chord chart. Excluded from
+chordShorthand.spec.ts's property-based round-trip fidelity claim for
+this specific combination, the same way Dominant's own qualityExplicit
+flag is already excluded there for a similar reason.

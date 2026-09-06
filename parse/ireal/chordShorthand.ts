@@ -28,6 +28,9 @@ const QUALITY_TO_SYMBOL: Record<ChordQuality, string> = {
   [ChordQuality.Add]: "add",
 };
 
+// Kept as the exact inverse of QUALITY_TO_SYMBOL: every symbol that table can
+// produce must be recognized here, or a round trip through an explicit
+// quality (e.g. Power, qualityExplicit: true) reparses as a different chord.
 const SYMBOL_TO_QUALITY: Array<[string, ChordQuality]> = [
   ["sus2", ChordQuality.Suspended2],
   ["sus4", ChordQuality.Suspended4],
@@ -37,6 +40,7 @@ const SYMBOL_TO_QUALITY: Array<[string, ChordQuality]> = [
   ["o", ChordQuality.Diminished],
   ["h", ChordQuality.HalfDiminished],
   ["+", ChordQuality.Augmented],
+  ["5", ChordQuality.Power],
 ];
 
 function rootToText(root: KeyRoot, accidental: KeyAccidental): string {
@@ -47,7 +51,7 @@ function alterationToText(alt: ChordAlteration): string {
   return (alt.type === "sharp" ? "#" : "b") + String(alt.degree);
 }
 
-export function parsedChordToIrealText(chord: ParsedChord): string {
+function chordToText(chord: ParsedChord, qualityToSymbol: Record<ChordQuality, string>): string {
   let text = rootToText(chord.root, chord.rootAccidental);
 
   if (chord.quality === ChordQuality.Dominant || !chord.qualityExplicit) {
@@ -56,7 +60,7 @@ export function parsedChordToIrealText(chord: ParsedChord): string {
   } else if (chord.quality === ChordQuality.Add) {
     text += "add" + (chord.extension !== null ? String(chord.extension) : "");
   } else {
-    text += QUALITY_TO_SYMBOL[chord.quality];
+    text += qualityToSymbol[chord.quality];
     if (chord.extension !== null && chord.quality !== ChordQuality.Suspended2 && chord.quality !== ChordQuality.Suspended4) {
       text += String(chord.extension);
     }
@@ -73,7 +77,15 @@ export function parsedChordToIrealText(chord: ParsedChord): string {
   return text;
 }
 
-const CHORD_TEXT_PATTERN = /^([A-G])([#b]?)((?:sus2|sus4|add|\^|-|o|h|\+)?)(\d+)?((?:[#b]\d+)*)(?:\/([A-G])([#b]?))?$/;
+export function parsedChordToIrealText(chord: ParsedChord): string {
+  return chordToText(chord, QUALITY_TO_SYMBOL);
+}
+
+// "5" (Power) is included as a quality-symbol alternative, not left to the
+// bare-extension digit group below: no dominant chord extension is ever the
+// literal digit 5 in real jazz chord vocabulary (extensions are 6, 7, 9, 11,
+// 13), so this is unambiguous, and it must stay in sync with SYMBOL_TO_QUALITY.
+const CHORD_TEXT_PATTERN = /^([A-G])([#b]?)((?:sus2|sus4|add|\^|-|o|h|\+|5)?)(\d+)?((?:[#b]\d+)*)(?:\/([A-G])([#b]?))?$/;
 
 export function irealTextToParsedChord(text: string): ParsedChord | null {
   const match = CHORD_TEXT_PATTERN.exec(text.trim());
@@ -128,26 +140,5 @@ const ABCX_QUALITY_TO_SYMBOL: Record<ChordQuality, string> = {
 };
 
 export function parsedChordToAbcxText(chord: ParsedChord): string {
-  let text = rootToText(chord.root, chord.rootAccidental);
-
-  if (chord.quality === ChordQuality.Dominant || !chord.qualityExplicit) {
-    if (chord.extension !== null) text += String(chord.extension);
-  } else if (chord.quality === ChordQuality.Add) {
-    text += "add" + (chord.extension !== null ? String(chord.extension) : "");
-  } else {
-    text += ABCX_QUALITY_TO_SYMBOL[chord.quality];
-    if (chord.extension !== null && chord.quality !== ChordQuality.Suspended2 && chord.quality !== ChordQuality.Suspended4) {
-      text += String(chord.extension);
-    }
-  }
-
-  for (const alt of chord.alterations) {
-    text += alterationToText(alt);
-  }
-
-  if (chord.bass) {
-    text += "/" + rootToText(chord.bass.root, chord.bass.accidental);
-  }
-
-  return text;
+  return chordToText(chord, ABCX_QUALITY_TO_SYMBOL);
 }

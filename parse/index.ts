@@ -40,3 +40,6 @@ export * from "./abcl";
 export * from "./playback";
 // Music theory module for chord symbol parsing
 export * from "./music-theory";
+// ABCx to/from iReal Pro chord chart link conversion
+export { exportAbcxToIrealLink } from "./ireal/exportToIreal";
+export { importIrealLinkToAbcx } from "./ireal/importFromIreal";

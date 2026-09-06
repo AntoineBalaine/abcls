@@ -76,10 +76,10 @@ export function parseSongFieldString(songString: string): IrealSongFields {
 
   return {
     title: unguard(parts[0]) ?? "",
-    composer: parts[1],
+    composer: unguard(parts[1]) ?? "",
     style: unguard(parts[3]) ?? "",
-    key: parts[4],
-    transpose: parts[5],
+    key: unguard(parts[4]) ?? "",
+    transpose: unguard(parts[5]) ?? "",
     rawChordData: parts[6],
     groove: unguard(parts[7]) || undefined,
     bpm: unguard(parts[8]) || undefined,
