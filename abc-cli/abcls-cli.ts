@@ -8,11 +8,13 @@
 import * as path from "path";
 import { Command } from "commander";
 import { abc2midiCommand } from "./commands/abc2midi";
+import { abc2xmlCommand } from "./commands/abc2xml";
 import { abcx2abcCommand } from "./commands/abcx2abc";
 import { checkCommand } from "./commands/check";
 import { formatCommand } from "./commands/format";
 import { midi2abcCommand } from "./commands/midi2abc";
 import { renderCommand } from "./commands/render";
+import { xml2abcCommand } from "./commands/xml2abc";
 
 const program = new Command();
 
@@ -25,6 +27,8 @@ program.addCommand(renderCommand);
 program.addCommand(abcx2abcCommand);
 program.addCommand(abc2midiCommand);
 program.addCommand(midi2abcCommand);
+program.addCommand(abc2xmlCommand);
+program.addCommand(xml2abcCommand);
 
 // The lsp subcommand loads the LSP server bundle, which is built as a
 // separate esbuild entry point to avoid increasing CLI startup time.

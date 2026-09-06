@@ -74,13 +74,8 @@ export type {
   TimeSignature as IrealTimeSignature,
 } from "./ireal/gridAst";
 export { layoutChart } from "./ireal/gridLayout";
-export type {
-  Barline as IrealBarline,
-  ChartLayout,
-  LaidOutBar,
-  LaidOutCell,
-  LaidOutLine,
-  LayoutOptions,
-} from "./ireal/gridLayout";
+export type { Barline as IrealBarline, ChartLayout, LaidOutBar, LaidOutCell, LaidOutLine, LayoutOptions } from "./ireal/gridLayout";
 export { parseIrealKey } from "./ireal/keyField";
 export { exportAbcxToIrealLink } from "./ireal/exportToIreal";
+// Tune (interpreter output) to ABC text serializer
+export { tuneToAbcText, tuneToAst } from "./tuneToAst";
