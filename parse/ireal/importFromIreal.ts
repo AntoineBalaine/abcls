@@ -33,8 +33,8 @@ function gridTokensToAbcxBody(tokens: GridToken[]): string {
   return parts.join(" ");
 }
 
-function buildSongAbcxText(fields: IrealSongFields, tuneNumber: number): string {
-  const lines: string[] = [`X:${tuneNumber}`];
+function buildSongAbcxText(fields: IrealSongFields, tuneNumber: number, sourceLink: string): string {
+  const lines: string[] = [`X:${tuneNumber}`, `% iReal Pro source: ${sourceLink}`];
   if (fields.title) lines.push(`T:${fields.title}`);
   if (fields.composer) lines.push(`C:${fields.composer}`);
   if (fields.style) lines.push(`%%irealstyle ${fields.style}`);
@@ -55,5 +55,5 @@ export function importIrealLinkToAbcx(link: string): string {
   if (playlist.songs.length === 0) {
     throw new Error("No songs found in iReal Pro link; nothing to import");
   }
-  return playlist.songs.map((song, i) => buildSongAbcxText(song, i + 1)).join("\n\n");
+  return playlist.songs.map((song, i) => buildSongAbcxText(song, i + 1, link)).join("\n\n");
 }

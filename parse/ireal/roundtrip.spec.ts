@@ -66,4 +66,29 @@ C7 F7 |
   it("throws a clear error when there are no songs to import", () => {
     expect(() => importIrealLinkToAbcx("irealb://")).to.throw(/No songs found/);
   });
+
+  it("embeds the exact source link as a comment immediately after X:, and it survives a real reparse with no errors", () => {
+    const abcx = `X:1\nT:Test\nK:C\nC7 |\n`;
+    const link = exportAbcxToIrealLink(abcx);
+    const reimportedAbcx = importIrealLinkToAbcx(link);
+    const lines = reimportedAbcx.split("\n");
+    expect(lines[0]).to.equal("X:1");
+    expect(lines[1]).to.equal(`% iReal Pro source: ${link}`);
+
+    const ctx = new ABCContext();
+    const tokens = ScannerAbcx(reimportedAbcx, ctx);
+    parseAbcx(tokens, ctx);
+    expect(ctx.errorReporter.hasErrors(), `parse errors: ${ctx.errorReporter.getErrors().map((e) => e.message).join(", ")}`).to.equal(false);
+  });
+
+  it("embeds the same whole-playlist source link on every tune in a multi-song playlist, not just the first", () => {
+    const songA = `X:1\nT:Song A\nK:C\nC7 |\n`;
+    const songB = `X:2\nT:Song B\nK:F\nF7 |\n`;
+    const link = exportAbcxToIrealLink(`${songA}\n${songB}`);
+    const reimportedAbcx = importIrealLinkToAbcx(link);
+    const sourceCommentLines = reimportedAbcx.split("\n").filter((l) => l.startsWith("% iReal Pro source: "));
+    expect(sourceCommentLines).to.have.length(2);
+    expect(sourceCommentLines[0]).to.equal(`% iReal Pro source: ${link}`);
+    expect(sourceCommentLines[1]).to.equal(`% iReal Pro source: ${link}`);
+  });
 });
