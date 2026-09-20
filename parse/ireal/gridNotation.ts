@@ -35,11 +35,22 @@ export function gridTokensToText(tokens: GridToken[]): string {
 
 export function textToGridTokens(text: string): GridToken[] {
   const tokens: GridToken[] = [];
+  // Real charts commonly open with a "[T44"-style time-signature marker
+  // (the digits are the meter, e.g. "44" for 4/4, "34" for 3/4) glued
+  // directly to the first chord with no separating space, e.g.
+  // "[T44A-   |Bh7 E7b9 |...". Section-label handling in general is out
+  // of scope for this reduced grid grammar (see the module doc comment
+  // above), but silently dropping the very first chord of a chart because
+  // it's glued to this marker is a real data-loss bug, not an
+  // intentionally-skipped unrecognized cell, so this specific marker is
+  // stripped before tokenizing rather than left to fuse with and destroy
+  // the chord that follows it.
+  const withoutLeadingTimeSig = text.replace(/^\[T\d{2}/, "");
   // "|" may be glued directly to an adjacent chord in real chart text
   // (e.g. "|C-7|G7|"); padding it with spaces first guarantees it always
   // splits out as its own cell below, rather than needing ad hoc
   // leading/trailing-run stripping per cell.
-  const cells = text
+  const cells = withoutLeadingTimeSig
     .split("|")
     .join(" | ")
     .split(/\s+/)

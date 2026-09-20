@@ -107,14 +107,23 @@ export class AbcxToAbcConverter {
   calculateRestLength(numChords: number, isFullBar: boolean): { letter: string; numerator: number; denominator: number } {
     if (numChords <= 0) return { letter: "x", numerator: 1, denominator: 1 };
 
+    // "X" is ABC's invisible whole-measure rest: on its own it already
+    // means "one full measure, whatever the meter is", and a trailing
+    // number changes its meaning to "this many whole measures" (a
+    // multi-measure rest), not "a rest lasting this many note-lengths".
+    // A single chord spanning the full bar is exactly one measure, so it
+    // must be bare "X" with no duration suffix — computing a note-length
+    // based numerator here (as the general per-chord case below does) and
+    // attaching it to "X" would wrongly turn one measure of rest into a
+    // multi-measure rest spanning that many measures instead.
+    if (isFullBar) return { letter: "X", numerator: 1, denominator: 1 };
+
     // Calculate bar length in terms of the default note length
     const meterValue = this.meter.numerator / this.meter.denominator;
     const noteLengthValue = this.noteLength.numerator / this.noteLength.denominator;
     const barUnits = meterValue / noteLengthValue;
     const restUnits = barUnits / numChords;
-
-    // Use X for full-bar rests (single chord per bar)
-    const restLetter = isFullBar ? "X" : "x";
+    const restLetter = "x";
 
     if (restUnits === Math.floor(restUnits)) {
       return { letter: restLetter, numerator: Math.floor(restUnits), denominator: 1 };
