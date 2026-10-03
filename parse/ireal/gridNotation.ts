@@ -1,15 +1,19 @@
 import { ParsedChord } from "../music-theory/types";
 import { irealTextToParsedChord, parsedChordToIrealText } from "./chordShorthand";
+import { cleanGridText } from "./gridAnnotations";
 
 /**
- * iReal Pro chord-grid plain text, reduced scope.
+ * iReal Pro chord-grid plain text.
  *
- * Covers: chord cells, "|" bar separators, "n" for N.C. (no chord), and
- * "x" for repeat-previous-bar. Section labels (*A, *B, *V), segno/coda,
- * first/second endings, and the "r" repeat-previous-two-bars shorthand
- * are not implemented in this version; see the implementation report for
- * why (grid-notation detail beyond these cases was not confirmed against
- * enough real sample data during implementation to build with confidence).
+ * textToGridTokens's own cell grammar covers only chord cells, "|" bar
+ * separators, "n" for N.C. (no chord), and "x" for repeat-previous-bar —
+ * but it runs the input through gridAnnotations.ts's cleanGridText first,
+ * which resolves everything else real charts commonly carry (section
+ * labels, time signatures, comments, alternative chords, fermata, the
+ * "small" annotation, hold/sustain comma padding, segno/coda jumps, and
+ * simple or first/second-ending repeat sections) down into that reduced
+ * grammar. The "r" repeat-previous-two-bars shorthand is still not
+ * implemented.
  */
 
 export type GridToken = { type: "chord"; chord: ParsedChord } | { type: "noChord" } | { type: "repeatBar" } | { type: "bar" };
@@ -35,22 +39,12 @@ export function gridTokensToText(tokens: GridToken[]): string {
 
 export function textToGridTokens(text: string): GridToken[] {
   const tokens: GridToken[] = [];
-  // Real charts commonly open with a "[T44"-style time-signature marker
-  // (the digits are the meter, e.g. "44" for 4/4, "34" for 3/4) glued
-  // directly to the first chord with no separating space, e.g.
-  // "[T44A-   |Bh7 E7b9 |...". Section-label handling in general is out
-  // of scope for this reduced grid grammar (see the module doc comment
-  // above), but silently dropping the very first chord of a chart because
-  // it's glued to this marker is a real data-loss bug, not an
-  // intentionally-skipped unrecognized cell, so this specific marker is
-  // stripped before tokenizing rather than left to fuse with and destroy
-  // the chord that follows it.
-  const withoutLeadingTimeSig = text.replace(/^\[T\d{2}/, "");
+  const cleaned = cleanGridText(text);
   // "|" may be glued directly to an adjacent chord in real chart text
   // (e.g. "|C-7|G7|"); padding it with spaces first guarantees it always
   // splits out as its own cell below, rather than needing ad hoc
   // leading/trailing-run stripping per cell.
-  const cells = withoutLeadingTimeSig
+  const cells = cleaned
     .split("|")
     .join(" | ")
     .split(/\s+/)

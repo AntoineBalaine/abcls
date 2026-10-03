@@ -128,3 +128,19 @@ correctly (confirmed via importFromIreal.spec.ts's passing repeat-chain
 test, which uses a chart with no unsupported grid features and resolves
 correctly). Closing this gap for real needs the grammar extensions
 described above, not another change to the repeat-bar logic.
+
+## Grid-annotation cleanup (section labels, repeats with endings, codas, hold-padding)
+
+gridAnnotations.ts's cleanGridText resolves most of the real-world grid
+constructs documented above as gaps (section labels, time signatures,
+comments, alternative chords, fermata, the "small" annotation, hold/
+sustain comma padding, segno/coda jumps, and simple or first/second-
+ending repeat sections), reimplemented from understanding of the
+protocol gained by cross-referencing drs251/pyRealParser and
+sciurius/perl-Data-iRealPro (not copied from either). Verified against a
+real 657-song library backup: charts with a visible symptom of this gap
+(an empty "|:  :|" repeat, the clearest sign content was silently
+dropped) dropped from the majority of complex charts to 38 of 657 (~6%).
+The "r" repeat-previous-two-bars shorthand mentioned in gridNotation.ts's
+own doc comment is still not implemented, and is the most likely cause
+of most of what remains — not independently confirmed per-chart.
