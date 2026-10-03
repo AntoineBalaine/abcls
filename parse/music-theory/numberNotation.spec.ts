@@ -16,11 +16,17 @@ describe("numberNotation", () => {
     it("major third above tonic is 3", () => {
       expect(formatDegree(nashvilleDegree(KeyRoot.E, KeyAccidental.None, cMajor))).to.equal("3");
     });
-    it("minor third above tonic is b3, regardless of the song's mode", () => {
+    it("a minor key's own tonic reads as 6, not 1 — Nashville numbers off the relative major", () => {
+      // A minor's relative major is C major: A is the diatonic vi of C
+      // major, so the i chord of an A-minor tune reads as "6".
       const aMinor = key(KeyRoot.A, KeyAccidental.None, Mode.Minor);
-      // C is a minor third above A, and is the diatonic iii of A minor —
-      // but Nashville numbering always measures against the major scale.
-      expect(formatDegree(nashvilleDegree(KeyRoot.C, KeyAccidental.None, aMinor))).to.equal("b3");
+      expect(formatDegree(nashvilleDegree(KeyRoot.A, KeyAccidental.None, aMinor))).to.equal("6");
+    });
+    it("a minor key's relative major tonic reads as 1", () => {
+      // C minor's relative major is Eb major: Eb reads as "1" even though
+      // the song's own tonic is C.
+      const cMinor = key(KeyRoot.C, KeyAccidental.None, Mode.Minor);
+      expect(formatDegree(nashvilleDegree(KeyRoot.E, KeyAccidental.Flat, cMinor))).to.equal("1");
     });
     it("tritone above tonic is #4", () => {
       expect(formatDegree(nashvilleDegree(KeyRoot.F, KeyAccidental.Sharp, cMajor))).to.equal("#4");

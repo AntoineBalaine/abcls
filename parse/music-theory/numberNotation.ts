@@ -5,18 +5,20 @@
  * Two numbering systems are supported, matching iReal Pro's own two
  * modes:
  *
- * - Nashville numbering: degrees are always measured against the major
- *   scale built on the key's tonic, regardless of the song's actual
- *   mode. A minor-key tune's diatonic iii chord (a minor third above the
- *   tonic) reads as "b3", because a minor third is not in the major
- *   scale built on that same tonic.
+ * - Nashville numbering: degrees are always measured against a major
+ *   scale. For a major-key song that's the key's own tonic; for a
+ *   minor-key song it's the *relative major* — the major key sharing the
+ *   same key signature, a minor third above the minor tonic (C minor's
+ *   relative major is Eb major) — because the Nashville Number System
+ *   always reads a chart's numbers off a major scale, never a minor one.
+ *   A C-minor tune's i chord (C) is a diatonic vi relative to Eb major,
+ *   so it reads as "6", not "1".
  * - Regular number notation: degrees are measured against the song's
- *   actual mode's scale, anchored at the same tonic. The same minor-key
- *   iii chord above reads as a plain "3", because a minor third above
- *   the tonic is the diatonic 3rd degree of a minor (Aeolian) scale.
+ *   actual mode's scale, anchored at the song's own tonic (no relative-
+ *   major shift) — a C-minor tune's i chord reads as a plain "1".
  *
- * Both reduce to the same offset-to-degree lookup; only the scale
- * pattern used for that lookup differs.
+ * Both reduce to the same offset-to-degree lookup; only the tonic and
+ * scale pattern used for that lookup differ.
  */
 
 import { KeyRoot, KeyAccidental, KeySignature, Mode } from "../types/abcjs-ast";
@@ -80,26 +82,29 @@ function offsetToDegree(offset: number, scaleSteps: number[]): DegreeSpelling {
   return { degree: 1, accidental: null };
 }
 
-function chordOffsetFromTonic(
-  chordRoot: KeyRoot,
-  chordRootAccidental: KeyAccidental,
-  key: KeySignature,
-): number {
-  const chordSemitone = rootSemitone(chordRoot, chordRootAccidental);
-  const tonicSemitone = rootSemitone(key.root, key.acc);
+function chordOffsetFromTonic(chordSemitone: number, tonicSemitone: number): number {
   return ((chordSemitone - tonicSemitone) % 12 + 12) % 12;
 }
 
+// A minor key's relative major sits a minor third (3 semitones) above
+// its tonic — e.g. C minor's relative major is Eb major.
+const RELATIVE_MAJOR_SHIFT_SEMITONES = 3;
+
 /**
- * Nashville numbering: degree relative to the major scale of the key's
- * tonic, ignoring the key's actual mode.
+ * Nashville numbering: degree relative to a major scale — the key's own
+ * tonic for a major key, or the relative major's tonic for a minor key,
+ * since the Nashville Number System always reads off a major scale.
  */
 export function nashvilleDegree(
   chordRoot: KeyRoot,
   chordRootAccidental: KeyAccidental,
   key: KeySignature,
 ): DegreeSpelling {
-  const offset = chordOffsetFromTonic(chordRoot, chordRootAccidental, key);
+  const chordSemitone = rootSemitone(chordRoot, chordRootAccidental);
+  const keyTonicSemitone = rootSemitone(key.root, key.acc);
+  const nashvilleTonicSemitone =
+    key.mode === Mode.Minor ? (keyTonicSemitone + RELATIVE_MAJOR_SHIFT_SEMITONES) % 12 : keyTonicSemitone;
+  const offset = chordOffsetFromTonic(chordSemitone, nashvilleTonicSemitone);
   return offsetToDegree(offset, MODE_SCALE_STEPS[Mode.Major]);
 }
 
@@ -112,7 +117,9 @@ export function regularDegree(
   chordRootAccidental: KeyAccidental,
   key: KeySignature,
 ): DegreeSpelling {
-  const offset = chordOffsetFromTonic(chordRoot, chordRootAccidental, key);
+  const chordSemitone = rootSemitone(chordRoot, chordRootAccidental);
+  const tonicSemitone = rootSemitone(key.root, key.acc);
+  const offset = chordOffsetFromTonic(chordSemitone, tonicSemitone);
   return offsetToDegree(offset, MODE_SCALE_STEPS[key.mode]);
 }
 
