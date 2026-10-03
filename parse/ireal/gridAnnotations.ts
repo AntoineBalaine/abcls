@@ -184,6 +184,16 @@ function fillCodas(text: string): string {
 export function cleanGridText(text: string): string {
   let s = removeAnnotations(text);
   s = fillRepeats(s);
+  // A "{" with no matching "}" anywhere in the chart (confirmed against
+  // a real chart in a user's library backup — not a hypothetical) is
+  // left untouched by fillRepeats, since there's no well-formed section
+  // to flatten. Left as a literal character, it glues onto whatever
+  // chord follows and silently breaks that chord's parsing; treating any
+  // brace fillRepeats didn't consume as a plain bar separator instead
+  // (same fallback-safety idea as bracketsToBars for "[" "]") avoids
+  // inventing a repeat structure that was never properly closed, while
+  // still freeing the chord it was glued to.
+  s = s.replace(/[{}]/g, "|");
   s = fillCodas(s);
   s = removePartMarkers(s);
   s = s.replace(/Z/g, ""); // end-of-song marker

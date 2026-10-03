@@ -73,14 +73,14 @@ function isRepeatBar(bar: GridToken[]): boolean {
  *
  * "Repeat this bar N times" for N > 1 is encoded as N repeat cells
  * bundled into a single bar slot (no "|" between them, not N separate
- * one-cell bars — see isRepeatBar). That has no single standard-ABC
- * construct either, so each repeat is rendered as its own separate
- * `|: <bar> :|` pair reusing the same source bar text; this plays the
- * source bar an extra two times per pair rather than exactly once, a
- * known, documented
- * simplification of this converter's reduced grid grammar (see the
- * module doc comment in gridNotation.ts) rather than a claim of exact
- * repeat-count fidelity.
+ * one-cell bars — see isRepeatBar). Each repeat reuses the same source
+ * bar text, and consecutive repeats of that bar share a single ":|:"
+ * barline between them (end-repeat and start-repeat combined, e.g.
+ * `|: C7 :|: C7 :|: C7 :|` for three), rather than a separate
+ * `|: ... :|` pair for each with a plain bar between — ABC and standard
+ * notation alike read `:| |` as the end of one repeated section
+ * immediately followed by an unrelated plain measure, not a continued
+ * repeat of the same bar.
  */
 function gridTokensToAbcxBody(tokens: GridToken[]): string {
   const bars = splitIntoBars(tokens);
@@ -106,16 +106,22 @@ function gridTokensToAbcxBody(tokens: GridToken[]): string {
     if (consumed[i]) continue;
     if (!isRepeat[i] && i + 1 < bars.length && isRepeat[i + 1]) {
       // Each subsequent repeat-bar slot can itself bundle more than one
-      // repeat cell (see isRepeatBar's comment), so it contributes that
-      // many |: ... :| pairs, not just one.
+      // repeat cell (see isRepeatBar's comment), so this chain can be
+      // more than one repeat of the same bar. Consecutive repeats of the
+      // same bar share a single ":|:" barline (end-repeat and
+      // start-repeat combined) between them, standard ABC notation for
+      // "repeat this measure again immediately" — not a separate
+      // "|: ... :|" pair for each with a redundant plain bar in between,
+      // which reads as an extra empty measure rather than a continued
+      // repeat.
       let j = i + 1;
+      let repeatCount = 0;
       while (j < bars.length && isRepeat[j]) {
-        for (let k = 0; k < bars[j].length; k++) {
-          emitted.push(`|: ${resolvedText[i]} :|`);
-        }
+        repeatCount += bars[j].length;
         consumed[j] = true;
         j++;
       }
+      emitted.push(`|: ${Array(repeatCount).fill(resolvedText[i]).join(" :|: ")} :|`);
     } else {
       emitted.push(resolvedText[i]);
     }

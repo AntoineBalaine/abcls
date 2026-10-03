@@ -144,3 +144,15 @@ dropped) dropped from the majority of complex charts to 38 of 657 (~6%).
 The "r" repeat-previous-two-bars shorthand mentioned in gridNotation.ts's
 own doc comment is still not implemented, and is the most likely cause
 of most of what remains — not independently confirmed per-chart.
+
+## An unmatched repeat-section brace is treated as a plain bar, not a repeat
+
+A real chart ("Perhaps", from a user's library backup) has a "{" with no
+matching "}" anywhere in its chord data — not a hypothetical edge case.
+cleanGridText's fillRepeats leaves an unresolvable "{" as a literal
+character, which then glues onto whatever chord follows and breaks its
+parsing, the same class of bug the unmatched-bracket and mixed-cell-bar
+issues above were. Treated as a plain bar separator (same fallback
+already used for "[" "]") rather than attempting to guess what repeat
+structure was intended, since there's no way to know how far an
+unclosed repeat section was meant to extend.
