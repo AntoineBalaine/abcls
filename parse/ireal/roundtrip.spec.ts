@@ -101,4 +101,9 @@ C7 F7 |
     const abcx = `X:1\nT:Test\nK:C\nCalt7 Gsus4 |\n`;
     expect(chordSequence(abcx)).to.deep.equal(["Calt7", "Gsus4"]);
   });
+
+  it("scans a minor-major-7 ABCx chord symbol ('C-^7') as a single chord, not fragments", () => {
+    const abcx = `X:1\nT:Test\nK:C\nC-^7 Dm7 |\n`;
+    expect(chordSequence(abcx)).to.deep.equal(["C-^7", "Dm7"]);
+  });
 });

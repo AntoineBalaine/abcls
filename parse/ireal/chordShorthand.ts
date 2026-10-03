@@ -30,15 +30,19 @@ const QUALITY_TO_SYMBOL: Record<ChordQuality, string> = {
   // ordering directly (see there); only present so this Record type
   // covers every ChordQuality value.
   [ChordQuality.Altered]: "alt",
+  [ChordQuality.MinorMajor7]: "-^",
 };
 
 // Kept as the exact inverse of QUALITY_TO_SYMBOL: every symbol that table can
 // produce must be recognized here, or a round trip through an explicit
 // quality (e.g. Power, qualityExplicit: true) reparses as a different chord.
+// "-^" must be listed before "-" for the same greedy-match reason as in
+// CHORD_TEXT_PATTERN above.
 const SYMBOL_TO_QUALITY: Array<[string, ChordQuality]> = [
   ["sus2", ChordQuality.Suspended2],
   ["sus4", ChordQuality.Suspended4],
   ["add", ChordQuality.Add],
+  ["-^", ChordQuality.MinorMajor7],
   ["^", ChordQuality.Major],
   ["-", ChordQuality.Minor],
   ["o", ChordQuality.Diminished],
@@ -98,7 +102,10 @@ export function parsedChordToIrealText(chord: ParsedChord): string {
 // bare-extension digit group below: no dominant chord extension is ever the
 // literal digit 5 in real jazz chord vocabulary (extensions are 6, 7, 9, 11,
 // 13), so this is unambiguous, and it must stay in sync with SYMBOL_TO_QUALITY.
-const CHORD_TEXT_PATTERN = /^([A-G])([#b]?)((?:sus2|sus4|add|\^|-|o|h|\+|5)?)(\d+)?((?:[#b]\d+)*)(?:\/([A-G])([#b]?))?$/;
+// "-^" (minor-major 7, e.g. "C-^7") must be listed before the standalone
+// "-" and "^" alternatives, or the alternation would match just "-" and
+// leave a stray "^" for the extension/alteration groups to choke on.
+const CHORD_TEXT_PATTERN = /^([A-G])([#b]?)((?:sus2|sus4|add|-\^|\^|-|o|h|\+|5)?)(\d+)?((?:[#b]\d+)*)(?:\/([A-G])([#b]?))?$/;
 
 // Real iReal Pro charts write a sus chord's extension *before* "sus"
 // (e.g. "G7sus", "A9sus" — the dominant-extension-plus-sus4 chord), not
@@ -207,6 +214,11 @@ const ABCX_QUALITY_TO_SYMBOL: Record<ChordQuality, string> = {
   [ChordQuality.Power]: "5",
   [ChordQuality.Add]: "add",
   [ChordQuality.Altered]: "alt",
+  // Reuses iReal's own "-^" symbol rather than inventing a distinct ABCx
+  // word for it — nothing else in this codebase depends on ABCx using a
+  // different spelling, and pChordSymbol/scanChordSymbol.ts both
+  // recognize "-^" the same way.
+  [ChordQuality.MinorMajor7]: "-^",
 };
 
 export function parsedChordToAbcxText(chord: ParsedChord): string {

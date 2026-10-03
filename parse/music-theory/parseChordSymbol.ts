@@ -32,6 +32,8 @@ function parseQuality(lexeme: string): ChordQuality {
       return ChordQuality.Add;
     case "alt":
       return ChordQuality.Altered;
+    case "-^":
+      return ChordQuality.MinorMajor7;
     default:
       return ChordQuality.Major;
   }

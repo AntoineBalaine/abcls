@@ -199,3 +199,25 @@ spelling out which specific tensions it means.
 Verified against the real 657-song backup: charts still showing the
 empty-repeat symptom dropped from 10 to 7 (99% of the library now
 converts with no symptom at all).
+
+## Minor-major-7 chord quality ('-^') was unrecognized, completing the 657-song backup fix
+
+"-^" (a minor triad with a major 7th, e.g. "C-^7") is a combined two-
+character symbol iReal Pro uses — confirmed against a real chart in a
+user's library backup ("A Shade Of Jade"). Neither CHORD_TEXT_PATTERN
+nor ABCx's pChordSymbol listed it, and critically, the standalone "-"
+(minor) and "^" (major) alternatives were tried first, consuming half of
+the combined symbol and leaving the other half to corrupt parsing — the
+same class of bug as every fix above in this file.
+
+Added ChordQuality.MinorMajor7, with "-^" listed before the standalone
+"-"/"^" alternatives everywhere it's matched (both for iReal-text parsing
+and ABCx's own scanner), so the combined symbol wins the match.
+
+This was the last of five real, independently-confirmed causes behind
+the single bug report that started this chain (garbled/empty repeat
+bars): an unmatched repeat brace, an unmatched bracket/mixed-cell bar,
+the sus-chord extension ordering, the altered-dominant quality, and
+finally this. Verified against the real 657-song backup: 0 of 657
+charts now show the empty-repeat symptom — every chart in the library
+converts cleanly.

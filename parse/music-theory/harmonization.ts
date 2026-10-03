@@ -154,6 +154,9 @@ export const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   // only covers the unaltered triad/7th, not the implied tensions
   // themselves (see ChordQuality.Altered's own doc comment).
   [ChordQuality.Altered]: [0, 4, 7],
+  // Minor triad (the major 7th that distinguishes this from plain Minor
+  // only applies once a 7th is added — see SEVENTH_CHORD_SPECS).
+  [ChordQuality.MinorMajor7]: [0, 3, 7],
 };
 
 /**
@@ -230,6 +233,13 @@ export const SEVENTH_CHORD_SPECS: Record<ChordQuality, IntervalSpec[]> = {
     { func: 3, interval: 4, scaleStep: 2 },
     { func: 5, interval: 7, scaleStep: 4 },
     { func: 7, interval: 10, scaleStep: 6 },
+  ],
+  // Minor triad with a major 7th (minMaj7), not the minor 7th Minor uses.
+  [ChordQuality.MinorMajor7]: [
+    { func: 8, interval: 0, scaleStep: 0 },
+    { func: 3, interval: 3, scaleStep: 2 },
+    { func: 5, interval: 7, scaleStep: 4 },
+    { func: 7, interval: 11, scaleStep: 6 },
   ],
 };
 

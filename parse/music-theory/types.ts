@@ -24,6 +24,11 @@ export enum ChordQuality {
   // shorthand this codebase can expand into concrete alterations without
   // guessing.
   Altered = "altered",
+  // A minor triad with a major 7th (minMaj7), written as the combined
+  // symbol "-^" in iReal Pro chord shorthand (e.g. "C-^7") — distinct
+  // from both Minor (minor 7th) and Major (major triad), common as a
+  // minor key's tonic chord in jazz harmony.
+  MinorMajor7 = "minor-major-7",
 }
 
 /**

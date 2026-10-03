@@ -235,4 +235,30 @@ describe("iReal chord shorthand", () => {
       expect(parsedChordToIrealText(parsed)).to.equal("C7alt");
     });
   });
+
+  describe("minor-major 7 chord text ('-^', a combined symbol)", () => {
+    // Confirmed against a real chart in a user's iReal Pro library backup
+    // ("A Shade Of Jade"): "-^" must be matched as a single two-character
+    // quality symbol before the standalone "-" (minor) and "^" (major)
+    // alternatives, or it parses as minor with a stray "^" left over.
+    it('parses "<root>-^<extension>" with the MinorMajor7 quality', () => {
+      const parsed = irealTextToParsedChord("Bb-^7");
+      expect(parsed?.root).to.equal("B");
+      expect(parsed?.rootAccidental).to.equal("b");
+      expect(parsed?.quality).to.equal(ChordQuality.MinorMajor7);
+      expect(parsed?.extension).to.equal(7);
+    });
+
+    it('parses a bare "-^" (no extension)', () => {
+      const parsed = irealTextToParsedChord("C-^");
+      expect(parsed?.quality).to.equal(ChordQuality.MinorMajor7);
+      expect(parsed?.extension).to.be.null;
+    });
+
+    it("round-trips through ABCx text without fragmenting", () => {
+      const parsed = irealTextToParsedChord("C-^7")!;
+      const abcxText = parsedChordToAbcxText(parsed);
+      expect(abcxText).to.equal("C-^7");
+    });
+  });
 });
