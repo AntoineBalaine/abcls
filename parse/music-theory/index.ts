@@ -63,6 +63,9 @@ export {
 // Re-export constants
 export { Spelling, LETTERS, NATURAL_SEMITONES } from "./constants";
 
+// Re-export number-notation (iReal Pro-style number chart) utilities
+export { DegreeSpelling, nashvilleDegree, regularDegree, formatDegree } from "./numberNotation";
+
 // Re-export harmonization types and functions
 export {
   VoicedNote,
