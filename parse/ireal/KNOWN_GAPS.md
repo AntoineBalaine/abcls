@@ -109,3 +109,22 @@ case rather than throwing, matching this file's existing policy for
 unsupported grid shapes, so the song still imports; the dropped cell
 simply contributes no text at that position, rather than correctly
 repeating whatever the actual preceding bar would resolve to.
+
+## Real charts commonly use grid features outside the reduced grammar, causing silent data loss cascading into wrong repeat-bar output
+
+Investigating a user report of garbled repeat-bar output ("|:  :|" with
+no chord text) against a real chart from their library backup found the
+actual cause is upstream of the repeat-bar logic: real iReal Pro charts
+routinely glue section labels and time signatures directly onto the
+first chord of a section (e.g. "{*AT44D9,   "), use comma-padding inside
+a cell for hold/sustain ("D9,   "), and use first/second-ending brackets
+("N1", "N2", "{", "}", "[", "]") — none of which gridNotation.ts's
+reduced grammar recognizes. Per that module's existing "unrecognized
+cell is silently skipped" policy, a bar built entirely from such cells
+resolves to empty text, and a later "x" (repeat previous bar) cell then
+faithfully reproduces that emptiness, making the symptom visible as an
+empty "|:  :|" even though the repeat-resolution logic itself is working
+correctly (confirmed via importFromIreal.spec.ts's passing repeat-chain
+test, which uses a chart with no unsupported grid features and resolves
+correctly). Closing this gap for real needs the grammar extensions
+described above, not another change to the repeat-bar logic.

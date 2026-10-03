@@ -46,8 +46,12 @@ function splitIntoBars(tokens: GridToken[]): GridToken[][] {
   return bars;
 }
 
+// A bar consisting entirely of one or more "repeat previous bar" cells —
+// iReal Pro packs "repeat this bar N times" as N consecutive repeatBar
+// cells inside a single bar slot (no "|" between them), not as N
+// separate one-cell bars, so this must accept more than one cell.
 function isRepeatBar(bar: GridToken[]): boolean {
-  return bar.length === 1 && bar[0].type === "repeatBar";
+  return bar.length > 0 && bar.every((t) => t.type === "repeatBar");
 }
 
 /**
@@ -67,11 +71,13 @@ function isRepeatBar(bar: GridToken[]): boolean {
  * `|: <bar> :|`, and the repeat cell itself contributes no separate
  * content (its meaning is now carried by the closing `:|`).
  *
- * A chain of two or more consecutive repeat cells (rare; "repeat this
- * bar N times" for N > 2) has no single standard-ABC construct, so each
- * repeat beyond the first is rendered as its own separate `|: <bar> :|`
- * pair reusing the same source bar text; this plays the source bar an
- * extra two times per pair rather than exactly once, a known, documented
+ * "Repeat this bar N times" for N > 1 is encoded as N repeat cells
+ * bundled into a single bar slot (no "|" between them, not N separate
+ * one-cell bars — see isRepeatBar). That has no single standard-ABC
+ * construct either, so each repeat is rendered as its own separate
+ * `|: <bar> :|` pair reusing the same source bar text; this plays the
+ * source bar an extra two times per pair rather than exactly once, a
+ * known, documented
  * simplification of this converter's reduced grid grammar (see the
  * module doc comment in gridNotation.ts) rather than a claim of exact
  * repeat-count fidelity.
@@ -99,11 +105,14 @@ function gridTokensToAbcxBody(tokens: GridToken[]): string {
   for (let i = 0; i < bars.length; i++) {
     if (consumed[i]) continue;
     if (!isRepeat[i] && i + 1 < bars.length && isRepeat[i + 1]) {
-      emitted.push(`|: ${resolvedText[i]} :|`);
-      consumed[i + 1] = true;
-      let j = i + 2;
+      // Each subsequent repeat-bar slot can itself bundle more than one
+      // repeat cell (see isRepeatBar's comment), so it contributes that
+      // many |: ... :| pairs, not just one.
+      let j = i + 1;
       while (j < bars.length && isRepeat[j]) {
-        emitted.push(`|: ${resolvedText[i]} :|`);
+        for (let k = 0; k < bars[j].length; k++) {
+          emitted.push(`|: ${resolvedText[i]} :|`);
+        }
         consumed[j] = true;
         j++;
       }

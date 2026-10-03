@@ -62,9 +62,25 @@ describe("importIrealLinkToAbcx with a repeat-bar cell mixed into a multi-cell b
     // marker, and another chord — not the whole-bar-repeat shape
     // gridTokensToAbcxBody's resolution pass handles, found in a real
     // user library backup.
-    expect(() => importIrealLinkToAbcx(linkWithChordData("C x G | Dm7 |"))).to.not.throw();
-    const abcx = importIrealLinkToAbcx(linkWithChordData("C x G | Dm7 |"));
+    expect(() => importIrealLinkToAbcx(linkWithChordData("C x G | D-7 |"))).to.not.throw();
+    const abcx = importIrealLinkToAbcx(linkWithChordData("C x G | D-7 |"));
     expect(abcx).to.include("C");
     expect(abcx).to.include("Dm7");
+  });
+});
+
+describe("importIrealLinkToAbcx with a chain of separate-bar repeat cells", () => {
+  it('resolves "repeat 3 times" (three separate one-cell "x" bars) to three real repeat pairs', () => {
+    // "Eb-7 | x | x | x | Ab-7 |" ("-7" is iReal Pro's own minor-seventh
+    // shorthand, not ABC's "m7"): each repeat is its own bar-delimited
+    // "x" cell — confirmed against a real chart's raw grid text (see
+    // commit message) to be how iReal Pro actually encodes a multi-bar
+    // repeat, rather than bundling multiple repeat cells into one bar
+    // slot with no separators, which was an unverified assumption this
+    // test previously made.
+    const abcx = importIrealLinkToAbcx(linkWithChordData("Eb-7 | x | x | x | Ab-7 |"));
+    const repeatPairs = abcx.match(/\|: Ebm7 :\|/g) ?? [];
+    expect(repeatPairs).to.have.length(3);
+    expect(abcx).to.not.include("|:  :|");
   });
 });
