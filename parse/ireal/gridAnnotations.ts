@@ -70,11 +70,18 @@ function commasToSpaces(text: string): string {
   return text.replace(/,/g, " ");
 }
 
+// Vertical-alignment spacer characters, used only to line up the grid
+// visually in iReal Pro's own editor — carry no musical information.
+function removeVerticalSpacers(text: string): string {
+  return text.replace(/Y+/g, "");
+}
+
 function removeAnnotations(text: string): string {
   let s = text;
   s = bracketsToBars(s);
   s = removeComments(s);
   s = removeAlternativeChords(s);
+  s = removeVerticalSpacers(s);
   s = removeFermata(s);
   s = removeLayoutMarker(s);
   s = removeSmallMarker(s);

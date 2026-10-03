@@ -44,6 +44,10 @@ describe("cleanGridText", () => {
     expect(cleanGridText("C |D7 Z")).to.equal("C |D7 ");
   });
 
+  it("removes vertical-alignment spacer characters", () => {
+    expect(cleanGridText("C |YYY D7")).to.equal("C | D7");
+  });
+
   describe("simple repeat sections", () => {
     it("plays a bracketed section twice", () => {
       expect(cleanGridText("A |{C |D7}| E")).to.equal("A |C |D7|C |D7| E");
