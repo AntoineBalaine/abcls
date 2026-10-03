@@ -157,4 +157,49 @@ describe("iReal chord shorthand", () => {
   it("returns null for unparseable text", () => {
     expect(irealTextToParsedChord("not a chord")).to.be.null;
   });
+
+  describe("real-world sus chord text (extension before 'sus', not after)", () => {
+    // Confirmed against real charts in a user's iReal Pro library
+    // backup: a sus chord's extension digit is written *before* "sus"
+    // ("G7sus", "A9sus"), and a bare sus triad has no trailing "2"/"4"
+    // at all ("Csus") — the opposite ordering, and a stricter form, than
+    // CHORD_TEXT_PATTERN's "sus2"/"sus4"-then-extension assumption.
+    it('parses a bare "sus" (no digit) as sus4', () => {
+      expect(irealTextToParsedChord("Csus")).to.deep.equal({
+        root: "C",
+        rootAccidental: "",
+        quality: ChordQuality.Suspended4,
+        qualityExplicit: true,
+        extension: null,
+        alterations: [],
+        bass: null,
+      });
+    });
+
+    it('parses "<extension>sus" as that extension with sus4', () => {
+      expect(irealTextToParsedChord("G7sus")).to.deep.equal({
+        root: "G",
+        rootAccidental: "",
+        quality: ChordQuality.Suspended4,
+        qualityExplicit: true,
+        extension: 7,
+        alterations: [],
+        bass: null,
+      });
+      expect(irealTextToParsedChord("A9sus")?.extension).to.equal(9);
+    });
+
+    it('parses "<extension>sus2" with the explicit sus2 quality', () => {
+      const parsed = irealTextToParsedChord("C7sus2");
+      expect(parsed?.quality).to.equal(ChordQuality.Suspended2);
+      expect(parsed?.extension).to.equal(7);
+    });
+
+    it("still parses alterations and a slash bass after the sus", () => {
+      const parsed = irealTextToParsedChord("G7sus#11/F");
+      expect(parsed?.extension).to.equal(7);
+      expect(parsed?.alterations).to.deep.equal([{ type: "sharp", degree: 11 }]);
+      expect(parsed?.bass).to.deep.equal({ root: "F", accidental: "" });
+    });
+  });
 });

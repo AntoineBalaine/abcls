@@ -87,9 +87,38 @@ export function parsedChordToIrealText(chord: ParsedChord): string {
 // 13), so this is unambiguous, and it must stay in sync with SYMBOL_TO_QUALITY.
 const CHORD_TEXT_PATTERN = /^([A-G])([#b]?)((?:sus2|sus4|add|\^|-|o|h|\+|5)?)(\d+)?((?:[#b]\d+)*)(?:\/([A-G])([#b]?))?$/;
 
-export function irealTextToParsedChord(text: string): ParsedChord | null {
-  const match = CHORD_TEXT_PATTERN.exec(text.trim());
+// Real iReal Pro charts write a sus chord's extension *before* "sus"
+// (e.g. "G7sus", "A9sus" — the dominant-extension-plus-sus4 chord), not
+// after it, and write a bare sus triad as plain "sus" with no trailing
+// "2"/"4" at all (defaulting to sus4) — neither of which
+// CHORD_TEXT_PATTERN's quality-before-extension ordering matches. Tried
+// as a fallback (only once the primary pattern above has failed) since
+// it has its own, different field ordering.
+const SUS_CHORD_TEXT_PATTERN = /^([A-G])([#b]?)(\d+)?sus([24])?((?:[#b]\d+)*)(?:\/([A-G])([#b]?))?$/;
+
+function parseSusChordText(trimmed: string): ParsedChord | null {
+  const match = SUS_CHORD_TEXT_PATTERN.exec(trimmed);
   if (!match) return null;
+  const [, rootLetter, rootAcc, extensionStr, susDigit, alterationsStr, bassLetter, bassAcc] = match;
+  const alterations: ChordAlteration[] = [];
+  for (const altText of alterationsStr.match(/[#b]\d+/g) ?? []) {
+    alterations.push({ type: altText[0] === "#" ? "sharp" : "flat", degree: parseInt(altText.slice(1), 10) });
+  }
+  return {
+    root: rootLetter as KeyRoot,
+    rootAccidental: (rootAcc || "") as KeyAccidental,
+    quality: susDigit === "2" ? ChordQuality.Suspended2 : ChordQuality.Suspended4,
+    qualityExplicit: true,
+    extension: extensionStr ? parseInt(extensionStr, 10) : null,
+    alterations,
+    bass: bassLetter ? { root: bassLetter as KeyRoot, accidental: (bassAcc || "") as KeyAccidental } : null,
+  };
+}
+
+export function irealTextToParsedChord(text: string): ParsedChord | null {
+  const trimmed = text.trim();
+  const match = CHORD_TEXT_PATTERN.exec(trimmed);
+  if (!match) return parseSusChordText(trimmed);
 
   const [, rootLetter, rootAcc, qualitySymbol, extensionStr, alterationsStr, bassLetter, bassAcc] = match;
 

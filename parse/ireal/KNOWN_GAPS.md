@@ -156,3 +156,24 @@ issues above were. Treated as a plain bar separator (same fallback
 already used for "[" "]") rather than attempting to guess what repeat
 structure was intended, since there's no way to know how far an
 unclosed repeat section was meant to extend.
+
+## Sus-chord shorthand: iReal writes the extension before "sus", not after
+
+CHORD_TEXT_PATTERN assumed a quality symbol (including "sus2"/"sus4")
+always precedes any extension digits, matching every other quality
+symbol ("^7", "-7", "o7", ...). Real iReal Pro charts write a sus
+chord's extension *before* "sus" instead ("G7sus", "A9sus" — a dominant
+extension combined with sus4), and write a bare sus triad as plain
+"sus" with no trailing "2"/"4" at all (confirmed against multiple real
+charts in a user's library backup, not a hypothetical). Neither form
+matched the existing pattern, so every sus chord in affected charts was
+silently dropped — this turned out to be the single largest source of
+the "empty repeat bar" symptom tracked across several earlier fixes in
+this file: a dropped sus chord mid-chart shifted the measure count out
+of sync with what any D.S./coda ('Q') or first/second-ending ('N1'/'N2')
+structure elsewhere in the same chart expected, producing output that
+looked like an unrelated repeat/coda bug until this was found and fixed.
+Added SUS_CHORD_TEXT_PATTERN as a fallback tried when the primary
+pattern doesn't match, covering both forms. Verified against the real
+657-song backup: charts still showing the empty-repeat symptom dropped
+from 32 to 10 (98.5% of the library now converts with no symptom at all).
