@@ -207,8 +207,37 @@ function renderBars(bars: RenderedBar[], barsPerLine: number): string {
   return out;
 }
 
+// Whether a bar holds anything a musician would actually play. A bar
+// carrying only annotation (a section label) is not a measure — the
+// label marks where a section begins, so it belongs to the next bar
+// that has content, not to a measure of its own. splitIntoBars starts a
+// bar at every bar token, so these turn up whenever the grid text puts a
+// separator between a label and the chord it introduces (which
+// gridAnnotations.ts's repeat flattening can do), as well as whenever a
+// chart opens or closes on a separator or had a cell dropped as
+// unrecognized.
+function hasMusicalContent(bar: GridToken[]): boolean {
+  return bar.some((t) => t.type !== "sectionLabel");
+}
+
 function gridTokensToAbcxBody(tokens: GridToken[]): string {
-  const bars = splitIntoBars(tokens);
+  const allBars = splitIntoBars(tokens);
+
+  // Carry any label from a content-free bar onto the next bar that has
+  // content, and drop the content-free bar itself: emitting it would
+  // both print a stray barline and push the bars-per-line layout out of
+  // step for the rest of the chart.
+  const bars: GridToken[][] = [];
+  let carriedLabels: GridToken[] = [];
+  for (const bar of allBars) {
+    if (!hasMusicalContent(bar)) {
+      carriedLabels = [...carriedLabels, ...bar];
+      continue;
+    }
+    bars.push(carriedLabels.length > 0 ? [...carriedLabels, ...bar] : bar);
+    carriedLabels = [];
+  }
+
   const isRepeat = bars.map(isRepeatBar);
 
   // Resolve each repeat bar's text to the nearest preceding non-repeat
@@ -218,8 +247,8 @@ function gridTokensToAbcxBody(tokens: GridToken[]): string {
   const emitted: string[] = [];
   // Tracked separately from what's emitted: a section label belongs only
   // to the bar it actually introduces, not to every later bar that holds
-  // the same chord via "x" — otherwise "[A] Cmaj7 | x | x" would show
-  // "[A]" on all three bars instead of just the first.
+  // the same chord via "x" — otherwise "[P:A] Cmaj7 | x | x" would show
+  // the label on all three bars instead of just the first.
   let lastSourceTextForRepeat = "";
   for (let i = 0; i < bars.length; i++) {
     if (isRepeat[i]) {
@@ -233,20 +262,11 @@ function gridTokensToAbcxBody(tokens: GridToken[]): string {
     }
   }
 
-  // splitIntoBars starts a new bar at every bar token, so a chart whose
-  // grid text opens or closes on a bar separator, or that had a cell
-  // dropped as unrecognized, leaves a bar with no content at all. An
-  // empty bar carries no musical information (a genuinely silent bar is
-  // an explicit "n"/N.C. cell, and a held chord is an "x" resolved
-  // above), and emitting one both prints a stray barline and pushes the
-  // bars-per-line layout out of step for the rest of the chart.
-  const nonEmpty = emitted.filter((text) => text.trim().length > 0);
-
   // iReal Pro charts are conventionally laid out four bars to a line; the
   // ABC output mirrors that so abcjs renders a readable, multi-line staff
   // instead of one unbroken line of bars.
   const BARS_PER_LINE = 4;
-  return renderBars(compactImmediateRepeats(nonEmpty), BARS_PER_LINE);
+  return renderBars(compactImmediateRepeats(emitted), BARS_PER_LINE);
 }
 
 /**

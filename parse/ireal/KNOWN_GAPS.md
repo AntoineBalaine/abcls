@@ -292,3 +292,23 @@ fix to how fillRepeats itself works — it reliably recovers the visual
 repeat sign for the common case (the same text duplicated immediately
 after itself) without the larger refactor a fully structural fix (giving
 GridToken real repeat-start/repeat-end bar variants) would need.
+
+## The section-label sentinel protects its delimiters but not its payload
+
+markSectionLabels rewrites "*A" to a sentinel-wrapped cell ("§A§") early
+in cleanGridText, before the passes that delete bare annotation letters
+("f" fermata, "l" layout, "s" small, "Y" spacer, and the U/S/Q/N-digit
+part markers). Those passes match a bare letter anywhere in the string,
+including between the sentinel delimiters — so a label whose letter is
+one of them ("*f", "*l", "*s", "*Y", "*U", "*S", "*Q") decays to "§§",
+fails gridNotation.ts's SECTION_LABEL_CELL test, and is dropped
+silently. Labels using any other letter, including every one seen in
+practice ("*A", "*B", "*C", "*D", "*V", "*i"), are unaffected.
+
+Latent rather than live: zero occurrences across a real 657-song
+library. Noted rather than worked around because the honest fix is to
+invert the pipeline — tokenize the grid into cells first, then run the
+annotation-removal passes per cell, skipping label cells — rather than
+teach each deletion pass yet another exception, which is the same
+"recover structure from text after destroying it" mistake that caused
+the doubled-barline bug (see the barline fix above).

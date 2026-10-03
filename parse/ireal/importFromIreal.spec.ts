@@ -155,6 +155,18 @@ describe("importIrealLinkToAbcx with an empty bar in the grid", () => {
     const abcx = importIrealLinkToAbcx(linkWithChordData("C7 | | F7 |"));
     expect(tuneBody(abcx)).to.equal("C7 | F7");
   });
+
+  it("attaches a label to the next bar with content instead of giving it a bar of its own", () => {
+    // A section label immediately before a repeat section ("*A{...")
+    // ends up separated from the chord it introduces, which used to
+    // leave the label sitting in a chordless measure of its own — and,
+    // being one bar wide, shifted every following line of the chart by
+    // one. Found in 8 charts of a real library, e.g. "Afternoon In
+    // Paris" and "26-2".
+    const abcx = importIrealLinkToAbcx(linkWithChordData("*A{T44C^7 |C-7 F7 |Bb^7 |Bb-7 Eb7 |"));
+    expect(tuneBody(abcx)).to.include("[P:A] Cmaj7 | Cm7 F7");
+    expect(tuneBody(abcx)).to.not.include("[P:A] |");
+  });
 });
 
 describe("importIrealLinkToAbcx with section labels", () => {
