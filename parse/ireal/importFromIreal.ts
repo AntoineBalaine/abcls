@@ -57,82 +57,51 @@ function isRepeatBar(bar: GridToken[]): boolean {
 /**
  * Renders one song's grid tokens as an ABCx tune-body line.
  *
- * iReal Pro's "x" grid cell means "repeat the previous bar" and, in the
- * generated ABCx text, used to be written as a bare "%" character. Since
- * ABCx (like ABC) treats "%" as the start of a comment, that silently
- * truncated any real-world chart using repeat bars: everything after the
- * "%" became a comment instead of chord data. Per the ABC 2.2 standard,
- * there is no per-bar "repeat previous measure" notation, but there is a
- * standard repeated-section barline pair, `|:` ... `:|` ("play what's
- * between these bars twice"), which is semantically equivalent for a
- * single repeated bar and, unlike "%", is real, already-supported ABC
- * barline syntax rather than a comment-colliding placeholder. So a bar
- * followed by exactly one "repeat previous bar" cell is rewritten as
- * `|: <bar> :|`, and the repeat cell itself contributes no separate
- * content (its meaning is now carried by the closing `:|`).
+ * iReal Pro's "x" grid cell means "this bar holds the same chord as the
+ * previous bar" — a held/sustained chord spanning consecutive bars, the
+ * same thing a real chart shows as that chord simply written again in
+ * each bar with ordinary barlines, not a music-notation repeat sign.
+ * ABC's `|:`/`:|` repeat barlines mean something else entirely (jump
+ * back and play a whole section again) and are reserved for genuine
+ * repeated sections; wrapping every single-bar "x" hold in its own
+ * `|: ... :|` pair, an earlier version of this function did, produced a
+ * chart littered with spurious repeat signs on ordinary held chords
+ * instead of the plain repeated bars iReal Pro itself shows (confirmed
+ * against a real chart, "A Felicidade", where only its actual repeated
+ * A section carries a repeat sign in iReal Pro's own display — every
+ * other "x" in the chart is just a held chord).
  *
- * "Repeat this bar N times" for N > 1 is encoded as N repeat cells
- * bundled into a single bar slot (no "|" between them, not N separate
- * one-cell bars — see isRepeatBar). Each repeat reuses the same source
- * bar text, and consecutive repeats of that bar share a single ":|:"
- * barline between them (end-repeat and start-repeat combined, e.g.
- * `|: C7 :|: C7 :|: C7 :|` for three), rather than a separate
- * `|: ... :|` pair for each with a plain bar between — ABC and standard
- * notation alike read `:| |` as the end of one repeated section
- * immediately followed by an unrelated plain measure, not a continued
- * repeat of the same bar.
+ * So each "x" cell resolves to the same plain chord text as the nearest
+ * preceding non-repeat bar, written as an ordinary bar like any other —
+ * no special barline syntax at all. (In the generated ABCx text, "x"
+ * used to be written as a bare "%" character; since ABCx, like ABC,
+ * treats "%" as the start of a comment, that silently truncated any
+ * real-world chart using repeat bars, which is why this function
+ * resolves it to real chord text instead.)
  */
 function gridTokensToAbcxBody(tokens: GridToken[]): string {
   const bars = splitIntoBars(tokens);
   const isRepeat = bars.map(isRepeatBar);
 
   // Resolve each repeat bar's text to the nearest preceding non-repeat
-  // bar's text.
-  const resolvedText: string[] = [];
+  // bar's text; the resulting array already has exactly the text to emit
+  // for every bar, in order — a repeat bar needs no special treatment
+  // beyond this resolution.
+  const emitted: string[] = [];
   let lastSourceText = "";
   for (let i = 0; i < bars.length; i++) {
     if (isRepeat[i]) {
-      resolvedText.push(lastSourceText);
+      emitted.push(lastSourceText);
     } else {
       const text = bars[i].map(cellText).join(" ");
-      resolvedText.push(text);
+      emitted.push(text);
       lastSourceText = text;
-    }
-  }
-
-  const consumed = new Array<boolean>(bars.length).fill(false);
-  const emitted: string[] = [];
-  for (let i = 0; i < bars.length; i++) {
-    if (consumed[i]) continue;
-    if (!isRepeat[i] && i + 1 < bars.length && isRepeat[i + 1]) {
-      // Each subsequent repeat-bar slot can itself bundle more than one
-      // repeat cell (see isRepeatBar's comment), so this chain can be
-      // more than one repeat of the same bar. Consecutive repeats of the
-      // same bar share a single ":|:" barline (end-repeat and
-      // start-repeat combined) between them, standard ABC notation for
-      // "repeat this measure again immediately" — not a separate
-      // "|: ... :|" pair for each with a redundant plain bar in between,
-      // which reads as an extra empty measure rather than a continued
-      // repeat.
-      let j = i + 1;
-      let repeatCount = 0;
-      while (j < bars.length && isRepeat[j]) {
-        repeatCount += bars[j].length;
-        consumed[j] = true;
-        j++;
-      }
-      emitted.push(`|: ${Array(repeatCount).fill(resolvedText[i]).join(" :|: ")} :|`);
-    } else {
-      emitted.push(resolvedText[i]);
     }
   }
 
   // iReal Pro charts are conventionally laid out four bars to a line; the
   // ABC output mirrors that so abcjs renders a readable, multi-line staff
-  // instead of one unbroken line of bars. A "written bar" here is one
-  // entry of `emitted`, so a folded repeat pair (one |: ... :| entry)
-  // counts as a single bar for line-wrapping purposes, matching how it
-  // occupies a single measure box on the page.
+  // instead of one unbroken line of bars.
   const BARS_PER_LINE = 4;
   const lines: string[] = [];
   for (let i = 0; i < emitted.length; i += BARS_PER_LINE) {

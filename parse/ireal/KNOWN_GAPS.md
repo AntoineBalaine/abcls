@@ -221,3 +221,33 @@ the sus-chord extension ordering, the altered-dominant quality, and
 finally this. Verified against the real 657-song backup: 0 of 657
 charts now show the empty-repeat symptom — every chart in the library
 converts cleanly.
+
+## "x" (single-bar hold) was wrongly rendered as a music-notation repeat sign
+
+gridTokensToAbcxBody previously wrapped every "x" ("this bar holds the
+same chord as the previous bar") in ABC's `|:`/`:|` repeat-barline
+syntax, on the theory that a single repeated bar is "semantically
+equivalent" to a tiny repeated section. A user comparing our output
+against iReal Pro's own display on a real chart ("A Felicidade") pointed
+out this is wrong: iReal Pro only shows a repeat sign around its one
+genuinely repeated section (the "{...}" bracket construct, 8 bars in
+that chart), and shows every ordinary held chord as a plain repeated bar
+with normal barlines — the same way a real lead sheet would. Wrapping
+every "x" in repeat barlines instead littered the chart with dozens of
+spurious repeat signs on chords that were never meant to be marked as a
+repeated section at all.
+
+Fixed: an "x" cell now resolves to the same plain chord text as the bar
+it holds, written as an ordinary bar — no special barline syntax.
+Verified against the real 657-song backup: 0 of 657 converted charts
+contain "|:" anywhere.
+
+Note this leaves the "{...}" genuine repeated-section construct
+rendered as flat duplicated text (gridAnnotations.ts's fillRepeats),
+not as an actual visual repeat sign — correct in substance (the right
+chords in the right order) but not as visually compact as iReal Pro's
+own repeat-sign display for that case. Teaching gridTokensToAbcxBody to
+emit a real `|:`/`:|` pair around a genuinely repeated section (rather
+than duplicating it) would need GridToken to distinguish a repeat-start/
+repeat-end bar from a plain one, which the current bar model doesn't —
+not implemented here.

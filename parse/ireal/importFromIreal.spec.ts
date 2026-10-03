@@ -70,20 +70,22 @@ describe("importIrealLinkToAbcx with a repeat-bar cell mixed into a multi-cell b
 });
 
 describe("importIrealLinkToAbcx with a chain of separate-bar repeat cells", () => {
-  it('resolves "repeat 3 times" (three separate one-cell "x" bars) to one run of three repeats sharing ":|:" barlines', () => {
+  it('resolves "repeat 3 times" (three separate one-cell "x" bars) to the same plain chord repeated as ordinary bars', () => {
     // "Eb-7 | x | x | x | Ab-7 |" ("-7" is iReal Pro's own minor-seventh
     // shorthand, not ABC's "m7"): each repeat is its own bar-delimited
-    // "x" cell — confirmed against a real chart's raw grid text (see
-    // commit history) to be how iReal Pro actually encodes a multi-bar
-    // repeat, rather than bundling multiple repeat cells into one bar
-    // slot with no separators, which was an unverified assumption this
-    // test previously made. Consecutive repeats of the same bar share a
-    // single ":|:" barline, not a separate "|: ... :|" pair each with a
-    // plain bar between them (which would read as an extra, unrelated
-    // empty measure).
+    // "x" cell — confirmed against a real chart's raw grid text to be how
+    // iReal Pro actually encodes a multi-bar repeat. A single-bar "x"
+    // means "this bar holds the same chord as the previous one", which
+    // iReal Pro itself shows as a plain repeated chord, not a music-
+    // notation repeat sign — wrapping it in "|: ... :|" (confirmed
+    // against a real chart, "A Felicidade", to be wrong: iReal Pro only
+    // shows a repeat sign around its one genuinely repeated section, not
+    // around every held chord) littered the chart with spurious repeat
+    // barlines.
     const abcx = importIrealLinkToAbcx(linkWithChordData("Eb-7 | x | x | x | Ab-7 |"));
-    expect(abcx).to.include("|: Ebm7 :|: Ebm7 :|: Ebm7 :|");
-    expect(abcx).to.not.include("|:  :|");
+    const bodyLines = abcx.split("\n").filter((l) => l.includes("|"));
+    expect(bodyLines.join(" ").trim()).to.equal("Ebm7 | Ebm7 | Ebm7 | Ebm7 | Abm7 |");
+    expect(abcx).to.not.include("|:");
   });
 });
 
