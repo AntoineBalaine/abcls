@@ -95,3 +95,17 @@ common real-world meaning of a bare "5" on a chord chart. Excluded from
 chordShorthand.spec.ts's property-based round-trip fidelity claim for
 this specific combination, the same way Dominant's own qualityExplicit
 flag is already excluded there for a similar reason.
+
+## A "repeat previous bar" cell mixed into a multi-cell bar is dropped
+
+gridTokensToAbcxBody's whole-bar repeat resolution (see
+importFromIreal.ts's module comment) only recognizes a "repeat previous
+bar" ("x") cell when it is a bar's sole content. A real chart found while
+importing a user's full iReal Pro library backup has an "x" cell sharing
+a bar with other chord cells — a shape the reduced grid grammar
+(gridNotation.ts; see "Reduced grid notation scope" above) was not built
+to resolve a source bar for. cellText() returns an empty string for this
+case rather than throwing, matching this file's existing policy for
+unsupported grid shapes, so the song still imports; the dropped cell
+simply contributes no text at that position, rather than correctly
+repeating whatever the actual preceding bar would resolve to.

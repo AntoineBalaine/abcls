@@ -20,7 +20,14 @@ import { parsedChordToAbcxText } from "./chordShorthand";
 function cellText(t: GridToken): string {
   if (t.type === "noChord") return "N.C.";
   if (t.type === "chord") return parsedChordToAbcxText(t.chord);
-  throw new Error(`cellText: unexpected token type "${t.type}"`);
+  // A "repeatBar" cell mixed into a multi-cell bar, rather than being the
+  // bar's sole content (the shape gridTokensToAbcxBody's whole-bar repeat
+  // pass below already resolves), has no single-cell ABCx equivalent.
+  // Dropped silently rather than thrown, matching this module's
+  // documented policy of degrading unsupported/ungrammatical iReal grid
+  // shapes instead of crashing the whole import (see KNOWN_GAPS.md) —
+  // found importing a real user library backup containing this shape.
+  return "";
 }
 
 /**
