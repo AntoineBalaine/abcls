@@ -14,8 +14,11 @@ describe("cleanGridText", () => {
     expect(cleanGridText("C(D7) G7")).to.equal("C G7");
   });
 
-  it("removes section labels", () => {
-    expect(cleanGridText("*AC |*BD7")).to.equal("C |D7");
+  it("keeps section labels, rewritten to an isolated sentinel cell", () => {
+    // A musician reading the chart wants to see "A section starts here"
+    // the same way iReal Pro itself shows it — dropping the label
+    // silently lost real structural information.
+    expect(cleanGridText("*AC |*BD7")).to.equal(" §A§ C | §B§ D7");
   });
 
   it("removes time signatures", () => {

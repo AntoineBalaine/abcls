@@ -100,3 +100,25 @@ describe("importIrealLinkToAbcx with an unmatched repeat-section brace", () => {
     expect(body).to.not.include("{");
   });
 });
+
+describe("importIrealLinkToAbcx with section labels", () => {
+  it('shows a section label inline as ABC\'s own "[P:X]" part-marker field, instead of dropping it', () => {
+    // "D-7" is iReal Pro's own minor-seventh shorthand, not ABC's "Dm7".
+    // "[P:X]" (not a bare "[X]", which looks similar but collides with
+    // ABC's own bracket/inline-field syntax and corrupts the chord that
+    // follows once this text is converted to real ABC) is ABC's standard
+    // inline part-marker field, rendered by renderers like abcjs as a
+    // proper boxed section letter above the staff.
+    const abcx = importIrealLinkToAbcx(linkWithChordData("*AC7 | D-7 | *BG7 | C7 |"));
+    const bodyLines = abcx.split("\n").filter((l) => l.includes("|"));
+    expect(bodyLines.join(" ")).to.include("[P:A] C7");
+    expect(bodyLines.join(" ")).to.include("[P:B] G7");
+  });
+
+  it("only shows the label on the bar that introduces the section, not on later repeats of its chord", () => {
+    const abcx = importIrealLinkToAbcx(linkWithChordData("*AC7 | x | x |"));
+    const bodyLines = abcx.split("\n").filter((l) => l.includes("|"));
+    const occurrences = bodyLines.join(" ").match(/\[P:A\]/g) ?? [];
+    expect(occurrences).to.have.length(1);
+  });
+});

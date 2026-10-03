@@ -16,10 +16,18 @@ import { cleanGridText } from "./gridAnnotations";
  * implemented.
  */
 
-export type GridToken = { type: "chord"; chord: ParsedChord } | { type: "noChord" } | { type: "repeatBar" } | { type: "bar" };
+export type GridToken =
+  | { type: "chord"; chord: ParsedChord }
+  | { type: "noChord" }
+  | { type: "repeatBar" }
+  | { type: "bar" }
+  | { type: "sectionLabel"; label: string };
 
 const NO_CHORD_TOKEN = "n";
 const REPEAT_BAR_TOKEN = "x";
+// Matches the sentinel-wrapped section-label cell gridAnnotations.ts's
+// markSectionLabels produces, e.g. "§A§".
+const SECTION_LABEL_CELL = /^§(\w)§$/;
 
 export function gridTokensToText(tokens: GridToken[]): string {
   const parts: string[] = [];
@@ -30,6 +38,8 @@ export function gridTokensToText(tokens: GridToken[]): string {
       parts.push(NO_CHORD_TOKEN);
     } else if (t.type === "repeatBar") {
       parts.push(REPEAT_BAR_TOKEN);
+    } else if (t.type === "sectionLabel") {
+      parts.push(`*${t.label}`);
     } else {
       parts.push(parsedChordToIrealText(t.chord));
     }
@@ -56,6 +66,8 @@ export function textToGridTokens(text: string): GridToken[] {
       tokens.push({ type: "noChord" });
     } else if (cell === REPEAT_BAR_TOKEN) {
       tokens.push({ type: "repeatBar" });
+    } else if (SECTION_LABEL_CELL.test(cell)) {
+      tokens.push({ type: "sectionLabel", label: SECTION_LABEL_CELL.exec(cell)![1] });
     } else {
       const chord = irealTextToParsedChord(cell);
       if (chord) {

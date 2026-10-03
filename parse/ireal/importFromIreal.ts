@@ -20,6 +20,18 @@ import { parsedChordToAbcxText } from "./chordShorthand";
 function cellText(t: GridToken): string {
   if (t.type === "noChord") return "N.C.";
   if (t.type === "chord") return parsedChordToAbcxText(t.chord);
+  // A section label (e.g. "*A") rendered as ABC's own standard inline
+  // part-marker field, "[P:A]" — not a bare "[A]" bracket, which looks
+  // similar but collides with ABC's own bracket/inline-field syntax and
+  // corrupts the chord that follows it once this ABCx text is converted
+  // to real ABC (confirmed: "[A]" parses as an inline field containing
+  // the literal text "A", eating the bracket structure the next chord's
+  // own quoting then collides with). "[P:A]" is exactly the construct
+  // ABC (and renderers like abcjs) use for this, so it round-trips
+  // cleanly and renders as a proper boxed section letter above the
+  // staff — the same thing iReal Pro itself shows, not an ad hoc
+  // annotation.
+  if (t.type === "sectionLabel") return `[P:${t.label}]`;
   // A "repeatBar" cell mixed into a multi-cell bar, rather than being the
   // bar's sole content (the shape gridTokensToAbcxBody's whole-bar repeat
   // pass below already resolves), has no single-cell ABCx equivalent.
@@ -79,6 +91,61 @@ function isRepeatBar(bar: GridToken[]): boolean {
  * real-world chart using repeat bars, which is why this function
  * resolves it to real chord text instead.)
  */
+// A heuristic for making the chart's one genuinely-repeated section
+// visible as an actual repeat sign, the way iReal Pro itself displays
+// it, instead of writing the section out twice as flat duplicated bars
+// (which is what gridAnnotations.ts's fillRepeats produces when it
+// flattens a "{...}" section — ABC's own repeat-barline model isn't
+// threaded through this function's plain string-per-bar representation,
+// so there's nothing marking the two halves as "the same section"
+// beyond their text happening to be identical). Confirmed against a
+// real chart ("A Felicidade") whose repeated 8-bar A section showed as
+// 16 plain, visually indistinguishable bars before this; a listener
+// comparing against iReal Pro's own display, which shows a single
+// repeat-barline-wrapped section, flagged the difference.
+//
+// Detects the longest immediately-adjacent repeated run of bars
+// (checked longest-first, so a genuine whole-section repeat wins over a
+// shorter coincidental match inside it) and collapses it into one
+// repeat-barline-wrapped occurrence. A minimum run length of 4 bars is
+// required: real charts commonly repeat a short (e.g. 2-bar) vamp or
+// ii-V pattern more than once without that being a notated repeat
+// section, and compacting those coincidental matches would be wrong far
+// more often than it would be right.
+const MIN_REPEAT_RUN_BARS = 4;
+const MAX_REPEAT_RUN_BARS = 16;
+
+function compactImmediateRepeats(bars: string[]): string[] {
+  const result: string[] = [];
+  let i = 0;
+  while (i < bars.length) {
+    const maxRun = Math.min(MAX_REPEAT_RUN_BARS, Math.floor((bars.length - i) / 2));
+    let matchedRunLength = 0;
+    for (let runLength = maxRun; runLength >= MIN_REPEAT_RUN_BARS; runLength--) {
+      let matches = true;
+      for (let j = 0; j < runLength; j++) {
+        if (bars[i + j] !== bars[i + runLength + j]) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) {
+        matchedRunLength = runLength;
+        break;
+      }
+    }
+    if (matchedRunLength > 0) {
+      const run = bars.slice(i, i + matchedRunLength);
+      result.push(`|: ${run[0]}`, ...run.slice(1, -1), `${run[run.length - 1]} :|`);
+      i += matchedRunLength * 2;
+    } else {
+      result.push(bars[i]);
+      i += 1;
+    }
+  }
+  return result;
+}
+
 function gridTokensToAbcxBody(tokens: GridToken[]): string {
   const bars = splitIntoBars(tokens);
   const isRepeat = bars.map(isRepeatBar);
@@ -88,24 +155,32 @@ function gridTokensToAbcxBody(tokens: GridToken[]): string {
   // for every bar, in order — a repeat bar needs no special treatment
   // beyond this resolution.
   const emitted: string[] = [];
-  let lastSourceText = "";
+  // Tracked separately from what's emitted: a section label belongs only
+  // to the bar it actually introduces, not to every later bar that holds
+  // the same chord via "x" — otherwise "[A] Cmaj7 | x | x" would show
+  // "[A]" on all three bars instead of just the first.
+  let lastSourceTextForRepeat = "";
   for (let i = 0; i < bars.length; i++) {
     if (isRepeat[i]) {
-      emitted.push(lastSourceText);
+      emitted.push(lastSourceTextForRepeat);
     } else {
-      const text = bars[i].map(cellText).join(" ");
-      emitted.push(text);
-      lastSourceText = text;
+      emitted.push(bars[i].map(cellText).join(" "));
+      lastSourceTextForRepeat = bars[i]
+        .filter((t) => t.type !== "sectionLabel")
+        .map(cellText)
+        .join(" ");
     }
   }
+
+  const compacted = compactImmediateRepeats(emitted);
 
   // iReal Pro charts are conventionally laid out four bars to a line; the
   // ABC output mirrors that so abcjs renders a readable, multi-line staff
   // instead of one unbroken line of bars.
   const BARS_PER_LINE = 4;
   const lines: string[] = [];
-  for (let i = 0; i < emitted.length; i += BARS_PER_LINE) {
-    lines.push(emitted.slice(i, i + BARS_PER_LINE).join(" | "));
+  for (let i = 0; i < compacted.length; i += BARS_PER_LINE) {
+    lines.push(compacted.slice(i, i + BARS_PER_LINE).join(" | "));
   }
   return lines.join(" |\n");
 }

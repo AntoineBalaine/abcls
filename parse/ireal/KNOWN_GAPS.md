@@ -251,3 +251,44 @@ emit a real `|:`/`:|` pair around a genuinely repeated section (rather
 than duplicating it) would need GridToken to distinguish a repeat-start/
 repeat-end bar from a plain one, which the current bar model doesn't —
 not implemented here.
+
+## Section labels are now kept (shown as ABC's own "[P:X]" part-marker field)
+
+Section labels ("*A", "*B", ...) were previously discarded entirely by
+removeSectionLabels, on the theory that they carry no information the
+reduced grid grammar needs. A user pointed out this drops real
+structural information iReal Pro itself displays. markSectionLabels now
+rewrites "*A" to a sentinel-wrapped cell ("§A§", padded with spaces so
+it isolates correctly even when glued to the following chord/time-
+signature) that textToGridTokens recognizes as its own sectionLabel
+token, which gridTokensToAbcxBody renders as ABC's standard inline
+part-marker field, "[P:A]" — not a bare "[A]", which looks similar but
+was confirmed to collide with ABC's own bracket/inline-field syntax and
+corrupt the chord immediately following it once converted to real ABC.
+"[P:A]" round-trips cleanly through the real converter with no errors
+and renders natively (in abcjs and other ABC renderers) as a proper
+boxed section letter above the staff, the same thing iReal Pro itself
+shows. The label is attached only to the bar that actually introduces
+the section, not propagated onto later bars that hold the same chord
+via "x".
+
+## The genuinely repeated section is now shown once, with a real repeat sign
+
+gridAnnotations.ts's fillRepeats flattens a "{...}" repeated section
+into literal duplicated bar text (there being no repeat-barline model
+threaded through this function's plain string-per-bar representation —
+see the "x" fix above for the related, now-fixed, over-application of
+that same syntax). A user comparing a real chart ("A Felicidade")
+against iReal Pro's own display pointed out the repeated section should
+show once, marked with an actual repeat sign, not written out twice.
+
+compactImmediateRepeats (in gridTokensToAbcxBody) detects the longest
+immediately-adjacent run of identical bars (checked longest-first, with
+a 4-bar minimum to avoid misfiring on a merely-coincidental short
+repeated phrase, like a ii-V appearing twice unrelatedly) and collapses
+it into one `|: ... :|`-wrapped occurrence. This is a text-pattern
+heuristic operating on the already-flattened bar array, not a structural
+fix to how fillRepeats itself works — it reliably recovers the visual
+repeat sign for the common case (the same text duplicated immediately
+after itself) without the larger refactor a fully structural fix (giving
+GridToken real repeat-start/repeat-end bar variants) would need.

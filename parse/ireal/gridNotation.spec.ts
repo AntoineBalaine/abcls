@@ -44,6 +44,25 @@ describe("iReal grid notation", () => {
   });
 
   it("skips an unrecognized cell rather than throwing", () => {
-    expect(() => textToGridTokens("C7 *A G7")).to.not.throw();
+    // "r" (repeat-previous-two-bars) is still not implemented — a
+    // genuinely unrecognized cell, unlike "*A" below.
+    expect(() => textToGridTokens("C7 r G7")).to.not.throw();
+  });
+
+  it("recognizes a section label as its own token, not dropped or glued to the next chord", () => {
+    expect(textToGridTokens("C7 *A G7")).to.deep.equal([
+      { type: "chord", chord: chord({ extension: 7 }) },
+      { type: "sectionLabel", label: "A" },
+      { type: "chord", chord: chord({ root: KeyRoot.G, extension: 7 }) },
+    ]);
+  });
+
+  it("recognizes a section label glued directly to the following chord", () => {
+    // Real charts commonly glue a section label straight onto the first
+    // chord of that section with no separating space (e.g. "*AC-7").
+    expect(textToGridTokens("*AC-7")).to.deep.equal([
+      { type: "sectionLabel", label: "A" },
+      { type: "chord", chord: chord({ quality: ChordQuality.Minor, qualityExplicit: true, extension: 7 }) },
+    ]);
   });
 });

@@ -37,8 +37,17 @@ function removeAlternativeChords(text: string): string {
   return text.replace(/\([^)]*\)/g, "");
 }
 
-function removeSectionLabels(text: string): string {
-  return text.replace(/\*\w/g, "");
+// Section labels (*A, *B, *V, ...) are kept, not discarded — a musician
+// reading the chart wants to see "A section starts here" the same way
+// iReal Pro itself shows it. Rewritten to a sentinel-wrapped form ("§A§",
+// padded with spaces so it always isolates into its own grid cell even
+// when originally glued to the following chord/time-signature, e.g.
+// "{*AT44D9") that gridNotation.ts's textToGridTokens recognizes as a
+// distinct sectionLabel token rather than plain chord text. "§" is used
+// since it cannot appear in real chart text and (being neither "f", "l",
+// nor "s") survives every other annotation-removal pass below unchanged.
+function markSectionLabels(text: string): string {
+  return text.replace(/\*(\w)/g, (_, letter: string) => ` §${letter}§ `);
 }
 
 // Time signature markers, e.g. "T44" for 4/4 — can appear glued to any
@@ -78,6 +87,7 @@ function removeVerticalSpacers(text: string): string {
 
 function removeAnnotations(text: string): string {
   let s = text;
+  s = markSectionLabels(s);
   s = bracketsToBars(s);
   s = removeComments(s);
   s = removeAlternativeChords(s);
@@ -85,7 +95,6 @@ function removeAnnotations(text: string): string {
   s = removeFermata(s);
   s = removeLayoutMarker(s);
   s = removeSmallMarker(s);
-  s = removeSectionLabels(s);
   s = removeTimeSignatures(s);
   s = commasToSpaces(s);
   return s;
