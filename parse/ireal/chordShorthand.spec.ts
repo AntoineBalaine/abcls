@@ -2,7 +2,7 @@ import { expect } from "chai";
 import fc from "fast-check";
 import { KeyAccidental, KeyRoot } from "../types/abcjs-ast";
 import { ChordQuality, ParsedChord } from "../music-theory/types";
-import { irealTextToParsedChord, parsedChordToIrealText } from "./chordShorthand";
+import { irealTextToParsedChord, parsedChordToAbcxText, parsedChordToIrealText } from "./chordShorthand";
 
 function chord(partial: Partial<ParsedChord>): ParsedChord {
   return {
@@ -200,6 +200,39 @@ describe("iReal chord shorthand", () => {
       expect(parsed?.extension).to.equal(7);
       expect(parsed?.alterations).to.deep.equal([{ type: "sharp", degree: 11 }]);
       expect(parsed?.bass).to.deep.equal({ root: "F", accidental: "" });
+    });
+  });
+
+  describe("real-world altered-dominant chord text ('alt', extension before the word)", () => {
+    // Confirmed against real charts in a user's iReal Pro library backup
+    // ("Dominant 7alt Workout", "Hindsight"): same before-the-word
+    // ordering as sus chords ("C7alt", not "Calt7"), and a bare "alt"
+    // with no extension at all.
+    it('parses "<extension>alt" with the Altered quality', () => {
+      const parsed = irealTextToParsedChord("C7alt");
+      expect(parsed?.quality).to.equal(ChordQuality.Altered);
+      expect(parsed?.extension).to.equal(7);
+    });
+
+    it('parses a bare "alt" (no extension)', () => {
+      const parsed = irealTextToParsedChord("Calt");
+      expect(parsed?.quality).to.equal(ChordQuality.Altered);
+      expect(parsed?.extension).to.be.null;
+    });
+
+    it("still parses alterations and a slash bass after the alt", () => {
+      const parsed = irealTextToParsedChord("C7alt#9/Bb");
+      expect(parsed?.alterations).to.deep.equal([{ type: "sharp", degree: 9 }]);
+      expect(parsed?.bass).to.deep.equal({ root: "B", accidental: "b" });
+    });
+
+    it('emits ABCx text with the quality word *before* the extension ("Calt7"), the opposite of iReal\'s own ordering', () => {
+      // ABCx's chord-symbol grammar (parsers/scan_abcx_tunebody.ts's
+      // pChordSymbol) expects quality-then-extension like every other
+      // quality word, unlike iReal's own "extension-then-alt" shorthand.
+      const parsed = irealTextToParsedChord("C7alt")!;
+      expect(parsedChordToAbcxText(parsed)).to.equal("Calt7");
+      expect(parsedChordToIrealText(parsed)).to.equal("C7alt");
     });
   });
 });

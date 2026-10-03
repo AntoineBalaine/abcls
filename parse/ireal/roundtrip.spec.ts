@@ -91,4 +91,14 @@ C7 F7 |
     expect(sourceCommentLines[0]).to.equal(`% iReal Pro source: ${link}`);
     expect(sourceCommentLines[1]).to.equal(`% iReal Pro source: ${link}`);
   });
+
+  it("scans an altered-dominant ABCx chord symbol ('Calt7') as a single chord, not fragments", () => {
+    // Regression guard for parsers/scan_abcx_tunebody.ts's pChordSymbol:
+    // it has its own, separate quality-word list from chordShorthand.ts's
+    // iReal-text patterns, and "alt" was missing from it even after the
+    // iReal-side parsing was fixed, silently fragmenting every
+    // altered-dominant chord's ABCx text into garbage annotations.
+    const abcx = `X:1\nT:Test\nK:C\nCalt7 Gsus4 |\n`;
+    expect(chordSequence(abcx)).to.deep.equal(["Calt7", "Gsus4"]);
+  });
 });

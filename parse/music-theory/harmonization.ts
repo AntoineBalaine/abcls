@@ -149,6 +149,11 @@ export const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   [ChordQuality.Suspended4]: [0, 5, 7],
   [ChordQuality.Power]: [0, 7],
   [ChordQuality.Add]: [0, 4, 7],
+  // Altered dominant: functionally a dominant triad underneath whatever
+  // altered tensions (b9/#9/#11/b13) the "alt" word implies — this table
+  // only covers the unaltered triad/7th, not the implied tensions
+  // themselves (see ChordQuality.Altered's own doc comment).
+  [ChordQuality.Altered]: [0, 4, 7],
 };
 
 /**
@@ -216,6 +221,15 @@ export const SEVENTH_CHORD_SPECS: Record<ChordQuality, IntervalSpec[]> = {
     { func: 3, interval: 4, scaleStep: 2 },
     { func: 5, interval: 7, scaleStep: 4 },
     { func: 7, interval: 11, scaleStep: 6 },
+  ],
+  // Altered dominant: same unaltered dominant 7th shape as
+  // ChordQuality.Dominant above — see QUALITY_INTERVALS's Altered entry
+  // for why the implied altered tensions aren't represented here.
+  [ChordQuality.Altered]: [
+    { func: 8, interval: 0, scaleStep: 0 },
+    { func: 3, interval: 4, scaleStep: 2 },
+    { func: 5, interval: 7, scaleStep: 4 },
+    { func: 7, interval: 10, scaleStep: 6 },
   ],
 };
 

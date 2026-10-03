@@ -177,3 +177,25 @@ Added SUS_CHORD_TEXT_PATTERN as a fallback tried when the primary
 pattern doesn't match, covering both forms. Verified against the real
 657-song backup: charts still showing the empty-repeat symptom dropped
 from 32 to 10 (98.5% of the library now converts with no symptom at all).
+
+## Altered-dominant chord quality ('alt') was entirely unrecognized
+
+Neither CHORD_TEXT_PATTERN (iReal-text parsing) nor ABCx's own
+pChordSymbol (parsers/scan_abcx_tunebody.ts) recognized "alt" at all —
+confirmed against multiple real charts in a user's library backup,
+including one ("Dominant 7alt Workout") that is *entirely* altered-
+dominant chords, which therefore failed to convert at all before this
+fix. Added ChordQuality.Altered to the shared enum, a parseAltChordText
+fallback (same before-the-word extension ordering as sus chords: iReal
+writes "C7alt", not "Calt7"), and "alt" to ABCx's own quality-word list
+(which separately needed "alt" added to pChordSymbol — a different,
+previously-undiscovered gap, found only by actually round-tripping the
+ABCx text that chordShorthand.ts now correctly produces through the
+real converter). The implied altered tensions themselves (b9/#9/#11/b13)
+are not expanded into structured ChordAlteration entries — "alt" is kept
+as a single opaque quality, consistent with iReal's own text never
+spelling out which specific tensions it means.
+
+Verified against the real 657-song backup: charts still showing the
+empty-repeat symptom dropped from 10 to 7 (99% of the library now
+converts with no symptom at all).

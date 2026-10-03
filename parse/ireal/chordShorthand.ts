@@ -26,6 +26,10 @@ const QUALITY_TO_SYMBOL: Record<ChordQuality, string> = {
   [ChordQuality.Suspended4]: "sus4",
   [ChordQuality.Power]: "5",
   [ChordQuality.Add]: "add",
+  // Unused at runtime — chordToText special-cases Altered's extension
+  // ordering directly (see there); only present so this Record type
+  // covers every ChordQuality value.
+  [ChordQuality.Altered]: "alt",
 };
 
 // Kept as the exact inverse of QUALITY_TO_SYMBOL: every symbol that table can
@@ -51,12 +55,21 @@ function alterationToText(alt: ChordAlteration): string {
   return (alt.type === "sharp" ? "#" : "b") + String(alt.degree);
 }
 
-function chordToText(chord: ParsedChord, qualityToSymbol: Record<ChordQuality, string>): string {
+function chordToText(chord: ParsedChord, qualityToSymbol: Record<ChordQuality, string>, altExtensionFirst: boolean): string {
   let text = rootToText(chord.root, chord.rootAccidental);
 
   if (chord.quality === ChordQuality.Dominant || !chord.qualityExplicit) {
     // Bare extension number, no quality letter, e.g. "C7".
     if (chord.extension !== null) text += String(chord.extension);
+  } else if (chord.quality === ChordQuality.Altered) {
+    // iReal Pro's own shorthand writes "alt" after any extension (e.g.
+    // "C7alt"), the opposite ordering from every other quality symbol,
+    // which precedes the extension (e.g. "C^7"); ABCx's chord-symbol
+    // scanner instead expects quality before extension like everything
+    // else (scanQuality always runs before scanExtension), so ABCx text
+    // must be "Calt7".
+    const extensionText = chord.extension !== null ? String(chord.extension) : "";
+    text += altExtensionFirst ? extensionText + "alt" : "alt" + extensionText;
   } else if (chord.quality === ChordQuality.Add) {
     text += "add" + (chord.extension !== null ? String(chord.extension) : "");
   } else {
@@ -78,7 +91,7 @@ function chordToText(chord: ParsedChord, qualityToSymbol: Record<ChordQuality, s
 }
 
 export function parsedChordToIrealText(chord: ParsedChord): string {
-  return chordToText(chord, QUALITY_TO_SYMBOL);
+  return chordToText(chord, QUALITY_TO_SYMBOL, true);
 }
 
 // "5" (Power) is included as a quality-symbol alternative, not left to the
@@ -115,10 +128,37 @@ function parseSusChordText(trimmed: string): ParsedChord | null {
   };
 }
 
+// Real iReal Pro charts write an altered-dominant chord's extension
+// *before* "alt" (e.g. "C7alt"), and a bare "alt" with no extension at
+// all — the same before-the-word ordering sus chords use, and the same
+// mismatch with CHORD_TEXT_PATTERN's quality-before-extension
+// assumption. Tried as a fallback (only once the primary pattern and the
+// sus fallback above have both failed).
+const ALT_CHORD_TEXT_PATTERN = /^([A-G])([#b]?)(\d+)?alt((?:[#b]\d+)*)(?:\/([A-G])([#b]?))?$/;
+
+function parseAltChordText(trimmed: string): ParsedChord | null {
+  const match = ALT_CHORD_TEXT_PATTERN.exec(trimmed);
+  if (!match) return null;
+  const [, rootLetter, rootAcc, extensionStr, alterationsStr, bassLetter, bassAcc] = match;
+  const alterations: ChordAlteration[] = [];
+  for (const altText of alterationsStr.match(/[#b]\d+/g) ?? []) {
+    alterations.push({ type: altText[0] === "#" ? "sharp" : "flat", degree: parseInt(altText.slice(1), 10) });
+  }
+  return {
+    root: rootLetter as KeyRoot,
+    rootAccidental: (rootAcc || "") as KeyAccidental,
+    quality: ChordQuality.Altered,
+    qualityExplicit: true,
+    extension: extensionStr ? parseInt(extensionStr, 10) : null,
+    alterations,
+    bass: bassLetter ? { root: bassLetter as KeyRoot, accidental: (bassAcc || "") as KeyAccidental } : null,
+  };
+}
+
 export function irealTextToParsedChord(text: string): ParsedChord | null {
   const trimmed = text.trim();
   const match = CHORD_TEXT_PATTERN.exec(trimmed);
-  if (!match) return parseSusChordText(trimmed);
+  if (!match) return parseSusChordText(trimmed) ?? parseAltChordText(trimmed);
 
   const [, rootLetter, rootAcc, qualitySymbol, extensionStr, alterationsStr, bassLetter, bassAcc] = match;
 
@@ -166,8 +206,9 @@ const ABCX_QUALITY_TO_SYMBOL: Record<ChordQuality, string> = {
   [ChordQuality.Suspended4]: "sus4",
   [ChordQuality.Power]: "5",
   [ChordQuality.Add]: "add",
+  [ChordQuality.Altered]: "alt",
 };
 
 export function parsedChordToAbcxText(chord: ParsedChord): string {
-  return chordToText(chord, ABCX_QUALITY_TO_SYMBOL);
+  return chordToText(chord, ABCX_QUALITY_TO_SYMBOL, false);
 }

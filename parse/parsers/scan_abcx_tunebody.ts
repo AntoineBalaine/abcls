@@ -21,12 +21,13 @@ import { annotation, barline2, collectInvalidToken, comment, inline_field, pEOL,
  * "maj" is matched before "m" in chords like "Cmaj7"
  *
  * Quality symbols:
- * - maj, min, dim, aug, sus, add, m, M: standard ABC quality indicators
+ * - maj, min, dim, aug, sus, add, alt, m, M: standard ABC quality indicators
  * - `-`: alternate notation for minor (e.g., C-7 = Cm7)
  * - `°`: diminished symbol (e.g., C°7 = Cdim7)
  * - `ø`, `Ø`: half-diminished symbols (e.g., Cø7 = Cm7b5)
+ * - `alt`: altered dominant (e.g., Calt7 = C7 with implied altered tensions)
  */
-export const pChordSymbol = /[A-Gacdefg][#b]?(maj|min|dim|aug|sus|add|m|M|-|°|ø|Ø)?[0-9]*(#[0-9]+|b[0-9]+)*(\/[A-Gacdefg][#b]?)?/;
+export const pChordSymbol = /[A-Gacdefg][#b]?(maj|min|dim|aug|sus|add|alt|m|M|-|°|ø|Ø)?[0-9]*(#[0-9]+|b[0-9]+)*(\/[A-Gacdefg][#b]?)?/;
 
 /**
  * Scans a chord symbol token

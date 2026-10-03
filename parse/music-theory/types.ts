@@ -16,6 +16,14 @@ export enum ChordQuality {
   Suspended4 = "sus4",
   Power = "power",
   Add = "add",
+  // An altered dominant 7th (implied b9/#9/#11/b13 tensions), written
+  // "alt" in iReal Pro chord shorthand (e.g. "C7alt"). Kept distinct from
+  // Dominant rather than folded into it with explicit ChordAlteration
+  // entries, since iReal's own text never spells out which specific
+  // tensions "alt" implies — it's a single opaque quality word, not a
+  // shorthand this codebase can expand into concrete alterations without
+  // guessing.
+  Altered = "altered",
 }
 
 /**
