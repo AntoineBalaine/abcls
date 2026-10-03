@@ -115,8 +115,24 @@ function isRepeatBar(bar: GridToken[]): boolean {
 const MIN_REPEAT_RUN_BARS = 4;
 const MAX_REPEAT_RUN_BARS = 16;
 
-function compactImmediateRepeats(bars: string[]): string[] {
-  const result: string[] = [];
+/**
+ * One bar's chord text, plus whether a repeated section begins or ends
+ * at it. The barlines themselves are deliberately *not* baked into
+ * `text`: a bar's content and the barline next to it are separate
+ * things, and the barline between any two adjacent bars depends on both
+ * of them (a section ending where the next begins is the single ":|:"
+ * symbol, not ":|" and "|:" written back to back). Keeping them apart
+ * lets renderBars below derive each barline exactly once, from
+ * structure.
+ */
+interface RenderedBar {
+  text: string;
+  opensRepeat: boolean;
+  closesRepeat: boolean;
+}
+
+function compactImmediateRepeats(bars: string[]): RenderedBar[] {
+  const result: RenderedBar[] = [];
   let i = 0;
   while (i < bars.length) {
     const maxRun = Math.min(MAX_REPEAT_RUN_BARS, Math.floor((bars.length - i) / 2));
@@ -136,14 +152,59 @@ function compactImmediateRepeats(bars: string[]): string[] {
     }
     if (matchedRunLength > 0) {
       const run = bars.slice(i, i + matchedRunLength);
-      result.push(`|: ${run[0]}`, ...run.slice(1, -1), `${run[run.length - 1]} :|`);
+      result.push(
+        ...run.map((text, j) => ({
+          text,
+          opensRepeat: j === 0,
+          closesRepeat: j === run.length - 1,
+        })),
+      );
       i += matchedRunLength * 2;
     } else {
-      result.push(bars[i]);
+      result.push({ text: bars[i], opensRepeat: false, closesRepeat: false });
       i += 1;
     }
   }
   return result;
+}
+
+/**
+ * The barline that goes between two adjacent bars (or at the very start
+ * or end of the chart, where one side is absent): a section ending
+ * exactly where the next begins is the single standard ":|:" symbol,
+ * not ":|" followed by "|:".
+ */
+function barlineBetween(left: RenderedBar | undefined, right: RenderedBar | undefined): string {
+  const closes = left?.closesRepeat ?? false;
+  const opens = right?.opensRepeat ?? false;
+  if (closes && opens) return ":|:";
+  if (closes) return ":|";
+  if (opens) return "|:";
+  return "|";
+}
+
+/**
+ * Renders bars as ABCx tune-body lines, `barsPerLine` to a line, with
+ * each barline derived from the bars on either side of it. A line's
+ * closing barline sits at the end of that line, before the break, which
+ * is how ABC itself is conventionally laid out. The chart's final bar
+ * gets a closing barline only if it actually closes a repeat — an
+ * ordinary last bar is left open, matching how the rest of this
+ * converter writes charts.
+ */
+function renderBars(bars: RenderedBar[], barsPerLine: number): string {
+  let out = "";
+  for (let i = 0; i < bars.length; i++) {
+    if (i === 0) {
+      out += bars[i].opensRepeat ? `${barlineBetween(undefined, bars[i])} ${bars[i].text}` : bars[i].text;
+      continue;
+    }
+    const barline = barlineBetween(bars[i - 1], bars[i]);
+    out += i % barsPerLine === 0 ? ` ${barline}\n${bars[i].text}` : ` ${barline} ${bars[i].text}`;
+  }
+  const lastBar = bars[bars.length - 1];
+  if (lastBar?.closesRepeat) out += ` ${barlineBetween(lastBar, undefined)}`;
+  return out;
 }
 
 function gridTokensToAbcxBody(tokens: GridToken[]): string {
@@ -172,17 +233,20 @@ function gridTokensToAbcxBody(tokens: GridToken[]): string {
     }
   }
 
-  const compacted = compactImmediateRepeats(emitted);
+  // splitIntoBars starts a new bar at every bar token, so a chart whose
+  // grid text opens or closes on a bar separator, or that had a cell
+  // dropped as unrecognized, leaves a bar with no content at all. An
+  // empty bar carries no musical information (a genuinely silent bar is
+  // an explicit "n"/N.C. cell, and a held chord is an "x" resolved
+  // above), and emitting one both prints a stray barline and pushes the
+  // bars-per-line layout out of step for the rest of the chart.
+  const nonEmpty = emitted.filter((text) => text.trim().length > 0);
 
   // iReal Pro charts are conventionally laid out four bars to a line; the
   // ABC output mirrors that so abcjs renders a readable, multi-line staff
   // instead of one unbroken line of bars.
   const BARS_PER_LINE = 4;
-  const lines: string[] = [];
-  for (let i = 0; i < compacted.length; i += BARS_PER_LINE) {
-    lines.push(compacted.slice(i, i + BARS_PER_LINE).join(" | "));
-  }
-  return lines.join(" |\n");
+  return renderBars(compactImmediateRepeats(nonEmpty), BARS_PER_LINE);
 }
 
 /**

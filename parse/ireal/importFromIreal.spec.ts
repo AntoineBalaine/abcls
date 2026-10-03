@@ -28,6 +28,20 @@ function linkWithChordData(chordData: string): string {
   return buildPlaylistLink({ songs: [fields] });
 }
 
+/**
+ * The tune-body (chord grid) lines of a generated ABCx tune, joined back
+ * into one line for easy assertion — everything that isn't a header
+ * field ("X:", "T:", "K:", ...) or a comment ("% iReal Pro source: ...",
+ * which embeds the original raw link and so legitimately contains raw
+ * grid text that assertions must not match against).
+ */
+function tuneBody(abcx: string): string {
+  return abcx
+    .split("\n")
+    .filter((line) => line.trim().length > 0 && !/^[A-Za-z]:/.test(line) && !line.startsWith("%"))
+    .join(" ");
+}
+
 describe("importIrealLinkToAbcx key field translation", () => {
   it('translates iReal Pro\'s own "-" minor-key suffix to ABC\'s "m" suffix', () => {
     const abcx = importIrealLinkToAbcx(linkWithKey("A-"));
@@ -83,8 +97,10 @@ describe("importIrealLinkToAbcx with a chain of separate-bar repeat cells", () =
     // around every held chord) littered the chart with spurious repeat
     // barlines.
     const abcx = importIrealLinkToAbcx(linkWithChordData("Eb-7 | x | x | x | Ab-7 |"));
-    const bodyLines = abcx.split("\n").filter((l) => l.includes("|"));
-    expect(bodyLines.join(" ").trim()).to.equal("Ebm7 | Ebm7 | Ebm7 | Ebm7 | Abm7 |");
+    // No trailing barline after the final bar: the chart's own trailing
+    // "|" leaves an empty bar behind, which carries no musical
+    // information and is dropped rather than printed as a stray bar.
+    expect(tuneBody(abcx)).to.equal("Ebm7 | Ebm7 | Ebm7 | Ebm7 | Abm7");
     expect(abcx).to.not.include("|:");
   });
 });
@@ -92,12 +108,52 @@ describe("importIrealLinkToAbcx with a chain of separate-bar repeat cells", () =
 describe("importIrealLinkToAbcx with an unmatched repeat-section brace", () => {
   it("does not glue the unmatched brace onto the following chord (confirmed against a real chart with no closing brace at all)", () => {
     const abcx = importIrealLinkToAbcx(linkWithChordData("{C7 | x | x | x |F7 |"));
-    // The body (the last line) is what textToGridTokens actually parsed
-    // into chords — not the "% iReal Pro source:" comment line, which
-    // legitimately embeds the original, still-brace-prefixed raw link.
-    const body = abcx.split("\n").pop()!;
-    expect(body).to.include("C7");
-    expect(body).to.not.include("{");
+    // tuneBody deliberately excludes the "% iReal Pro source:" comment
+    // line, which legitimately embeds the original, still-brace-prefixed
+    // raw link.
+    expect(tuneBody(abcx)).to.equal("C7 | C7 | C7 | C7 | F7");
+  });
+});
+
+describe("importIrealLinkToAbcx barlines around a repeated section", () => {
+  // Eight bars written twice in a row (what gridAnnotations.ts's
+  // fillRepeats produces from a "{...}" section) collapse into one
+  // repeat-barline-wrapped section, and the barline on each side of it
+  // is derived from the bars either side rather than glued into a bar's
+  // own text — so a repeat landing at a line boundary, next to a plain
+  // bar, or immediately next to another repeated section each produce
+  // exactly one correct barline, never a doubled "| |".
+  // Each run ends with its own bar separator so that concatenating two
+  // of them leaves a real bar boundary at the seam (without it, the last
+  // chord of one copy and the first of the next land in the same bar).
+  const eightBars = "C7 | D-7 | E-7 | F7 | G7 | A-7 | B-7 | C7 | ";
+
+  it("wraps the repeated section once, with no doubled barline at the line break it ends on", () => {
+    const abcx = importIrealLinkToAbcx(linkWithChordData(`${eightBars}${eightBars}F7 |`));
+    expect(tuneBody(abcx)).to.equal("|: C7 | Dm7 | Em7 | F7 | G7 | Am7 | Bm7 | C7 :| F7");
+  });
+
+  it("uses a single plain barline before a repeat that starts mid-chart", () => {
+    const abcx = importIrealLinkToAbcx(linkWithChordData(`F7 | ${eightBars}${eightBars}`));
+    expect(tuneBody(abcx)).to.include("F7 |: C7");
+    expect(tuneBody(abcx)).to.not.match(/\|\s*\|:/);
+  });
+
+  it('merges a repeat ending where the next begins into the single ":|:" symbol', () => {
+    const first = "C7 | D-7 | E-7 | F7 | ";
+    const second = "G7 | A-7 | B-7 | C7 | ";
+    const abcx = importIrealLinkToAbcx(linkWithChordData(`${first}${first}${second}${second}`));
+    expect(tuneBody(abcx)).to.include("F7 :|: G7");
+    expect(tuneBody(abcx)).to.not.match(/:\|\s*\|:/);
+  });
+});
+
+describe("importIrealLinkToAbcx with an empty bar in the grid", () => {
+  it("drops a bar with no content rather than printing a stray barline for it", () => {
+    // Two adjacent bar separators with nothing between them, which real
+    // charts do contain (found in "African Queen, The").
+    const abcx = importIrealLinkToAbcx(linkWithChordData("C7 | | F7 |"));
+    expect(tuneBody(abcx)).to.equal("C7 | F7");
   });
 });
 
@@ -110,15 +166,13 @@ describe("importIrealLinkToAbcx with section labels", () => {
     // inline part-marker field, rendered by renderers like abcjs as a
     // proper boxed section letter above the staff.
     const abcx = importIrealLinkToAbcx(linkWithChordData("*AC7 | D-7 | *BG7 | C7 |"));
-    const bodyLines = abcx.split("\n").filter((l) => l.includes("|"));
-    expect(bodyLines.join(" ")).to.include("[P:A] C7");
-    expect(bodyLines.join(" ")).to.include("[P:B] G7");
+    expect(tuneBody(abcx)).to.include("[P:A] C7");
+    expect(tuneBody(abcx)).to.include("[P:B] G7");
   });
 
   it("only shows the label on the bar that introduces the section, not on later repeats of its chord", () => {
     const abcx = importIrealLinkToAbcx(linkWithChordData("*AC7 | x | x |"));
-    const bodyLines = abcx.split("\n").filter((l) => l.includes("|"));
-    const occurrences = bodyLines.join(" ").match(/\[P:A\]/g) ?? [];
+    const occurrences = tuneBody(abcx).match(/\[P:A\]/g) ?? [];
     expect(occurrences).to.have.length(1);
   });
 });
