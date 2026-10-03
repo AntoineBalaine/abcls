@@ -119,6 +119,18 @@ function gridTokensToAbcxBody(tokens: GridToken[]): string {
   return lines.join(" |\n");
 }
 
+/**
+ * Translates iReal Pro's own key-field spelling into standard ABC key
+ * syntax. iReal Pro's key picker marks a minor key with a trailing "-"
+ * (matching its own minor-chord shorthand, e.g. "A-7"), not ABC's "m"
+ * suffix — so a chart whose key field is "A-" would otherwise end up as
+ * the literal (invalid, and silently misread as major) ABC header
+ * "K:A-" rather than "K:Am".
+ */
+function irealKeyToAbcKey(key: string): string {
+  return key.endsWith("-") ? `${key.slice(0, -1)}m` : key;
+}
+
 function buildSongAbcxText(fields: IrealSongFields, tuneNumber: number, sourceLink: string): string {
   const lines: string[] = [`X:${tuneNumber}`, `% iReal Pro source: ${sourceLink}`];
   if (fields.title) lines.push(`T:${fields.title}`);
@@ -127,7 +139,7 @@ function buildSongAbcxText(fields: IrealSongFields, tuneNumber: number, sourceLi
   if (fields.groove) lines.push(`%%irealgroove ${fields.groove}`);
   if (fields.bpm) lines.push(`Q:1/4=${fields.bpm}`);
   lines.push(`%%irealrepeats ${fields.repeats ?? "1"}`);
-  lines.push(`K:${fields.key || "C"}`);
+  lines.push(`K:${irealKeyToAbcKey(fields.key || "C")}`);
 
   const chordText = unscramble(stripChordDataMarker(fields.rawChordData));
   const gridTokens = textToGridTokens(chordText);
