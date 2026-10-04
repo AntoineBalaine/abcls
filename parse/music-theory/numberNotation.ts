@@ -122,8 +122,28 @@ export function nashvilleDegree(
 }
 
 /**
- * Regular number notation: degree relative to the song's actual mode's
- * scale, anchored at the same tonic.
+ * Regular number notation: degree relative to the song's own tonic.
+ *
+ * A minor key is read against its parallel major, the major scale on the
+ * same tonic, which is what iReal Pro's own number charts do. A minor is
+ * therefore read against A major, so a C major seventh in A minor is
+ * `b3maj7` and not `3maj7`: A major's third is C sharp, and C is a
+ * semitone below it.
+ *
+ * The reason is that an accidental in a degree then always means the same
+ * thing, a departure from a major scale, so `3` and `b3` each have one
+ * reading whatever mode the song is in. Reading a minor key against the
+ * minor scale instead makes the same digit mean different notes depending
+ * on the key's mode, which is the ambiguity this convention exists to
+ * remove.
+ *
+ * This is the same reference scale Nashville uses and a different tonic:
+ * Nashville reads a minor key against its relative major, three semitones
+ * up, so C minor's tonic prints `6`, where here it prints `1`.
+ *
+ * A key in one of the other modes is still read against that mode's own
+ * scale. No iReal Pro chart can be in one, since its key field spells only
+ * major and minor, so this concerns ABC-sourced keys alone.
  */
 export function regularDegree(
   chordRoot: KeyRoot,
@@ -133,7 +153,8 @@ export function regularDegree(
   const chordSemitone = rootSemitone(chordRoot, chordRootAccidental);
   const tonicSemitone = rootSemitone(key.root, key.acc);
   const offset = chordOffsetFromTonic(chordSemitone, tonicSemitone);
-  return offsetToDegree(offset, MODE_SCALE_STEPS[key.mode]);
+  const referenceMode = key.mode === Mode.Minor ? Mode.Major : key.mode;
+  return offsetToDegree(offset, MODE_SCALE_STEPS[referenceMode]);
 }
 
 /** Renders a DegreeSpelling as iReal Pro-style text, e.g. "b3", "#4", "1". */
