@@ -1,8 +1,8 @@
 import { expect } from "chai";
 import { buildPlaylistLink, IrealSongFields } from "./fields";
+import { withChordDataMarker } from "./fields";
 import { importIrealLinkToAbcx } from "./importFromIreal";
 import { scramble } from "./scramble";
-import { withChordDataMarker } from "./fields";
 
 function linkWithKey(key: string): string {
   const fields: IrealSongFields = {

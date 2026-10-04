@@ -4,8 +4,8 @@ import { parseAbcx } from "../parsers/parse_abcx";
 import { ScannerAbcx } from "../parsers/scan_abcx_tunebody";
 import { ChordSymbol, Tune } from "../types/Expr";
 import { exportAbcxToIrealLink } from "./exportToIreal";
-import { importIrealLinkToAbcx } from "./importFromIreal";
 import { parsePlaylistLink } from "./fields";
+import { importIrealLinkToAbcx } from "./importFromIreal";
 
 function chordSequence(abcxSource: string): string[] {
   const ctx = new ABCContext();

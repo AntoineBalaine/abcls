@@ -2,9 +2,9 @@ import { expect } from "chai";
 import { ABCContext } from "../parsers/Context";
 import { AbcErrorReporter } from "../parsers/ErrorReporter";
 import { parsedChordToIrealText } from "./chordShorthand";
+import { Barline, ChartLayout, layoutChart } from "./gridLayout";
 import { parseGrid } from "./gridParser";
 import { scanGrid } from "./gridScanner";
-import { Barline, ChartLayout, layoutChart } from "./gridLayout";
 
 /**
  * Example-based tests for `gridLayout.ts`, one per rule in

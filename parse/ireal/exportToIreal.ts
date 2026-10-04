@@ -1,12 +1,12 @@
-import { ABCContext } from "../parsers/Context";
-import { ScannerAbcx } from "../parsers/scan_abcx_tunebody";
-import { parseAbcx } from "../parsers/parse_abcx";
-import { BarLine, ChordSymbol, Directive, File_structure, Info_line, Tune } from "../types/Expr";
 import { parseChordSymbol } from "../music-theory/parseChordSymbol";
 import { scanChordSymbol } from "../music-theory/scanChordSymbol";
-import { scramble } from "./scramble";
+import { ABCContext } from "../parsers/Context";
+import { parseAbcx } from "../parsers/parse_abcx";
+import { ScannerAbcx } from "../parsers/scan_abcx_tunebody";
+import { BarLine, ChordSymbol, Directive, File_structure, Info_line, Tune } from "../types/Expr";
 import { buildPlaylistLink, IrealSongFields, withChordDataMarker } from "./fields";
 import { GridToken, gridTokensToText } from "./gridNotation";
+import { scramble } from "./scramble";
 
 function infoLineText(line: Info_line): string {
   return line.value.map((t) => t.lexeme).join("");

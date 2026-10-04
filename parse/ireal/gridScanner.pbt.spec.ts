@@ -3,8 +3,8 @@ import * as fc from "fast-check";
 import { ABCContext } from "../parsers/Context";
 import { AbcErrorReporter } from "../parsers/ErrorReporter";
 import { scanGrid } from "./gridScanner";
-import { GridToken, GridTT, tokensToGridText } from "./gridTokens";
 import * as Gen from "./gridScanner.pbt.generators";
+import { GridToken, GridTT, tokensToGridText } from "./gridTokens";
 
 /**
  * Property-based tests for the iReal Pro grid scanner.

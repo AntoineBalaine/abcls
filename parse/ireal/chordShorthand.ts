@@ -1,5 +1,5 @@
-import { KeyAccidental, KeyRoot } from "../types/abcjs-ast";
 import { ChordAlteration, ChordQuality, ParsedChord } from "../music-theory/types";
+import { KeyAccidental, KeyRoot } from "../types/abcjs-ast";
 
 /**
  * ParsedChord <-> iReal Pro chord shorthand text.

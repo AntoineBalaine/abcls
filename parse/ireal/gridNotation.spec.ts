@@ -1,6 +1,6 @@
 import { expect } from "chai";
-import { KeyAccidental, KeyRoot } from "../types/abcjs-ast";
 import { ChordQuality, ParsedChord } from "../music-theory/types";
+import { KeyAccidental, KeyRoot } from "../types/abcjs-ast";
 import { GridToken, gridTokensToText, textToGridTokens } from "./gridNotation";
 
 function chord(partial: Partial<ParsedChord>): ParsedChord {

@@ -1,7 +1,7 @@
+import { ParsedChord } from "../music-theory/types";
 import { ABCContext } from "../parsers/Context";
 import { Token, TT } from "../parsers/scan";
 import { ParserErrorType } from "../types/types";
-import { ParsedChord } from "../music-theory/types";
 import { irealTextToParsedChord } from "./chordShorthand";
 import { Annotation, Bar, Bass, Cell, Ending, IrealChart, Navigation, Repeat, Section, TimeSignature } from "./gridAst";
 import { GridToken, GridTT } from "./gridTokens";

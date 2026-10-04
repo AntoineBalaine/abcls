@@ -1,7 +1,7 @@
-import { parsePlaylistLink, stripChordDataMarker, IrealSongFields } from "./fields";
-import { unscramble } from "./scramble";
-import { GridToken, textToGridTokens } from "./gridNotation";
 import { parsedChordToAbcxText } from "./chordShorthand";
+import { parsePlaylistLink, stripChordDataMarker, IrealSongFields } from "./fields";
+import { GridToken, textToGridTokens } from "./gridNotation";
+import { unscramble } from "./scramble";
 
 /**
  * Builds ABCx source text directly for one song, rather than constructing

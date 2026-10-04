@@ -58,17 +58,17 @@
  * tokens rather than failing the run.
  */
 import * as fs from "fs";
-import { parsePlaylistLink, stripChordDataMarker } from "../fields";
 import { ABCContext } from "../../parsers/Context";
 import { AbcErrorReporter } from "../../parsers/ErrorReporter";
-import { unscramble } from "../scramble";
+import { parsedChordToIrealText } from "../chordShorthand";
+import { parsePlaylistLink, stripChordDataMarker } from "../fields";
+import { IrealChart } from "../gridAst";
+import { ChartLayout, layoutChart } from "../gridLayout";
+import { textToGridTokens } from "../gridNotation";
+import { chartChords, parseGrid } from "../gridParser";
 import { scanGrid } from "../gridScanner";
 import { GridTT, tokensToGridText } from "../gridTokens";
-import { chartChords, parseGrid } from "../gridParser";
-import { IrealChart } from "../gridAst";
-import { parsedChordToIrealText } from "../chordShorthand";
-import { textToGridTokens } from "../gridNotation";
-import { ChartLayout, layoutChart } from "../gridLayout";
+import { unscramble } from "../scramble";
 
 /**
  * Every chord the layout names, counting a cell's alternative chord as well

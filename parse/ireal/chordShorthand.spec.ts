@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import fc from "fast-check";
-import { KeyAccidental, KeyRoot } from "../types/abcjs-ast";
 import { ChordQuality, ParsedChord } from "../music-theory/types";
+import { KeyAccidental, KeyRoot } from "../types/abcjs-ast";
 import { irealTextToParsedChord, parsedChordToAbcxText, parsedChordToIrealText } from "./chordShorthand";
 
 function chord(partial: Partial<ParsedChord>): ParsedChord {

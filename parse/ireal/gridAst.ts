@@ -1,5 +1,5 @@
-import { KeyAccidental, KeyRoot } from "../types/abcjs-ast";
 import { ParsedChord } from "../music-theory/types";
+import { KeyAccidental, KeyRoot } from "../types/abcjs-ast";
 
 /**
  * The tree `gridParser.ts` builds from a stream of `GridToken`s.
