@@ -59,9 +59,26 @@ function chordToText(chord: ParsedChord, qualityToSymbol: Record<ChordQuality, s
     text += altExtensionFirst ? extensionText + "alt" : "alt" + extensionText;
   } else if (chord.quality === ChordQuality.Add) {
     text += "add" + (chord.extension !== null ? String(chord.extension) : "");
+  } else if (chord.quality === ChordQuality.Suspended2 || chord.quality === ChordQuality.Suspended4) {
+    // A sus chord's extension is a real degree of the chord and not a
+    // restatement of the suspension, so "Eb9sus" (a ninth over a
+    // suspended fourth) must not collapse to "Ebsus4"; the library has
+    // such chords in twelve charts. The two dialects place the digit
+    // differently. iReal Pro writes it before the word and then omits
+    // the suspension's own digit, which is how real charts read
+    // ("G7sus", "A9sus"), while ABCx's chord scanner reads a quality and
+    // only then an extension, so there the digit follows a fully spelled
+    // "sus4"/"sus2".
+    const extensionText = chord.extension !== null ? String(chord.extension) : "";
+    const suspensionWord = chord.quality === ChordQuality.Suspended2 ? "sus2" : "sus4";
+    if (altExtensionFirst) {
+      text += extensionText + (chord.quality === ChordQuality.Suspended2 ? "sus2" : extensionText ? "sus" : "sus4");
+    } else {
+      text += suspensionWord + extensionText;
+    }
   } else {
     text += qualityToSymbol[chord.quality];
-    if (chord.extension !== null && chord.quality !== ChordQuality.Suspended2 && chord.quality !== ChordQuality.Suspended4) {
+    if (chord.extension !== null) {
       text += String(chord.extension);
     }
   }

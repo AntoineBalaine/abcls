@@ -41,6 +41,12 @@ describe("iReal chord shorthand", () => {
       expect(parsedChordToIrealText(chord({ quality: ChordQuality.Suspended4, qualityExplicit: true }))).to.equal("Csus4");
       expect(parsedChordToIrealText(chord({ quality: ChordQuality.Suspended2, qualityExplicit: true }))).to.equal("Csus2");
     });
+    it("keeps a sus chord's extension, which is a degree and not the suspension", () => {
+      const sus9 = { quality: ChordQuality.Suspended4, qualityExplicit: true, extension: 9 };
+      expect(parsedChordToIrealText(chord(sus9))).to.equal("C9sus");
+      expect(parsedChordToAbcxText(chord(sus9))).to.equal("Csus49");
+      expect(irealTextToParsedChord("C9sus")?.extension).to.equal(9);
+    });
     it("emits root accidentals and slash bass", () => {
       expect(
         parsedChordToIrealText(

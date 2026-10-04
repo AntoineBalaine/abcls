@@ -512,3 +512,21 @@ to ABCx's own chord symbol grammar (`pChordSymbol`, `scanChordSymbol.ts`
 and `parseChordSymbol.ts`) so that the text `parsedChordToAbcxText`
 produces for it parses back, which is the same three-place addition `-^`
 and `alt` each needed before it.
+
+## A lone star inside a chord cell truncates the chord
+
+Measured by a differential comparison against pyRealParser over the 359
+charts the two implementations share. After the two dialects' spellings
+are normalised, every remaining difference but one is either a marker
+pyRealParser fails to strip and we do (`N.C.` glued onto a chord, and the
+bare `S`, `U` and `W` markers) or a chart whose stored data is damaged
+upstream of both ("Alfie's Theme" and "Chippie", 23 and 27 bytes), where
+both implementations read nonsense.
+
+The one genuine gap is "You Taught My Heart To Sing", which writes
+`F#*-^*`: a minor-major seventh with a lone `*` before and after the
+quality symbols. Because `*` otherwise introduces a section marker, the
+scanner ends the chord lexeme at it and the chord reads as `F#`, dropping
+`-^`. One chord in one chart of 657, so it is recorded rather than fixed;
+the fix belongs in the scanner, which should skip a `*` that no section
+letter follows rather than treat it as a boundary.
