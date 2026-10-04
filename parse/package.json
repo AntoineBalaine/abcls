@@ -44,7 +44,12 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.spec.js",
+    "!dist/**/*.spec.d.ts",
+    "!dist/**/*.js.map",
+    "!dist/debug-format*.js",
+    "!dist/debug-test.*"
   ],
   "devDependencies": {
     "@istanbuljs/nyc-config-typescript": "^1.0.2",

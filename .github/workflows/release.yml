@@ -53,6 +53,12 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # Publish abcls-parser (standalone parser package, already built by build:ci above)
+      - name: Publish abcls-parser
+        run: cd parse && npm publish || echo "Version already published, skipping"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   publish-vscode:
     needs: build-and-test
     runs-on: ubuntu-latest
