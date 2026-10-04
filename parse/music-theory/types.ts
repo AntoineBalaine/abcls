@@ -16,24 +16,10 @@ export enum ChordQuality {
   Suspended4 = "sus4",
   Power = "power",
   Add = "add",
-  // An altered dominant 7th (implied b9/#9/#11/b13 tensions), written
-  // "alt" in iReal Pro chord shorthand (e.g. "C7alt"). Kept distinct from
-  // Dominant rather than folded into it with explicit ChordAlteration
-  // entries, since iReal's own text never spells out which specific
-  // tensions "alt" implies — it's a single opaque quality word, not a
-  // shorthand this codebase can expand into concrete alterations without
-  // guessing.
   Altered = "altered",
-  // A minor triad with a major 7th (minMaj7), written as the combined
-  // symbol "-^" in iReal Pro chord shorthand (e.g. "C-^7") — distinct
-  // from both Minor (minor 7th) and Major (major triad), common as a
-  // minor key's tonic chord in jazz harmony.
+  // A minor triad with a major 7th (minMaj7)
   MinorMajor7 = "minor-major-7",
-  // A diminished triad with a major 7th (dimMaj7), written as the
-  // combined symbol "o^" in iReal Pro chord shorthand (e.g. "Dbo^7").
-  // Kept distinct from Diminished (diminished 7th) and from
-  // HalfDiminished (minor 7th over a diminished triad), because the three
-  // differ only in which seventh sits on the same triad.
+  // A diminished triad with a major 7th (dimMaj7)
   DiminishedMajor7 = "diminished-major-7",
 }
 

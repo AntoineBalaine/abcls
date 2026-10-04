@@ -149,16 +149,11 @@ export const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   [ChordQuality.Suspended4]: [0, 5, 7],
   [ChordQuality.Power]: [0, 7],
   [ChordQuality.Add]: [0, 4, 7],
-  // Altered dominant: functionally a dominant triad underneath whatever
-  // altered tensions (b9/#9/#11/b13) the "alt" word implies — this table
-  // only covers the unaltered triad/7th, not the implied tensions
-  // themselves (see ChordQuality.Altered's own doc comment).
+  // Altered dominant
   [ChordQuality.Altered]: [0, 4, 7],
-  // Minor triad (the major 7th that distinguishes this from plain Minor
-  // only applies once a 7th is added — see SEVENTH_CHORD_SPECS).
+  // Minor triad, major 7th
   [ChordQuality.MinorMajor7]: [0, 3, 7],
-  // Diminished triad (the major 7th that distinguishes this from plain
-  // Diminished only applies once a 7th is added — see SEVENTH_CHORD_SPECS).
+  // Diminished triad, major 7th
   [ChordQuality.DiminishedMajor7]: [0, 3, 6],
 };
 
