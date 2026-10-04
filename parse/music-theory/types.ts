@@ -16,6 +16,11 @@ export enum ChordQuality {
   Suspended4 = "sus4",
   Power = "power",
   Add = "add",
+  Altered = "altered",
+  // A minor triad with a major 7th (minMaj7)
+  MinorMajor7 = "minor-major-7",
+  // A diminished triad with a major 7th (dimMaj7)
+  DiminishedMajor7 = "diminished-major-7",
 }
 
 /**

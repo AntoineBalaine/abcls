@@ -47,7 +47,7 @@ function scanQuality(ctx: ChordScanCtx): boolean {
 
   // Order matters: longest match first
   // sus4 and sus2 must come before sus
-  const qualities = ["maj", "min", "dim", "aug", "sus4", "sus2", "sus", "add", "M", "m", "+", "-", "°", "ø", "Ø"];
+  const qualities = ["maj", "min", "dim", "aug", "sus4", "sus2", "sus", "add", "alt", "-^", "o^", "M", "m", "+", "-", "°", "ø", "Ø"];
   for (const q of qualities) {
     if (remaining.startsWith(q)) {
       pushToken(ctx, ChordTT.QUALITY, q);

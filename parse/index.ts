@@ -40,3 +40,52 @@ export * from "./abcl";
 export * from "./playback";
 // Music theory module for chord symbol parsing
 export * from "./music-theory";
+// Reading an iReal Pro chart: link fields, then the grid language itself
+// through its scanner, parser and layout. These are what a consumer that
+// renders a chart uses, so that no stage after the parser has to recover
+// structure from a string.
+//
+// The ABCx conversion in `ireal/importFromIreal.ts` is deliberately not
+// exported. Nothing consumes it: the application it was written for now
+// reads charts through the scanner and parser below, and
+// `ireal/exportToIreal.ts`'s link writer never had a consumer at all.
+// Advertising either from the package root would claim a supported API for
+// code nobody calls, which is also code whose defects nobody finds.
+//
+// Every tree type carries an `Ireal` prefix. A bare `Annotation` collided
+// with the ABC annotation expression of the same name, and because an
+// explicit named export overrides a star export, `Annotation` silently
+// stopped meaning what every existing consumer took it to mean; the cstree
+// workspace was what noticed. `Barline` sits one capital letter from
+// `BarLine`, so the whole family is prefixed rather than only the name
+// that happened to break.
+export { buildPlaylistLink, buildSongFieldString, parsePlaylistLink, parseSongFieldString, stripChordDataMarker } from "./ireal/fields";
+export type { IrealPlaylist, IrealSongFields } from "./ireal/fields";
+export { scramble, unscramble } from "./ireal/scramble";
+export { scanGrid } from "./ireal/gridScanner";
+export { GridTT, tokensToGridText } from "./ireal/gridTokens";
+export type { GridToken } from "./ireal/gridTokens";
+export { chartChords, parseGrid } from "./ireal/gridParser";
+export type {
+  Annotation as IrealAnnotation,
+  Bar as IrealBar,
+  Bass as IrealBass,
+  Cell as IrealCell,
+  CellKind as IrealCellKind,
+  Ending as IrealEnding,
+  IrealChart,
+  Navigation as IrealNavigation,
+  Repeat as IrealRepeat,
+  Section as IrealSection,
+  TimeSignature as IrealTimeSignature,
+} from "./ireal/gridAst";
+export { layoutChart } from "./ireal/gridLayout";
+export type {
+  Barline as IrealBarline,
+  ChartLayout,
+  LaidOutBar,
+  LaidOutCell,
+  LaidOutLine,
+  LayoutOptions,
+} from "./ireal/gridLayout";
+export { parseIrealKey } from "./ireal/keyField";

@@ -52,7 +52,7 @@ describe("Rest Duration Calculation", () => {
   }
 
   describe("4/4 Time with L:1/8", () => {
-    it("single chord per bar should get X8 (full bar rest)", () => {
+    it("single chord per bar should get bare X (full bar rest), not X8", () => {
       const source = `X:1
 M:4/4
 L:1/8
@@ -62,7 +62,10 @@ C |`;
 
       expect(rests).to.have.length(1);
       expect(rests[0].rest.lexeme).to.equal("X"); // Full bar rest
-      expect(getRestLength(rests[0])).to.equal("8");
+      // Bare X, no duration suffix: a trailing number on X means "this
+      // many whole measures" (multi-measure rest), not "a rest lasting
+      // this many note-lengths" — X8 would wrongly mean 8 whole measures.
+      expect(rests[0].rhythm).to.be.undefined;
     });
 
     it("two chords per bar should get x4 each", () => {
@@ -113,7 +116,7 @@ C D E F G A B C |`;
   });
 
   describe("4/4 Time with L:1/4", () => {
-    it("single chord per bar should get X4", () => {
+    it("single chord per bar should get bare X, not X4", () => {
       const source = `X:1
 M:4/4
 L:1/4
@@ -123,7 +126,7 @@ C |`;
 
       expect(rests).to.have.length(1);
       expect(rests[0].rest.lexeme).to.equal("X");
-      expect(getRestLength(rests[0])).to.equal("4");
+      expect(rests[0].rhythm).to.be.undefined;
     });
 
     it("two chords per bar should get x2 each", () => {
@@ -158,7 +161,7 @@ C G Am F |`;
   });
 
   describe("3/4 Time with L:1/4", () => {
-    it("single chord per bar should get X3", () => {
+    it("single chord per bar should get bare X, not X3", () => {
       const source = `X:1
 M:3/4
 L:1/4
@@ -168,7 +171,7 @@ C |`;
 
       expect(rests).to.have.length(1);
       expect(rests[0].rest.lexeme).to.equal("X");
-      expect(getRestLength(rests[0])).to.equal("3");
+      expect(rests[0].rhythm).to.be.undefined;
     });
 
     it("three chords per bar should get x each (length 1)", () => {
@@ -188,7 +191,7 @@ C G Am |`;
   });
 
   describe("6/8 Time with L:1/8", () => {
-    it("single chord per bar should get X6", () => {
+    it("single chord per bar should get bare X, not X6", () => {
       const source = `X:1
 M:6/8
 L:1/8
@@ -198,7 +201,7 @@ C |`;
 
       expect(rests).to.have.length(1);
       expect(rests[0].rest.lexeme).to.equal("X");
-      expect(getRestLength(rests[0])).to.equal("6");
+      expect(rests[0].rhythm).to.be.undefined;
     });
 
     it("two chords per bar should get x3 each", () => {
@@ -233,7 +236,7 @@ C G Am |`;
   });
 
   describe("2/4 Time with L:1/8", () => {
-    it("single chord per bar should get X4", () => {
+    it("single chord per bar should get bare X, not X4", () => {
       const source = `X:1
 M:2/4
 L:1/8
@@ -243,7 +246,7 @@ C |`;
 
       expect(rests).to.have.length(1);
       expect(rests[0].rest.lexeme).to.equal("X");
-      expect(getRestLength(rests[0])).to.equal("4");
+      expect(rests[0].rhythm).to.be.undefined;
     });
 
     it("two chords per bar should get x2 each", () => {
@@ -297,9 +300,9 @@ K:C
 C | G Am | F |`;
       const rests = getRests(source);
 
-      // First bar: 1 chord -> X8
+      // First bar: 1 chord -> bare X, not X8
       expect(rests[0].rest.lexeme).to.equal("X");
-      expect(getRestLength(rests[0])).to.equal("8");
+      expect(rests[0].rhythm).to.be.undefined;
 
       // Second bar: 2 chords -> x4 each
       expect(rests[1].rest.lexeme).to.equal("x");
@@ -307,9 +310,9 @@ C | G Am | F |`;
       expect(rests[2].rest.lexeme).to.equal("x");
       expect(getRestLength(rests[2])).to.equal("4");
 
-      // Third bar: 1 chord -> X8
+      // Third bar: 1 chord -> bare X, not X8
       expect(rests[3].rest.lexeme).to.equal("X");
-      expect(getRestLength(rests[3])).to.equal("8");
+      expect(rests[3].rhythm).to.be.undefined;
     });
   });
 
@@ -320,10 +323,10 @@ K:C
 C |`;
       const rests = getRests(source);
 
-      // Default: M:4/4, L:1/8 -> single chord gets X8
+      // Default: M:4/4, L:1/8 -> single chord gets bare X, not X8
       expect(rests).to.have.length(1);
       expect(rests[0].rest.lexeme).to.equal("X");
-      expect(getRestLength(rests[0])).to.equal("8");
+      expect(rests[0].rhythm).to.be.undefined;
     });
   });
 
@@ -349,10 +352,10 @@ C |`;
         });
       });
 
-      // Custom: M:3/4, L:1/4 -> single chord gets X3
+      // Custom: M:3/4, L:1/4 -> single chord gets bare X, not X3
       expect(rests).to.have.length(1);
       expect(rests[0].rest.lexeme).to.equal("X");
-      expect(getRestLength(rests[0])).to.equal("3");
+      expect(rests[0].rhythm).to.be.undefined;
     });
   });
 });

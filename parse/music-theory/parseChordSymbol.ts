@@ -30,6 +30,12 @@ function parseQuality(lexeme: string): ChordQuality {
       return ChordQuality.Suspended4;
     case "add":
       return ChordQuality.Add;
+    case "alt":
+      return ChordQuality.Altered;
+    case "-^":
+      return ChordQuality.MinorMajor7;
+    case "o^":
+      return ChordQuality.DiminishedMajor7;
     default:
       return ChordQuality.Major;
   }

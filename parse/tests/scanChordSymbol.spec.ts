@@ -22,6 +22,19 @@ function BASS_SLASH() {
 }
 
 describe("scanChordSymbol", () => {
+  describe("combined quality symbols", () => {
+    // Each of these names one quality rather than two, so it has to be
+    // matched whole; matching only its first character leaves the "^" for
+    // the extension rule, which is what used to corrupt the chord.
+    it('scans "C-^7", the minor-major seventh', () => {
+      expect(scanChordSymbol("C-^7")).to.deep.equal({ tokens: [ROOT("C"), QUALITY("-^"), EXTENSION("7")], consumed: 4 });
+    });
+
+    it('scans "Dbo^7", the diminished major seventh', () => {
+      expect(scanChordSymbol("Dbo^7")).to.deep.equal({ tokens: [ROOT("D"), ACCIDENTAL("b"), QUALITY("o^"), EXTENSION("7")], consumed: 5 });
+    });
+  });
+
   describe("basic chords", () => {
     it('scans "C"', () => {
       const result = scanChordSymbol("C");
