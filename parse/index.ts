@@ -43,3 +43,18 @@ export * from "./music-theory";
 // ABCx to/from iReal Pro chord chart link conversion
 export { exportAbcxToIrealLink } from "./ireal/exportToIreal";
 export { importIrealLinkToAbcx } from "./ireal/importFromIreal";
+// Reading an iReal Pro chart: link fields, then the grid language itself
+// through its scanner, parser and layout. A consumer that renders a chart
+// uses these rather than the ABCx conversion above, so that no stage after
+// the parser has to recover structure from a string.
+export { buildPlaylistLink, buildSongFieldString, parsePlaylistLink, parseSongFieldString, stripChordDataMarker } from "./ireal/fields";
+export type { IrealPlaylist, IrealSongFields } from "./ireal/fields";
+export { scramble, unscramble } from "./ireal/scramble";
+export { scanGrid } from "./ireal/gridScanner";
+export { GridTT, tokensToGridText } from "./ireal/gridTokens";
+export type { GridToken } from "./ireal/gridTokens";
+export { chartChords, parseGrid } from "./ireal/gridParser";
+export type { Annotation, Bar, Bass, Cell, CellKind, Ending, IrealChart, Navigation, Repeat, Section, TimeSignature } from "./ireal/gridAst";
+export { layoutChart } from "./ireal/gridLayout";
+export type { Barline, ChartLayout, LaidOutBar, LaidOutCell, LaidOutLine, LayoutOptions } from "./ireal/gridLayout";
+export { parseIrealKey } from "./ireal/keyField";

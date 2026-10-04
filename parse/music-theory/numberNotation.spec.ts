@@ -59,5 +59,26 @@ describe("numberNotation", () => {
       const dDorian = key(KeyRoot.D, KeyAccidental.None, Mode.Dorian);
       expect(formatDegree(regularDegree(KeyRoot.C, KeyAccidental.None, dDorian))).to.equal("7");
     });
+    it("raises a degree the scale lowers rather than flattening the one above it", () => {
+      // The minor scale lowers its third, sixth and seventh, so the notes
+      // above them are the major third, major sixth and major seventh.
+      // Naming them by flattening the upper degree instead gave "b4" for a
+      // major third and "b1" for a leading tone, which no chart writes.
+      const cMinor = key(KeyRoot.C, KeyAccidental.None, Mode.Minor);
+      expect(formatDegree(regularDegree(KeyRoot.E, KeyAccidental.None, cMinor))).to.equal("#3");
+      expect(formatDegree(regularDegree(KeyRoot.A, KeyAccidental.None, cMinor))).to.equal("#6");
+      expect(formatDegree(regularDegree(KeyRoot.B, KeyAccidental.None, cMinor))).to.equal("#7");
+    });
+    it("spells a major key's chromatic degrees as flattened upper degrees still", () => {
+      // The rule above must not disturb a major key, where every gap but
+      // the tritone is read as a flattened upper degree.
+      const cMajor = key(KeyRoot.C, KeyAccidental.None, Mode.Major);
+      const spell = (root: KeyRoot, acc: KeyAccidental) => formatDegree(regularDegree(root, acc, cMajor));
+      expect(spell(KeyRoot.D, KeyAccidental.Flat)).to.equal("b2");
+      expect(spell(KeyRoot.E, KeyAccidental.Flat)).to.equal("b3");
+      expect(spell(KeyRoot.G, KeyAccidental.Flat)).to.equal("#4");
+      expect(spell(KeyRoot.A, KeyAccidental.Flat)).to.equal("b6");
+      expect(spell(KeyRoot.B, KeyAccidental.Flat)).to.equal("b7");
+    });
   });
 });
