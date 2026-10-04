@@ -69,6 +69,7 @@ export const OTHER_SPECS: TokenSpec[] = [
   ...specs(GridTT.REPEAT_ONE_BAR, ["x"]),
   ...specs(GridTT.REPEAT_TWO_BARS, ["r"]),
   ...specs(GridTT.SAME_CHORD, ["p"]),
+  ...specs(GridTT.SAME_CHORD_WITH_BASS, ["W/C", "W/Bb", "W/Eb"]),
   ...specs(GridTT.PAD, [","]),
   ...specs(GridTT.SECTION_OPEN, ["["]),
   ...specs(GridTT.SECTION_CLOSE, ["]"]),

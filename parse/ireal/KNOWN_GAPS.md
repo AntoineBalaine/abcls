@@ -398,3 +398,117 @@ else in the codebase, and the token's `line` stays 0. Grid text contains
 no line break at all, in 0 of the 657 charts, so for this input the two
 numbers are the same and line 0 is the correct line. This becomes worth
 revisiting only if grid text ever gains line breaks.
+
+## Grid parser: chord preservation could not be measured as the plan asks
+
+Section 7 of `plans/2.ireal-grid-lexer-parser.md` makes the primary guard
+for Phase 2 a multiset comparison: for each chart, the tree must name
+each chord at least as often as the current implementation does. That
+comparison turned out not to be available, and the reason lies in the
+implementation it compares against. `gridAnnotations.ts` resolves a
+repeated section by duplicating its text and a coda by duplicating the
+span before it, those duplications compound over the twenty passes
+`fillRepeats` is allowed, and the result is that the current
+implementation names a chart's chords anywhere from once to six times
+over, where the tree stores every bar exactly once by design. Measured
+over the real 657-chart library: the current implementation names 54,943
+chords and the tree names 42,663 with its repeats expanded once each, and
+184 charts name at least one chord more often on the old side for this
+reason alone. "Caminhando" is the clearest case, 156 occurrences of `G-`
+against 26.
+
+`verifyAgainstLibrary.ts` therefore checks containment over distinct
+chord symbols, which no amount of expansion affects, and prints the
+occurrence counts beside it for human review. That is what the invariant
+exists to catch: a chord shape the new path drops. Measured over the same
+library, 0 of 657 charts lose a chord symbol, and 0 charts throw.
+
+## Grid parser: the brace and bracket characters are the two repeat barlines, not a matched pair
+
+An early reading of section 4 of the plan ("a chart may open one and never
+close it") suggested an unclosed `{` was a rare malformation. Measuring
+the parser against the library instead gave 57 charts with an unclosed
+`{` and 24 with a `}` that opens nothing, which is too many for either to
+be a malformation. Both shapes are ordinary: "Au Privave" is
+`{T44F7 | ... |G-7 C7 ]`, opening with a brace and closing with a
+bracket, and "All Of Me 1" has `[N1E7 | ... |G7 }`, a bracketed group
+closed with a brace. The reading that fits is that iReal Pro writes the
+four characters as section boundaries, with `{` and `}` additionally
+carrying the two repeat barlines, so a repeated span may be bounded at
+either end by the plain form. The parser reads it that way: a section
+boundary of any kind closes a repeat that is still open, and a closing
+brace with no opening one marks the section it ends as repeated. With
+that, 3 unclosed braces remain across the library, two of them the same
+chart ("Black Diamonds", which has a genuine `{` with no closer before
+the end of the chart) and one the damaged "Chippie".
+
+## Grid parser: `IrealChart.navigation` holds one coda position, where a chart may mark two
+
+The tree type in section 7 of the plan gives `navigation` a single
+`codaSectionIndex`, and that is what is implemented. A chart that marks
+both where to jump from and where the coda begins writes two `Q`
+characters (the shape `gridAnnotations.ts`'s `fillCodas` reads), and the
+tree keeps only the first. No chord is lost by this, since the parser
+reorders nothing and every bar stays in its section; what is lost is the
+distinction between the two markers, which the emitter will need in Phase
+3. Recording the second position is a one-field addition to `Navigation`,
+left to the phase that has a use for it.
+
+## Grid scanner: `W` resolved as the previous chord over a written bass
+
+Phase 1 left `W` as an `UNKNOWN` token, 6 occurrences in one chart
+("Ingênuo", which the library holds twice). Phase 2 resolves it as the
+previous cell's chord over the bass that follows the slash, which makes
+it a sibling of `p` differing only in carrying a bass. Four observations
+in that chart support the reading, and no reference consulted confirms
+the letter itself.
+
+Every occurrence has the shape `W/<bass>` as the second cell of a bar
+whose first cell is a minor chord: `D-,W/C,`, `C-,W/Bb,` and `F-,W/Eb,`.
+Each bass is the seventh below the preceding chord's root, giving Dm/C,
+Cm/Bb and Fm/Eb, which are that chord with a descending bass. The same
+chart writes out in full every slash chord whose root differs from the
+cell before it (`G-/D`, `C-/G`, `F/A`, `A-/E`), so `W` stands exactly
+where a repeated root would otherwise have been written. The same chart
+also writes `p` (`|F7, |psAb7,|`), the same construct without a bass.
+
+The scanner rule is deliberately narrow: `W` followed by a slash and a
+root letter. A bare `W` stays `UNKNOWN`, because the evidence is about the
+slash-bass form and nothing establishes what the letter means on its own.
+This takes the library's `UNKNOWN` count from 40 to 28; the remaining 28
+are the `F#*-^*` cell in "You Taught My Heart To Sing" and the two charts
+whose chord data is damaged upstream, all three described above.
+
+## Chord shorthand: one positional component parser in place of three whole-string patterns
+
+`irealTextToParsedChord` was one primary regular expression plus two
+fallbacks, each added when a chord shape turned out not to fit the fixed
+component order the previous pattern assumed. Measured against the real
+657-chart library, it rejected 8 distinct lexemes out of the 25,181 chord
+lexemes the scanner isolates, 22 occurrences in all. Six were real music
+and showed the same mismatch a third time over: `G7b9sus`, `Bb7b9sus` and
+`A7b9sus` write an alteration between the extension and a trailing
+quality word; `C7+` and `D7+` write a quality symbol after the extension;
+`Dbo^7` combines two quality symbols.
+
+Since iReal Pro fixes no order among a chord's components, the parser now
+consumes a root and an optional accidental and then reads components in
+whatever order they appear, validating the combination at the end. All six
+shapes parse. Re-measured over the same library afterwards, 2 chord
+lexemes are still rejected, 2 occurrences: `Bb-77h` and `F7-b`, both from
+"Alfie's Theme", whose chord data is damaged upstream of the scanner. They
+are left rejected rather than absorbed, because a shape that names no
+chord should not be given one to make a count read zero.
+
+Two spellings of the component sequence keep their previous reading rather
+than a more general one, each for a reason measured rather than assumed. A
+digit 5 standing immediately after the root is the Power chord symbol and
+not an extension, which is the existing convention recorded above under
+"5 chord text is ambiguous"; later in the sequence the same digit is an
+ordinary extension, as in `C^5`. And the diminished major seventh needed
+`ChordQuality.DiminishedMajor7` added to the shared enumeration, with
+entries in `QUALITY_INTERVALS` and `SEVENTH_CHORD_SPECS`, and `o^` added
+to ABCx's own chord symbol grammar (`pChordSymbol`, `scanChordSymbol.ts`
+and `parseChordSymbol.ts`) so that the text `parsedChordToAbcxText`
+produces for it parses back, which is the same three-place addition `-^`
+and `alt` each needed before it.

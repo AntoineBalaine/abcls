@@ -203,6 +203,28 @@ const RULES: Array<(source: string, cursor: number) => Match> = [
     if (source[cursor] !== "*" || source[cursor + 1] === undefined || !/\w/.test(source[cursor + 1])) return null;
     return { type: GridTT.SECTION_LABEL, length: 2 };
   },
+  /**
+   * `W` followed by a slash bass, which reads as the previous cell's chord
+   * over that bass.
+   *
+   * The reading rests on the one chart in the sample library that writes
+   * `W` at all ("Ingênuo", 3 occurrences per copy of the chart). Each one
+   * is the second cell of a bar whose first cell is a minor chord, and the
+   * bass that follows is the seventh below that chord's root: `D-,W/C,`,
+   * `C-,W/Bb,` and `F-,W/Eb,`. The same chart writes every slash chord
+   * whose root differs from the cell before it out in full (`G-/D`,
+   * `C-/G`, `F/A`), so `W` stands exactly where a repeated root would
+   * have been written, and it writes `p` too (`F7, |psAb7,`), which is the
+   * same construct without a bass. No reference consulted confirms the
+   * letter, so a bare `W` with no slash bass is deliberately left to the
+   * unknown rule rather than guessed at.
+   */
+  (source, cursor) => {
+    if (source[cursor] !== "W" || source[cursor + 1] !== "/" || !isRoot(source[cursor + 2])) return null;
+    let length = 3;
+    if (source[cursor + length] !== undefined && ACCIDENTALS.includes(source[cursor + length])) length++;
+    return { type: GridTT.SAME_CHORD_WITH_BASS, length };
+  },
   (source, cursor) => {
     const length = chordLength(source, cursor);
     return length > 0 ? { type: GridTT.CHORD, length } : null;

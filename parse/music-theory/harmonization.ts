@@ -157,6 +157,9 @@ export const QUALITY_INTERVALS: Record<ChordQuality, number[]> = {
   // Minor triad (the major 7th that distinguishes this from plain Minor
   // only applies once a 7th is added — see SEVENTH_CHORD_SPECS).
   [ChordQuality.MinorMajor7]: [0, 3, 7],
+  // Diminished triad (the major 7th that distinguishes this from plain
+  // Diminished only applies once a 7th is added — see SEVENTH_CHORD_SPECS).
+  [ChordQuality.DiminishedMajor7]: [0, 3, 6],
 };
 
 /**
@@ -239,6 +242,14 @@ export const SEVENTH_CHORD_SPECS: Record<ChordQuality, IntervalSpec[]> = {
     { func: 8, interval: 0, scaleStep: 0 },
     { func: 3, interval: 3, scaleStep: 2 },
     { func: 5, interval: 7, scaleStep: 4 },
+    { func: 7, interval: 11, scaleStep: 6 },
+  ],
+  // Diminished triad with a major 7th (dimMaj7), not the diminished 7th
+  // Diminished uses nor the minor 7th HalfDiminished uses.
+  [ChordQuality.DiminishedMajor7]: [
+    { func: 8, interval: 0, scaleStep: 0 },
+    { func: 3, interval: 3, scaleStep: 2 },
+    { func: 5, interval: 6, scaleStep: 4 },
     { func: 7, interval: 11, scaleStep: 6 },
   ],
 };

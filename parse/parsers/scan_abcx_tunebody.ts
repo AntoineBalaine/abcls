@@ -27,8 +27,9 @@ import { annotation, barline2, collectInvalidToken, comment, inline_field, pEOL,
  * - `ø`, `Ø`: half-diminished symbols (e.g., Cø7 = Cm7b5)
  * - `alt`: altered dominant (e.g., Calt7 = C7 with implied altered tensions)
  * - `-^`: minor-major 7 (e.g., C-^7 = minor triad with a major 7th)
+ * - `o^`: diminished-major 7 (e.g., Co^7 = diminished triad with a major 7th)
  */
-export const pChordSymbol = /[A-Gacdefg][#b]?(maj|min|dim|aug|sus|add|alt|-\^|m|M|-|°|ø|Ø)?[0-9]*(#[0-9]+|b[0-9]+)*(\/[A-Gacdefg][#b]?)?/;
+export const pChordSymbol = /[A-Gacdefg][#b]?(maj|min|dim|aug|sus|add|alt|-\^|o\^|m|M|-|°|ø|Ø)?[0-9]*(#[0-9]+|b[0-9]+)*(\/[A-Gacdefg][#b]?)?/;
 
 /**
  * Scans a chord symbol token

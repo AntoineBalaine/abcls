@@ -236,6 +236,64 @@ describe("iReal chord shorthand", () => {
     });
   });
 
+  describe("components written in any order, which is what iReal Pro does", () => {
+    // Measured against a real 657-chart library: of 25,181 chord lexemes
+    // the grid scanner isolates, these are the shapes the previous
+    // whole-string patterns rejected. All six are real music, and the
+    // pattern across them is that iReal Pro fixes no order among a chord's
+    // components, which is why the parser reads components positionally
+    // rather than matching one of a few fixed orders.
+    it("parses an alteration written between the extension and a trailing sus", () => {
+      for (const text of ["G7b9sus", "Bb7b9sus", "A7b9sus"]) {
+        const parsed = irealTextToParsedChord(text);
+        expect(parsed, text).to.not.be.null;
+        expect(parsed!.quality, text).to.equal(ChordQuality.Suspended4);
+        expect(parsed!.extension, text).to.equal(7);
+        expect(parsed!.alterations, text).to.deep.equal([{ type: "flat", degree: 9 }]);
+      }
+      expect(irealTextToParsedChord("G7b9sus")!.root).to.equal("G");
+      expect(irealTextToParsedChord("Bb7b9sus")!.rootAccidental).to.equal("b");
+    });
+
+    it("parses an augmented symbol written after the extension", () => {
+      for (const text of ["C7+", "D7+"]) {
+        const parsed = irealTextToParsedChord(text);
+        expect(parsed, text).to.not.be.null;
+        expect(parsed!.quality, text).to.equal(ChordQuality.Augmented);
+        expect(parsed!.extension, text).to.equal(7);
+      }
+    });
+
+    it("parses two quality symbols combining into the diminished major seventh", () => {
+      const parsed = irealTextToParsedChord("Dbo^7");
+      expect(parsed?.root).to.equal("D");
+      expect(parsed?.rootAccidental).to.equal("b");
+      expect(parsed?.quality).to.equal(ChordQuality.DiminishedMajor7);
+      expect(parsed?.extension).to.equal(7);
+      expect(parsedChordToIrealText(parsed!)).to.equal("Dbo^7");
+    });
+
+    it("rejects two quality symbols that name no single quality", () => {
+      // `Bb-77h` and `F7-b`, the two remaining rejected lexemes in the
+      // sample library, both come from charts whose chord data is damaged
+      // upstream of this module; a chord shape that means nothing must
+      // stay rejected rather than being absorbed to make a count read zero.
+      expect(irealTextToParsedChord("Bb-77h")).to.be.null;
+      expect(irealTextToParsedChord("F7-b")).to.be.null;
+    });
+
+    it("reads a digit 5 standing right after the root as the power chord, and elsewhere as an extension", () => {
+      expect(irealTextToParsedChord("C5")?.quality).to.equal(ChordQuality.Power);
+      expect(irealTextToParsedChord("C^5")?.quality).to.equal(ChordQuality.Major);
+      expect(irealTextToParsedChord("C^5")?.extension).to.equal(5);
+    });
+
+    it("rejects text carrying anything after its slash bass", () => {
+      expect(irealTextToParsedChord("C7/Fx")).to.be.null;
+      expect(irealTextToParsedChord("C7/")).to.be.null;
+    });
+  });
+
   describe("minor-major 7 chord text ('-^', a combined symbol)", () => {
     // Confirmed against a real chart in a user's iReal Pro library backup
     // ("A Shade Of Jade"): "-^" must be matched as a single two-character

@@ -31,25 +31,8 @@ const QUALITY_TO_SYMBOL: Record<ChordQuality, string> = {
   // covers every ChordQuality value.
   [ChordQuality.Altered]: "alt",
   [ChordQuality.MinorMajor7]: "-^",
+  [ChordQuality.DiminishedMajor7]: "o^",
 };
-
-// Kept as the exact inverse of QUALITY_TO_SYMBOL: every symbol that table can
-// produce must be recognized here, or a round trip through an explicit
-// quality (e.g. Power, qualityExplicit: true) reparses as a different chord.
-// "-^" must be listed before "-" for the same greedy-match reason as in
-// CHORD_TEXT_PATTERN above.
-const SYMBOL_TO_QUALITY: Array<[string, ChordQuality]> = [
-  ["sus2", ChordQuality.Suspended2],
-  ["sus4", ChordQuality.Suspended4],
-  ["add", ChordQuality.Add],
-  ["-^", ChordQuality.MinorMajor7],
-  ["^", ChordQuality.Major],
-  ["-", ChordQuality.Minor],
-  ["o", ChordQuality.Diminished],
-  ["h", ChordQuality.HalfDiminished],
-  ["+", ChordQuality.Augmented],
-  ["5", ChordQuality.Power],
-];
 
 function rootToText(root: KeyRoot, accidental: KeyAccidental): string {
   return root + (accidental === KeyAccidental.None ? "" : accidental);
@@ -98,101 +81,164 @@ export function parsedChordToIrealText(chord: ParsedChord): string {
   return chordToText(chord, QUALITY_TO_SYMBOL, true);
 }
 
-// "5" (Power) is included as a quality-symbol alternative, not left to the
-// bare-extension digit group below: no dominant chord extension is ever the
-// literal digit 5 in real jazz chord vocabulary (extensions are 6, 7, 9, 11,
-// 13), so this is unambiguous, and it must stay in sync with SYMBOL_TO_QUALITY.
-// "-^" (minor-major 7, e.g. "C-^7") must be listed before the standalone
-// "-" and "^" alternatives, or the alternation would match just "-" and
-// leave a stray "^" for the extension/alteration groups to choke on.
-const CHORD_TEXT_PATTERN = /^([A-G])([#b]?)((?:sus2|sus4|add|-\^|\^|-|o|h|\+|5)?)(\d+)?((?:[#b]\d+)*)(?:\/([A-G])([#b]?))?$/;
+/**
+ * The quality symbols and quality words a chord may carry, longest first.
+ *
+ * Because `-^` and `o^` each name one quality rather than two, they are
+ * listed before the standalone `-`, `o` and `^` that spell their halves;
+ * matching a half would leave the other half for the alteration rule,
+ * which is the defect this ordering has already prevented once.
+ */
+const QUALITY_SYMBOLS: Array<[string, ChordQuality]> = [
+  ["sus2", ChordQuality.Suspended2],
+  ["sus4", ChordQuality.Suspended4],
+  // A bare "sus" with no trailing digit means sus4, which is what real
+  // charts write (`Csus`, `G7sus`).
+  ["sus", ChordQuality.Suspended4],
+  ["alt", ChordQuality.Altered],
+  ["add", ChordQuality.Add],
+  ["-^", ChordQuality.MinorMajor7],
+  ["o^", ChordQuality.DiminishedMajor7],
+  ["^", ChordQuality.Major],
+  ["-", ChordQuality.Minor],
+  ["o", ChordQuality.Diminished],
+  ["h", ChordQuality.HalfDiminished],
+  ["+", ChordQuality.Augmented],
+];
 
-// Real iReal Pro charts write a sus chord's extension *before* "sus"
-// (e.g. "G7sus", "A9sus" — the dominant-extension-plus-sus4 chord), not
-// after it, and write a bare sus triad as plain "sus" with no trailing
-// "2"/"4" at all (defaulting to sus4) — neither of which
-// CHORD_TEXT_PATTERN's quality-before-extension ordering matches. Tried
-// as a fallback (only once the primary pattern above has failed) since
-// it has its own, different field ordering.
-const SUS_CHORD_TEXT_PATTERN = /^([A-G])([#b]?)(\d+)?sus([24])?((?:[#b]\d+)*)(?:\/([A-G])([#b]?))?$/;
+/**
+ * The qualities that two separately written symbols may combine into.
+ *
+ * iReal Pro writes the minor-major seventh as the single symbol `-^` and
+ * the diminished major seventh as `o^`, so these pairs are what the
+ * component parser sees when it takes those symbols apart; keeping the
+ * combination here rather than in the symbol table means a chart writing
+ * the halves in either order still resolves to one quality.
+ */
+const QUALITY_COMBINATIONS: Array<[ChordQuality, ChordQuality, ChordQuality]> = [
+  [ChordQuality.Minor, ChordQuality.Major, ChordQuality.MinorMajor7],
+  [ChordQuality.Diminished, ChordQuality.Major, ChordQuality.DiminishedMajor7],
+];
 
-function parseSusChordText(trimmed: string): ParsedChord | null {
-  const match = SUS_CHORD_TEXT_PATTERN.exec(trimmed);
-  if (!match) return null;
-  const [, rootLetter, rootAcc, extensionStr, susDigit, alterationsStr, bassLetter, bassAcc] = match;
-  const alterations: ChordAlteration[] = [];
-  for (const altText of alterationsStr.match(/[#b]\d+/g) ?? []) {
-    alterations.push({ type: altText[0] === "#" ? "sharp" : "flat", degree: parseInt(altText.slice(1), 10) });
+function combineQualities(qualities: ChordQuality[]): ChordQuality | null {
+  if (qualities.length === 0) return ChordQuality.Dominant;
+  if (qualities.length === 1) return qualities[0];
+  if (qualities.length > 2) return null;
+  const [first, second] = qualities;
+  for (const [a, b, combined] of QUALITY_COMBINATIONS) {
+    if ((first === a && second === b) || (first === b && second === a)) return combined;
   }
-  return {
-    root: rootLetter as KeyRoot,
-    rootAccidental: (rootAcc || "") as KeyAccidental,
-    quality: susDigit === "2" ? ChordQuality.Suspended2 : ChordQuality.Suspended4,
-    qualityExplicit: true,
-    extension: extensionStr ? parseInt(extensionStr, 10) : null,
-    alterations,
-    bass: bassLetter ? { root: bassLetter as KeyRoot, accidental: (bassAcc || "") as KeyAccidental } : null,
-  };
+  return null;
 }
 
-// Real iReal Pro charts write an altered-dominant chord's extension
-// *before* "alt" (e.g. "C7alt"), and a bare "alt" with no extension at
-// all — the same before-the-word ordering sus chords use, and the same
-// mismatch with CHORD_TEXT_PATTERN's quality-before-extension
-// assumption. Tried as a fallback (only once the primary pattern and the
-// sus fallback above have both failed).
-const ALT_CHORD_TEXT_PATTERN = /^([A-G])([#b]?)(\d+)?alt((?:[#b]\d+)*)(?:\/([A-G])([#b]?))?$/;
-
-function parseAltChordText(trimmed: string): ParsedChord | null {
-  const match = ALT_CHORD_TEXT_PATTERN.exec(trimmed);
-  if (!match) return null;
-  const [, rootLetter, rootAcc, extensionStr, alterationsStr, bassLetter, bassAcc] = match;
-  const alterations: ChordAlteration[] = [];
-  for (const altText of alterationsStr.match(/[#b]\d+/g) ?? []) {
-    alterations.push({ type: altText[0] === "#" ? "sharp" : "flat", degree: parseInt(altText.slice(1), 10) });
-  }
-  return {
-    root: rootLetter as KeyRoot,
-    rootAccidental: (rootAcc || "") as KeyAccidental,
-    quality: ChordQuality.Altered,
-    qualityExplicit: true,
-    extension: extensionStr ? parseInt(extensionStr, 10) : null,
-    alterations,
-    bass: bassLetter ? { root: bassLetter as KeyRoot, accidental: (bassAcc || "") as KeyAccidental } : null,
-  };
-}
-
+/**
+ * Parses one chord cell written in iReal Pro's own dialect, or returns
+ * null when the text is not a chord.
+ *
+ * Because iReal Pro fixes no order among a chord's components, this
+ * consumes a root and an optional accidental and then reads components
+ * in whatever order they appear, validating the combination at the end.
+ * Three measurements against a real 657-chart library made that
+ * necessary: `G7b9sus` writes an alteration between the extension and a
+ * trailing quality word, `C7+` writes a quality symbol after the
+ * extension, and `Dbo^7` combines two quality symbols. A whole-string
+ * pattern per component order had grown three alternates by then and
+ * would have needed a fourth for each of these.
+ */
 export function irealTextToParsedChord(text: string): ParsedChord | null {
   const trimmed = text.trim();
-  const match = CHORD_TEXT_PATTERN.exec(trimmed);
-  if (!match) return parseSusChordText(trimmed) ?? parseAltChordText(trimmed);
+  let i = 0;
 
-  const [, rootLetter, rootAcc, qualitySymbol, extensionStr, alterationsStr, bassLetter, bassAcc] = match;
-
-  let quality: ChordQuality = ChordQuality.Dominant;
-  let qualityExplicit = false;
-  for (const [symbol, q] of SYMBOL_TO_QUALITY) {
-    if (qualitySymbol === symbol) {
-      quality = q;
-      qualityExplicit = true;
-      break;
-    }
+  if (!/[A-G]/.test(trimmed[i] ?? "")) return null;
+  const root = trimmed[i] as KeyRoot;
+  i++;
+  let rootAccidental = "" as KeyAccidental;
+  if (trimmed[i] === "#" || trimmed[i] === "b") {
+    rootAccidental = trimmed[i] as KeyAccidental;
+    i++;
   }
 
+  const qualities: ChordQuality[] = [];
   const alterations: ChordAlteration[] = [];
-  const altMatches = alterationsStr.match(/[#b]\d+/g) ?? [];
-  for (const altText of altMatches) {
-    alterations.push({ type: altText[0] === "#" ? "sharp" : "flat", degree: parseInt(altText.slice(1), 10) });
+  let extension: number | null = null;
+  let bass: ParsedChord["bass"] = null;
+  let firstComponent = true;
+
+  while (i < trimmed.length) {
+    // A slash bass ends the chord, so anything written after it is not a
+    // component of this chord and the whole text is rejected.
+    if (trimmed[i] === "/") {
+      const bassRoot = trimmed[i + 1];
+      if (bassRoot === undefined || !/[A-G]/.test(bassRoot)) return null;
+      let bassAccidental = "" as KeyAccidental;
+      let next = i + 2;
+      if (trimmed[next] === "#" || trimmed[next] === "b") {
+        bassAccidental = trimmed[next] as KeyAccidental;
+        next++;
+      }
+      if (next !== trimmed.length) return null;
+      bass = { root: bassRoot as KeyRoot, accidental: bassAccidental };
+      i = next;
+      continue;
+    }
+
+    // An alteration is a sign followed by at least one digit, which is
+    // what separates it from the accidental already consumed above.
+    if (trimmed[i] === "#" || trimmed[i] === "b") {
+      const digits = /^\d+/.exec(trimmed.slice(i + 1));
+      if (!digits) return null;
+      alterations.push({ type: trimmed[i] === "#" ? "sharp" : "flat", degree: parseInt(digits[0], 10) });
+      i += 1 + digits[0].length;
+      firstComponent = false;
+      continue;
+    }
+
+    // The digit 5 standing immediately after the root is the Power chord
+    // symbol rather than an extension, because no dominant chord's
+    // extension is ever the literal 5; later in the component sequence the
+    // same digit is an ordinary extension, as in `C^5`.
+    if (firstComponent && trimmed[i] === "5" && !/\d/.test(trimmed[i + 1] ?? "")) {
+      qualities.push(ChordQuality.Power);
+      i++;
+      firstComponent = false;
+      continue;
+    }
+
+    const digits = /^\d+/.exec(trimmed.slice(i));
+    if (digits) {
+      // A chord carries at most one extension, so a second run of digits
+      // means the text is not a chord rather than an extension to merge.
+      if (extension !== null) return null;
+      extension = parseInt(digits[0], 10);
+      i += digits[0].length;
+      firstComponent = false;
+      continue;
+    }
+
+    const symbol = QUALITY_SYMBOLS.find(([lexeme]) => trimmed.startsWith(lexeme, i));
+    if (symbol) {
+      qualities.push(symbol[1]);
+      i += symbol[0].length;
+      firstComponent = false;
+      continue;
+    }
+
+    return null;
   }
+
+  const quality = combineQualities(qualities);
+  if (quality === null) return null;
 
   return {
-    root: rootLetter as KeyRoot,
-    rootAccidental: (rootAcc || "") as KeyAccidental,
+    root,
+    rootAccidental,
     quality,
-    qualityExplicit,
-    extension: extensionStr ? parseInt(extensionStr, 10) : null,
+    // Dominant has no symbol of its own in this dialect, so an explicit
+    // dominant cannot be told from an implicit one by text alone.
+    qualityExplicit: qualities.length > 0,
+    extension,
     alterations,
-    bass: bassLetter ? { root: bassLetter as KeyRoot, accidental: (bassAcc || "") as KeyAccidental } : null,
+    bass,
   };
 }
 
@@ -219,6 +265,9 @@ const ABCX_QUALITY_TO_SYMBOL: Record<ChordQuality, string> = {
   // different spelling, and pChordSymbol/scanChordSymbol.ts both
   // recognize "-^" the same way.
   [ChordQuality.MinorMajor7]: "-^",
+  // Reuses iReal's own "o^" symbol for the same reason "-^" is reused
+  // above: scanChordSymbol.ts and pChordSymbol both recognize it.
+  [ChordQuality.DiminishedMajor7]: "o^",
 };
 
 export function parsedChordToAbcxText(chord: ParsedChord): string {

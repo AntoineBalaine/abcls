@@ -42,6 +42,16 @@ describe("iReal Pro grid scanner", () => {
     assert.strictEqual(tokensToGridText(tokens), source, "token lexemes must reproduce the source");
   }
 
+  /** Asserts the exact lexemes, for a rule whose match length is what matters. */
+  function expectLexemes(source: string, expected: string[]): void {
+    const tokens = scan(source);
+    assert.deepStrictEqual(
+      tokens.map((t) => t.lexeme),
+      expected
+    );
+    assert.strictEqual(tokensToGridText(tokens), source, "token lexemes must reproduce the source");
+  }
+
   describe("chord cells", () => {
     const cases: Array<[string, string]> = [
       ["a bare triad", "C"],
@@ -135,6 +145,19 @@ describe("iReal Pro grid scanner", () => {
 
     it("scans p as the same-chord shorthand, including the doubled form", () => {
       expectTypes("pp", [GridTT.SAME_CHORD, GridTT.SAME_CHORD]);
+    });
+
+    it("scans W followed by a slash bass as the same-chord-with-bass shorthand", () => {
+      // The three cells the one chart that writes `W` holds, in full:
+      // `D-,W/C,`, `C-,W/Bb,` and `F-,W/Eb,`.
+      expectTypes("D-,W/C,", [GridTT.CHORD, GridTT.PAD, GridTT.SAME_CHORD_WITH_BASS, GridTT.PAD]);
+      expectLexemes("C-,W/Bb,", ["C-", ",", "W/Bb", ","]);
+      expectLexemes("F-,W/Eb,", ["F-", ",", "W/Eb", ","]);
+    });
+
+    it("leaves a W with no slash bass unrecognized rather than guessing at it", () => {
+      expectTypes("W", [GridTT.UNKNOWN]);
+      expectTypes("W/", [GridTT.UNKNOWN, GridTT.UNKNOWN]);
     });
 
     it("scans a comma pad as its own token", () => {

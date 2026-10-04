@@ -19,6 +19,13 @@ export enum GridTT {
   REPEAT_TWO_BARS = "GRID_REPEAT_TWO_BARS",
   /** `p`, this cell holds the same chord as the previous cell. */
   SAME_CHORD = "GRID_SAME_CHORD",
+  /**
+   * `W/C`, this cell holds the same chord as the previous cell over the
+   * bass that follows the slash. A sibling of `SAME_CHORD`, differing only
+   * in carrying an explicit bass; see `gridScanner.ts`'s rule for the
+   * evidence behind that reading.
+   */
+  SAME_CHORD_WITH_BASS = "GRID_SAME_CHORD_WITH_BASS",
   /** `|`, a bar separator. */
   BAR = "GRID_BAR",
   /** `[`, a section opening. */

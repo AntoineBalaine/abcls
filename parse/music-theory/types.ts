@@ -29,6 +29,12 @@ export enum ChordQuality {
   // from both Minor (minor 7th) and Major (major triad), common as a
   // minor key's tonic chord in jazz harmony.
   MinorMajor7 = "minor-major-7",
+  // A diminished triad with a major 7th (dimMaj7), written as the
+  // combined symbol "o^" in iReal Pro chord shorthand (e.g. "Dbo^7").
+  // Kept distinct from Diminished (diminished 7th) and from
+  // HalfDiminished (minor 7th over a diminished triad), because the three
+  // differ only in which seventh sits on the same triad.
+  DiminishedMajor7 = "diminished-major-7",
 }
 
 /**
