@@ -34,7 +34,28 @@
  * distinct chord symbols, which no expansion affects; the occurrence
  * counts are printed beside it for human review.
  *
- * Phase 3 adds the emitter invariants.
+ * Phase A of `plans/3.chord-grid-text-rendering.md` adds the layout
+ * invariants from its section 9, which replace that plan's retired emitter
+ * invariants because there is no longer an emitted string to check:
+ *
+ * - Chord preservation against the tree, counting alternative chords as
+ *   well as chords, over the same walk the parser exports for the purpose.
+ *   The layout groups and reorders bars and must neither add nor drop one,
+ *   so the two multisets are compared for equality rather than containment.
+ * - Plausible length. No chart's layout may hold more bars than its tree
+ *   does. The absence of any length invariant is what let the old path's
+ *   inflation ship unnoticed, so it is checked rather than assumed.
+ * - Every labelled section that lays out a bar contributes exactly one
+ *   section label, on its first line.
+ * - Barlines, which are the layout's central output and the subject of its
+ *   whole defect history. A barline between two bars is printed once, so no
+ *   repeat sign may appear at both sides of one line break, no line may open
+ *   with a barline that closes, and the chart's last line must end the chart
+ *   rather than separate it from nothing.
+ *
+ * An ending sequence that is not consecutive from one is a property of the
+ * chart rather than a layout defect, so it is reported beside the unknown
+ * tokens rather than failing the run.
  */
 import * as fs from "fs";
 import { parsePlaylistLink, stripChordDataMarker } from "../fields";
@@ -47,6 +68,117 @@ import { chartChords, parseGrid } from "../gridParser";
 import { IrealChart } from "../gridAst";
 import { parsedChordToIrealText } from "../chordShorthand";
 import { textToGridTokens } from "../gridNotation";
+import { ChartLayout, layoutChart } from "../gridLayout";
+
+/**
+ * Every chord the layout names, counting a cell's alternative chord as well
+ * as its own.
+ *
+ * The tree side of the same walk is `chartChords` in `gridParser.ts`, which
+ * exists so that both sides count the same things; a walk that forgot the
+ * alternative branch would let the layout drop every alternative chord in
+ * the library while the preservation check still passed.
+ */
+function layoutChordTexts(layout: ChartLayout): string[] {
+  const out: string[] = [];
+  for (const line of layout.lines) {
+    for (const bar of line.bars) {
+      for (const cell of bar.cells) {
+        if (cell.chord) out.push(parsedChordToIrealText(cell.chord));
+        if (cell.alternative) out.push(parsedChordToIrealText(cell.alternative));
+      }
+    }
+  }
+  return out;
+}
+
+function treeBarCount(chart: IrealChart): number {
+  let n = 0;
+  for (const section of chart.sections) {
+    n += section.bars.filter((bar) => bar.cells.length > 0).length;
+    for (const ending of section.repeat?.endings ?? []) {
+      n += ending.bars.filter((bar) => bar.cells.length > 0).length;
+    }
+  }
+  return n;
+}
+
+/**
+ * The layout conditions that must hold for one chart, as a list of the ones
+ * that do not, so that a failing chart names its own problem.
+ */
+function layoutProblems(chart: IrealChart, layout: ChartLayout): string[] {
+  const problems: string[] = [];
+
+  const expected = multisetOf(chartChords(chart).map(parsedChordToIrealText));
+  const actual = multisetOf(layoutChordTexts(layout));
+  for (const [text, count] of expected) {
+    const got = actual.get(text) ?? 0;
+    if (got !== count) problems.push(`chord ${text}: tree ${count}, layout ${got}`);
+  }
+  for (const text of actual.keys()) {
+    if (!expected.has(text)) problems.push(`chord ${text}: in layout, not in tree`);
+  }
+
+  const laidOutBars = layout.lines.reduce((sum, line) => sum + line.bars.length, 0);
+  if (laidOutBars > treeBarCount(chart)) {
+    problems.push(`bars: tree ${treeBarCount(chart)}, layout ${laidOutBars}`);
+  }
+
+  // A section that lays out no bar at all contributes no line and so owes
+  // no label; there is nothing for the label to head.
+  const labelled = chart.sections.filter(
+    (section) =>
+      section.label !== undefined &&
+      (section.bars.some((bar) => bar.cells.length > 0) ||
+        (section.repeat?.endings ?? []).some((ending) => ending.bars.some((bar) => bar.cells.length > 0)))
+  ).length;
+  const labels = layout.lines.filter((line) => line.sectionLabel !== undefined).length;
+  if (labels !== labelled) problems.push(`section labels: sections ${labelled}, lines ${labels}`);
+
+  // Barlines are the layout's central output and the subject of the whole
+  // defect history, so they are checked rather than trusted. A barline
+  // between two bars must be printed once: when the two fall on different
+  // lines, what closes belongs to the earlier line and what opens to the
+  // later one, so the same repeat sign appearing at both sides of one line
+  // break is the duplication this checks for.
+  for (let i = 0; i + 1 < layout.lines.length; i++) {
+    const closing = layout.lines[i].closeBarline;
+    const opening = layout.lines[i + 1].bars[0]?.openBarline;
+    if (closing !== "plain" && closing === opening) {
+      problems.push(`barline ${closing} printed at both sides of the break after line ${i}`);
+    }
+    if (closing === "closeOpenRepeat" || opening === "closeOpenRepeat") {
+      problems.push(`barline ${closing}/${opening} spans a line break, where it must be split`);
+    }
+    if (opening === "closeRepeat") {
+      problems.push(`line ${i + 1} opens with a closing repeat, which belongs to the line before it`);
+    }
+  }
+  if (layout.lines.length > 0 && layout.lines[layout.lines.length - 1].closeBarline === "plain") {
+    problems.push("the chart's last line closes with a separator rather than ending the chart");
+  }
+
+  return problems;
+}
+
+/**
+ * Ending sequences that are not consecutive from one.
+ *
+ * Such a section is laid out in the order the chart writes it, which is the
+ * order it is read in, since the numbers are not a reliable ordering when
+ * they repeat or start above one. This is a property of the chart rather
+ * than a layout defect, so it is reported for review alongside the unknown
+ * tokens rather than failing the run.
+ */
+function oddEndingSequences(chart: IrealChart): string[] {
+  const odd: string[] = [];
+  for (const section of chart.sections) {
+    const numbers = (section.repeat?.endings ?? []).map((ending) => ending.number);
+    if (numbers.length > 0 && !numbers.every((n, i) => n === i + 1)) odd.push(numbers.join(","));
+  }
+  return odd;
+}
 
 const HREF_IREAL_LINK = /href="(irealb:\/\/[^"]*)"/g;
 
@@ -178,6 +310,11 @@ function main(): void {
   let chartsCountingFewer = 0;
   let treeChords = 0;
   let currentChordCount = 0;
+  let layoutFailures = 0;
+  const oddEndings: Array<{ title: string; sequence: string }> = [];
+  let laidOutBarTotal = 0;
+  let laidOutLineTotal = 0;
+  let treeBarTotal = 0;
 
   for (const chart of charts) {
     const ctx = new ABCContext(new AbcErrorReporter());
@@ -213,6 +350,19 @@ function main(): void {
       // see this file's own comment on why the two sides count
       // differently.
       if (missingChords(expected, actual).length > 0) chartsCountingFewer++;
+
+      const laidOut = layoutChart(tree);
+      const problems = layoutProblems(tree, laidOut);
+      if (problems.length > 0) {
+        layoutFailures++;
+        process.stdout.write(`layout: ${chart.title}: ${problems.join("; ")}\n`);
+      }
+      for (const sequence of oddEndingSequences(tree)) {
+        oddEndings.push({ title: chart.title, sequence });
+      }
+      laidOutBarTotal += laidOut.lines.reduce((sum, line) => sum + line.bars.length, 0);
+      laidOutLineTotal += laidOut.lines.length;
+      treeBarTotal += treeBarCount(tree);
     }
 
     // Read after parsing, so that what the parser reports is surfaced too
@@ -248,6 +398,14 @@ function main(): void {
   process.stdout.write(`charts naming some chord fewer times than the current implementation: ${chartsCountingFewer}\n`);
   process.stdout.write(`chords named by the current implementation: ${currentChordCount}\n`);
   process.stdout.write(`chords named by the tree, repeats expanded: ${treeChords}\n`);
+  process.stdout.write(`charts failing a layout invariant: ${layoutFailures}\n`);
+  process.stdout.write(`bars in the tree: ${treeBarTotal}\n`);
+  process.stdout.write(`bars laid out: ${laidOutBarTotal}\n`);
+  process.stdout.write(`lines laid out: ${laidOutLineTotal}\n`);
+  process.stdout.write(`sections whose ending numbers are not consecutive from one: ${oddEndings.length}\n`);
+  for (const entry of [...new Map(oddEndings.map((e) => [`${e.title}:${e.sequence}`, e])).values()]) {
+    process.stdout.write(`  ${entry.title}: endings ${entry.sequence}\n`);
+  }
   // Grouped by message rather than listed per chart, because a single
   // condition holding on fifty charts is one thing to look at, not fifty.
   const byMessage = new Map<string, string[]>();
@@ -274,7 +432,9 @@ function main(): void {
   // three is a condition this work exists to make impossible. Unknown
   // tokens are reported for review rather than failing the run, because
   // the plan allows a listed and explained exception set.
-  process.exit(coverageFailures === 0 && parseFailures === 0 && chordLossFailures === 0 ? 0 : 1);
+  process.exit(
+    coverageFailures === 0 && parseFailures === 0 && chordLossFailures === 0 && layoutFailures === 0 ? 0 : 1
+  );
 }
 
 main();
