@@ -233,6 +233,22 @@ describe("iReal grid layout", () => {
       expect(bars[1].openBarline).to.equal("plain");
     });
 
+    it("resolves a chain of held chords, each to the same chord", () => {
+      // Ported from the retired importFromIreal spec, where a run of
+      // separate-bar holds was a real defect: the old path compacted them
+      // into a repeat sign instead of repeating the chord.
+      const result = layout("Eb-7 |x |x |x |Ab-7 ");
+      const bars = result.lines.flatMap((l) => l.bars);
+      expect(bars.map((b) => parsedChordToIrealText(b.cells[0].chord!))).to.deep.equal([
+        "Eb-7",
+        "Eb-7",
+        "Eb-7",
+        "Eb-7",
+        "Ab-7",
+      ]);
+      expect(bars.every((b) => b.openBarline === "plain")).to.equal(true);
+    });
+
     it("emits no bar for a bar holding no cell", () => {
       // Asserting that no laid-out bar is empty would pass by construction,
       // since an empty bar is filtered out before a bar is built; the rule

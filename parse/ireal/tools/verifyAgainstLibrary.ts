@@ -1,47 +1,25 @@
 /**
- * Token-level verification of `gridScanner.ts` against a real iReal Pro
- * library backup.
+ * Verification of the iReal Pro grid scanner, parser and layout against a
+ * real library backup.
  *
  * Because the library is personal data it is never committed; the path to a
  * backup HTML page is given on the command line instead:
  *
  *   npx tsx parse/ireal/tools/verifyAgainstLibrary.ts <path-to-backup.html>
  *
- * This is the harness described in `plans/2.ireal-grid-lexer-parser.md`
- * section 9, as far as Phase 2 reaches. It checks three things:
+ * The invariants are those of `plans/2.ireal-grid-lexer-parser.md` section 9
+ * and `plans/3.chord-grid-text-rendering.md` section 9. Unit tests cover the
+ * constructs we thought to write down; this covers the ones a real library
+ * actually contains, and it has found three defects the unit tests did not.
  *
  * - Token coverage. Scanning covers every character of every chart, and
- *   every `GridTT.UNKNOWN` token is reported, grouped by the character
- *   that produced it and named by the chart it came from.
+ *   every `GridTT.UNKNOWN` token is reported, grouped by the character that
+ *   produced it and named by the chart it came from.
  * - Parsing. No chart makes `parseGrid` throw.
- * - Chord preservation. For each chart, every chord the current
- *   implementation names is also named by the tree. Because the plan gives
- *   up comparing output byte for byte, this invariant is the primary guard
- *   in its place, and losing one chord on one chart fails the run.
- *
- * Section 7 of the plan asks for chord preservation as multiset
- * containment, the tree naming each chord at least as often as the current
- * implementation does. That comparison turned out not to be available, and
- * the reason is in the implementation it compares against rather than in
- * either tree: `gridAnnotations.ts` resolves a repeated section by
- * duplicating its text and a coda by duplicating the span before it, those
- * duplications compound, and the result is that the current implementation
- * names a chart's chords anywhere from once to six times over, where the
- * tree stores every bar exactly once by design. Measured over the sample
- * library, 189 of 657 charts name at least one chord more often on the old
- * side for that reason alone. What the invariant exists to catch is a
- * chord shape the new path drops, so it is checked as containment over
- * distinct chord symbols, which no expansion affects; the occurrence
- * counts are printed beside it for human review.
- *
- * Phase A of `plans/3.chord-grid-text-rendering.md` adds the layout
- * invariants from its section 9, which replace that plan's retired emitter
- * invariants because there is no longer an emitted string to check:
- *
- * - Chord preservation against the tree, counting alternative chords as
- *   well as chords, over the same walk the parser exports for the purpose.
- *   The layout groups and reorders bars and must neither add nor drop one,
- *   so the two multisets are compared for equality rather than containment.
+ * - Chord preservation between the tree and its layout, counting a cell's
+ *   alternative chord as well as its own, over the walk the parser exports
+ *   for the purpose. The layout groups and reorders bars and must neither
+ *   add nor drop one, so the two multisets are compared for equality.
  * - Plausible length. No chart's layout may hold more bars than its tree
  *   does. The absence of any length invariant is what let the old path's
  *   inflation ship unnoticed, so it is checked rather than assumed.
@@ -56,6 +34,13 @@
  * An ending sequence that is not consecutive from one is a property of the
  * chart rather than a layout defect, so it is reported beside the unknown
  * tokens rather than failing the run.
+ *
+ * What is gone from this harness is the comparison against the ABCx
+ * conversion, which measured whether the tree named every chord that
+ * implementation did. That implementation is deleted, so the tree is now
+ * the reference rather than the candidate. `plans/4.abcx-to-ireal-export.md`
+ * adds the invariant that replaces it: writing the tree back out as grid
+ * text and parsing it must reproduce the tree.
  */
 import * as fs from "fs";
 import { ABCContext } from "../../parsers/Context";
@@ -64,7 +49,6 @@ import { parsedChordToIrealText } from "../chordShorthand";
 import { parsePlaylistLink, stripChordDataMarker } from "../fields";
 import { IrealChart } from "../gridAst";
 import { ChartLayout, layoutChart } from "../gridLayout";
-import { textToGridTokens } from "../gridNotation";
 import { chartChords, parseGrid } from "../gridParser";
 import { scanGrid } from "../gridScanner";
 import { GridTT, tokensToGridText } from "../gridTokens";
@@ -263,28 +247,6 @@ function performedChords(chart: IrealChart): string[] {
   return chords;
 }
 
-/**
- * The chords the current implementation produces for a chart, which is
- * what chord preservation is measured against.
- */
-function currentChords(grid: string): string[] {
-  const texts: string[] = [];
-  for (const token of textToGridTokens(grid)) {
-    if (token.type === "chord") texts.push(parsedChordToIrealText(token.chord));
-  }
-  return texts;
-}
-
-/** The chords present in `expected` more often than in `actual`. */
-function missingChords(expected: Multiset, actual: Multiset): Array<{ text: string; expected: number; actual: number }> {
-  const missing: Array<{ text: string; expected: number; actual: number }> = [];
-  for (const [text, count] of expected) {
-    const have = actual.get(text) ?? 0;
-    if (have < count) missing.push({ text, expected: count, actual: have });
-  }
-  return missing;
-}
-
 function main(): void {
   const path = process.argv[2];
   if (!path) {
@@ -306,10 +268,7 @@ function main(): void {
   // the run unnoticed.
   const reported: Array<{ title: string; message: string }> = [];
   let parseFailures = 0;
-  let chordLossFailures = 0;
-  let chartsCountingFewer = 0;
   let treeChords = 0;
-  let currentChordCount = 0;
   let layoutFailures = 0;
   const oddEndings: Array<{ title: string; sequence: string }> = [];
   let laidOutBarTotal = 0;
@@ -337,19 +296,7 @@ function main(): void {
       process.stdout.write(`parse failure: ${chart.title}: ${String(err)}\n`);
     }
     if (tree !== null) {
-      const expected = multisetOf(currentChords(chart.grid));
-      const actual = multisetOf(performedChords(tree));
-      treeChords += [...actual.values()].reduce((sum, n) => sum + n, 0);
-      currentChordCount += [...expected.values()].reduce((sum, n) => sum + n, 0);
-      const missing = [...expected.keys()].filter((text) => !actual.has(text));
-      if (missing.length > 0) {
-        chordLossFailures++;
-        process.stdout.write(`chord loss: ${chart.title}: ${missing.join(", ")}\n`);
-      }
-      // Not a failure, only a difference in how often a chord is named:
-      // see this file's own comment on why the two sides count
-      // differently.
-      if (missingChords(expected, actual).length > 0) chartsCountingFewer++;
+      treeChords += performedChords(tree).length;
 
       const laidOut = layoutChart(tree);
       const problems = layoutProblems(tree, laidOut);
@@ -394,9 +341,6 @@ function main(): void {
   process.stdout.write(`coverage failures: ${coverageFailures}\n`);
   process.stdout.write(`UNKNOWN tokens: ${unknownCount}\n`);
   process.stdout.write(`parse failures: ${parseFailures}\n`);
-  process.stdout.write(`charts losing a chord: ${chordLossFailures}\n`);
-  process.stdout.write(`charts naming some chord fewer times than the current implementation: ${chartsCountingFewer}\n`);
-  process.stdout.write(`chords named by the current implementation: ${currentChordCount}\n`);
   process.stdout.write(`chords named by the tree, repeats expanded: ${treeChords}\n`);
   process.stdout.write(`charts failing a layout invariant: ${layoutFailures}\n`);
   process.stdout.write(`bars in the tree: ${treeBarTotal}\n`);
@@ -432,9 +376,7 @@ function main(): void {
   // three is a condition this work exists to make impossible. Unknown
   // tokens are reported for review rather than failing the run, because
   // the plan allows a listed and explained exception set.
-  process.exit(
-    coverageFailures === 0 && parseFailures === 0 && chordLossFailures === 0 && layoutFailures === 0 ? 0 : 1
-  );
+  process.exit(coverageFailures === 0 && parseFailures === 0 && layoutFailures === 0 ? 0 : 1);
 }
 
 main();
