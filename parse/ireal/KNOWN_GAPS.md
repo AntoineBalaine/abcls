@@ -312,3 +312,89 @@ annotation-removal passes per cell, skipping label cells — rather than
 teach each deletion pass yet another exception, which is the same
 "recover structure from text after destroying it" mistake that caused
 the doubled-barline bug (see the barline fix above).
+
+## Grid scanner: the four charts in a real 657-chart library that still produce UNKNOWN tokens
+
+Phase 1 of `plans/2.ireal-grid-lexer-parser.md` asks for zero
+`GridTT.UNKNOWN` tokens across the sample library, or a written list of
+the exact inputs that produce them with a reason for each. Running
+`parse/ireal/tools/verifyAgainstLibrary.ts` over a real backup of 657
+chart entries (361 distinct titles, each mostly present twice because the
+backup holds two playlist links) gives 0 coverage failures and 40
+`UNKNOWN` token occurrences, all of them from these four charts. They are
+listed rather than absorbed into the grammar, because absorbing input
+whose meaning is not established would be tuning the grammar until the
+count reads zero.
+
+Chart "Ingênuo", 3 occurrences of `W` and the 3 `/` characters that
+follow them, in the cells `W/C`, `W/Bb` and `W/Eb`. Each sits
+immediately after an ordinary chord cell (`D-,W/C,`, `C-,W/Bb,`,
+`F-,W/Eb,`), which reads as a slash chord whose root is carried over
+from the preceding cell, but `W` is not among the constructs section 4 of
+the plan records and no reference consulted during Phase 1 confirms that
+reading. The `/` is reported too rather than separately, because the
+chord rule attaches a slash bass only when a root letter precedes the
+slash, so a slash with no root of its own is left to the unknown rule.
+
+Chart "You Taught My Heart To Sing", the 4 characters `*`, `-`, `^`, `*`
+in the cell `F#*-^*`. The `-^` between the asterisks is iReal Pro's
+minor-major seventh symbol, so the cell plausibly means an F# minor-major
+chord with the quality wrapped in asterisks, but what the asterisks
+themselves denote is not established; the section label rule requires a
+word character after `*` and so declines this one.
+
+Charts "Alfie's Theme" (7 occurrences) and "Chippie" (13 occurrences).
+Both of these have a chord data field only 33 and 37 characters long
+including the 10-character marker, against a few hundred for an ordinary
+chart, and the grid text that comes out of `unscramble` is not valid grid
+notation in any reading: `9b7F 4Bb-77hG F7-bBZL7^` and
+`7bEZL4F7Xy-AZL7-G 7^FA*{ Y `. Both read as approximately reversed
+fragments of a real chart, with `LZ` sequences left in place that
+`unscramble` would have rewritten to ` |` had they been oriented the
+other way. The data is therefore truncated or otherwise damaged upstream
+of the scanner, either in the backup itself or in how `scramble.ts`
+handles a payload shorter than one 50-character chunk, which was not
+determined during Phase 1 and is not a scanner concern. Scanning them
+loses nothing: every character still comes back as a token.
+
+Separately, and not a scanner defect: 8 distinct chord lexemes the
+scanner correctly isolates are rejected by `chordShorthand.ts`'s
+`irealTextToParsedChord`, 22 occurrences in all. Six of them are genuine
+dialect gaps worth closing in Phase 2 (`G7b9sus`, `Bb7b9sus`, `A7b9sus`,
+an alteration between the extension and `sus`; `C7+`, `D7+`, an
+augmented symbol after the extension; `Dbo^7`, a diminished triad with a
+major seventh). The remaining two, `Bb-77h` and `F7-b`, come from the two
+damaged charts above.
+
+## Grid scanner: three review findings deliberately left as they are
+
+A code review of Phase 1 raised six findings. Three were fixed (an
+unterminated `<...>` or `(...)` used to absorb every remaining bar of the
+chart into one token, and `verifyAgainstLibrary.ts` neither survived an
+unparsable link nor surfaced error reporter entries). The other three are
+recorded here rather than acted on, with what was measured against the
+real 657-chart library in each case.
+
+A cell holding a bare `sus`, `alt` or `add` with no root fragments into
+decoration tokens, so `sus` scans as `SMALL`, `UNKNOWN`, `SMALL` rather
+than as one cell. Section 4 of the plan says "a bare `sus` means sus4",
+which reads as being about a chord that writes no `2` or `4` after its
+`sus` (`Csus`), and that form is handled; a rootless cell has zero
+occurrences across the library. Scanning one as a single token would also
+need a token type for a chord cell with no root, which `GridTT` does not
+have, so the shape of the fix belongs to Phase 2's cell model rather than
+to the scanner.
+
+A nested or literal `<` inside an annotation would end the annotation
+early, because the annotation rule takes the first `>` rather than a
+balanced one. The library holds 168 annotations, exactly as many `<` as
+`>` characters, and no annotation containing a second `<`, so there is no
+evidence iReal Pro ever writes one; adding balance counting would be
+guessing at a format detail rather than implementing a known one.
+
+The grid token position handed to the error reporter is an absolute offset
+into the grid text, where `Token.position` is line relative everywhere
+else in the codebase, and the token's `line` stays 0. Grid text contains
+no line break at all, in 0 of the 657 charts, so for this input the two
+numbers are the same and line 0 is the correct line. This becomes worth
+revisiting only if grid text ever gains line breaks.
