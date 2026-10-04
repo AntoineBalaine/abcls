@@ -31,6 +31,13 @@
  *   with a barline that closes, and the chart's last line must end the chart
  *   rather than separate it from nothing.
  *
+ * - The writer's fixpoint, from `plans/4.abcx-to-ireal-export.md` section 9.
+ *   Writing the tree back out as grid text and parsing that must reproduce
+ *   the tree, which is what makes the writer trustworthy: the parser is the
+ *   only independent judge of what the writer produced. Compared over the
+ *   tree rather than over text, since the writer normalises whitespace,
+ *   resolves back references and closes an unclosed repeat.
+ *
  * An ending sequence that is not consecutive from one is a property of the
  * chart rather than a layout defect, so it is reported beside the unknown
  * tokens rather than failing the run.
@@ -52,6 +59,7 @@ import { ChartLayout, layoutChart } from "../gridLayout";
 import { chartChords, parseGrid } from "../gridParser";
 import { scanGrid } from "../gridScanner";
 import { GridTT, tokensToGridText } from "../gridTokens";
+import { writeGrid } from "../gridWriter";
 import { unscramble } from "../scramble";
 
 /**
@@ -143,6 +151,50 @@ function layoutProblems(chart: IrealChart, layout: ChartLayout): string[] {
     problems.push("the chart's last line closes with a separator rather than ending the chart");
   }
 
+  return problems;
+}
+
+/**
+ * The tree as a canonical string, for comparing it with a reparse of what
+ * the writer produced.
+ *
+ * Keys are sorted, because two trees holding the same facts may order their
+ * properties differently and a plain stringify calls that a difference.
+ * `position` is an offset into text the writer does not reproduce, and
+ * `unclosed` is a diagnostic it normalises away by closing the repeat.
+ */
+function canonicalTree(chart: IrealChart): string {
+  const canonical = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value === null || typeof value !== "object") return value;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      if (key === "position" || key === "unclosed") continue;
+      out[key] = canonical((value as Record<string, unknown>)[key]);
+    }
+    return out;
+  };
+  return JSON.stringify(canonical(chart));
+}
+
+/**
+ * The ways writing a chart and reading it back can fail, as a list of the
+ * ones that happened.
+ */
+function writerProblems(chart: IrealChart): string[] {
+  const problems: string[] = [];
+  const writeCtx = new ABCContext(new AbcErrorReporter());
+  const text = writeGrid(chart, writeCtx);
+  for (const error of writeCtx.errorReporter.getErrors()) problems.push(`writing: ${error.message}`);
+
+  const readCtx = new ABCContext(new AbcErrorReporter());
+  const stream = scanGrid(text, readCtx);
+  const unknown = stream.filter((token) => token.type === GridTT.UNKNOWN);
+  if (unknown.length > 0) {
+    problems.push(`wrote ${unknown.length} character(s) the scanner does not know: ${unknown.map((t) => JSON.stringify(t.lexeme)).join(", ")}`);
+  }
+  const reparsed = parseGrid(stream, readCtx);
+  if (canonicalTree(reparsed) !== canonicalTree(chart)) problems.push("the reparsed tree differs from the one written");
   return problems;
 }
 
@@ -270,6 +322,7 @@ function main(): void {
   let parseFailures = 0;
   let treeChords = 0;
   let layoutFailures = 0;
+  let writerFailures = 0;
   const oddEndings: Array<{ title: string; sequence: string }> = [];
   let laidOutBarTotal = 0;
   let laidOutLineTotal = 0;
@@ -304,6 +357,12 @@ function main(): void {
         layoutFailures++;
         process.stdout.write(`layout: ${chart.title}: ${problems.join("; ")}\n`);
       }
+      const writerIssues = writerProblems(tree);
+      if (writerIssues.length > 0) {
+        writerFailures++;
+        process.stdout.write(`writer: ${chart.title}: ${writerIssues.join("; ")}\n`);
+      }
+
       for (const sequence of oddEndingSequences(tree)) {
         oddEndings.push({ title: chart.title, sequence });
       }
@@ -343,6 +402,7 @@ function main(): void {
   process.stdout.write(`parse failures: ${parseFailures}\n`);
   process.stdout.write(`chords named by the tree, repeats expanded: ${treeChords}\n`);
   process.stdout.write(`charts failing a layout invariant: ${layoutFailures}\n`);
+  process.stdout.write(`charts failing the writer fixpoint: ${writerFailures}\n`);
   process.stdout.write(`bars in the tree: ${treeBarTotal}\n`);
   process.stdout.write(`bars laid out: ${laidOutBarTotal}\n`);
   process.stdout.write(`lines laid out: ${laidOutLineTotal}\n`);
@@ -376,7 +436,7 @@ function main(): void {
   // three is a condition this work exists to make impossible. Unknown
   // tokens are reported for review rather than failing the run, because
   // the plan allows a listed and explained exception set.
-  process.exit(coverageFailures === 0 && parseFailures === 0 && layoutFailures === 0 ? 0 : 1);
+  process.exit(coverageFailures === 0 && parseFailures === 0 && layoutFailures === 0 && writerFailures === 0 ? 0 : 1);
 }
 
 main();

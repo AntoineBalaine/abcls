@@ -291,3 +291,40 @@ scanner ends the chord lexeme at it and the chord reads as `F#`, dropping
 `-^`. One chord in one chart of 657, so it is recorded rather than fixed;
 the fix belongs in the scanner, which should skip a `*` that no section
 letter follows rather than treat it as a boundary.
+
+## The tree's section order is not always the text's bar order
+
+Found by a code review of the grid writer, and by a text-first differential
+fuzz it ran: parse a random grid, write it, parse again, compare.
+
+A numbered ending attaches to the section that owns the repeat, which the
+parser finds through `endingsOwner` and which may be an earlier section
+than the one whose bars follow it in the text. `{p *Ap N1Bb7` is fourteen
+characters that demonstrate it: section 0 holds one bar and an ending
+holding `Bb7`, section 1 holds the label `A` and one bar, and in the text
+section 1's bar stands between section 0's bar and section 0's ending.
+
+Writing sections in tree order therefore cannot reproduce that text. It
+only matters for a cell whose content depends on what precedes it, which is
+an unresolved `p` or `W/<bass>` back reference, and such a cell requires the
+chart to name no chord at all before it. No chart in the sample library
+reaches the shape. The writer reports the condition and writes `n` rather
+than a `p` that would bind to the wrong chord, so the loss is visible
+rather than silent.
+
+Expressing it faithfully would need the tree to record where a section's
+ending stands relative to other sections, which is a change to the parser's
+own model rather than to the writer.
+
+## A chord with an alteration and no extension may have no spelling
+
+The alteration's digit follows the root directly, so a flattened fifth on A
+with no extension writes `Ab5`, which reads back as an A flat power chord:
+the text round-trips while the chord does not. The parser cannot produce
+such a chord, since reading `Ab5` gives the power chord, so this concerns a
+tree assembled by hand or read out of ABCx.
+
+`irealChordTextRoundTrips` in `chordShorthand.ts` is the check, and it
+compares the chord rather than the text, because comparing the text is
+exactly the mistake that let this through the first time. The writer runs it
+over every chord it writes and reports any that fails.

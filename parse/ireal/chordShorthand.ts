@@ -290,3 +290,28 @@ const ABCX_QUALITY_TO_SYMBOL: Record<ChordQuality, string> = {
 export function parsedChordToAbcxText(chord: ParsedChord): string {
   return chordToText(chord, ABCX_QUALITY_TO_SYMBOL, false);
 }
+
+/**
+ * Whether a chord survives being written and read back as iReal Pro text.
+ *
+ * Comparing the text a reading produces is not enough, and that mistake is
+ * worth recording: a flattened fifth on A with no extension writes `Ab5`,
+ * which reads as an A flat power chord and writes as `Ab5` again, so the
+ * text round-trips while the chord does not. The comparison is therefore
+ * over the chord itself. `qualityExplicit` is left out, since a dominant
+ * has no symbol for the dialect to record it with.
+ */
+export function irealChordTextRoundTrips(chord: ParsedChord): boolean {
+  const reread = irealTextToParsedChord(parsedChordToIrealText(chord));
+  if (reread === null) return false;
+  const same = (a: ParsedChord, b: ParsedChord): boolean =>
+    a.root === b.root &&
+    a.rootAccidental === b.rootAccidental &&
+    a.quality === b.quality &&
+    a.extension === b.extension &&
+    a.alterations.length === b.alterations.length &&
+    a.alterations.every((alt, i) => alt.type === b.alterations[i].type && alt.degree === b.alterations[i].degree) &&
+    a.bass?.root === b.bass?.root &&
+    a.bass?.accidental === b.bass?.accidental;
+  return same(chord, reread);
+}
