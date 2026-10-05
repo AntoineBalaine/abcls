@@ -64,23 +64,23 @@ function shape(chart: IrealChart): string {
 describe("iReal grid writer", () => {
   describe("sections", () => {
     it("writes a plain section in brackets", () => {
-      expect(roundTrip("C^7 |D-7 ")).to.equal("[ C^7 | D-7 ] Z");
+      expect(roundTrip("C^7 |D-7 ")).to.equal("[C^7 |D-7 ]Z");
     });
 
     it("writes a repeated section in braces", () => {
-      expect(roundTrip("{C^7 |D-7 }")).to.equal("{ C^7 | D-7 } Z");
+      expect(roundTrip("{C^7 |D-7 }")).to.equal("{C^7 |D-7 }Z");
     });
 
     it("writes a section label after the opening delimiter", () => {
-      expect(roundTrip("[*AC^7 ")).to.equal("[ *A C^7 ] Z");
+      expect(roundTrip("[*AC^7 ")).to.equal("[*AC^7 ]Z");
     });
 
     it("writes a time signature after the label", () => {
-      expect(roundTrip("[*AT44C^7 ")).to.equal("[ *A T44 C^7 ] Z");
+      expect(roundTrip("[*AT44C^7 ")).to.equal("[*AT44C^7 ]Z");
     });
 
     it("writes twelve eight as the one code whose digits are not a fraction", () => {
-      expect(roundTrip("[T12C^7 ")).to.equal("[ T12 C^7 ] Z");
+      expect(roundTrip("[T12C^7 ")).to.equal("[T12C^7 ]Z");
     });
 
     it("reports a time signature iReal Pro cannot spell", () => {
@@ -88,7 +88,7 @@ describe("iReal grid writer", () => {
       chart.sections[0].timeSignature = { numerator: 13, denominator: 16 };
       const { text, errors } = write(chart);
       expect(errors.join()).to.match(/no iReal Pro spelling/);
-      expect(text).to.equal("[ C^7 ] Z");
+      expect(text).to.equal("[C^7 ]Z");
     });
 
     it("ends the chart with Z", () => {
@@ -98,77 +98,77 @@ describe("iReal grid writer", () => {
 
   describe("cells", () => {
     it("writes a chord in iReal Pro's own dialect", () => {
-      expect(roundTrip("C^7 |D-7 |Eh7 |F#o7 |G7alt ")).to.equal("[ C^7 | D-7 | Eh7 | F#o7 | G7alt ] Z");
+      expect(roundTrip("C^7 |D-7 |Eh7 |F#o7 |G7alt ")).to.equal("[C^7 |D-7 |Eh7 |F#o7 |G7alt ]Z");
     });
 
     it("writes several cells in one bar separated by a space", () => {
-      expect(roundTrip("C^7 D-7 |G7 ")).to.equal("[ C^7 D-7 | G7 ] Z");
+      expect(roundTrip("C^7 D-7 |G7 ")).to.equal("[C^7 D-7 |G7 ]Z");
     });
 
     it("writes a no-chord cell as n", () => {
-      expect(roundTrip("n |C^7 ")).to.equal("[ n | C^7 ] Z");
+      expect(roundTrip("n |C^7 ")).to.equal("[n |C^7 ]Z");
     });
 
     it("writes a slash bass", () => {
-      expect(roundTrip("C^7/G ")).to.equal("[ C^7/G ] Z");
+      expect(roundTrip("C^7/G ")).to.equal("[C^7/G ]Z");
     });
 
     it("writes an alternative chord in parentheses after its cell", () => {
-      expect(roundTrip("C^7 (A-7)|D-7 ")).to.equal("[ C^7(A-7) | D-7 ] Z");
+      expect(roundTrip("C^7 (A-7)|D-7 ")).to.equal("[C^7(A-7) |D-7 ]Z");
     });
 
     it("writes the cue-size marker before the cell it applies to", () => {
-      expect(roundTrip("sC^7 ")).to.equal("[ sC^7 ] Z");
+      expect(roundTrip("sC^7 ")).to.equal("[sC^7 ]Z");
     });
 
     it("writes a fermata at the head of its bar", () => {
-      // It belongs to the bar rather than to a cell, so it stands on its
-      // own rather than being glued to the chord the way the cue-size
-      // marker is.
-      expect(roundTrip("fC^7 |D-7 ")).to.equal("[ f C^7 | D-7 ] Z");
+      // It belongs to the bar rather than to a cell and occupies none, so
+      // it sits flush against the first cell: a space there would be an
+      // empty cell and would move the chord off the first beat.
+      expect(roundTrip("fC^7 |D-7 ")).to.equal("[fC^7 |D-7 ]Z");
     });
 
     it("resolves a held chord rather than writing the back reference again", () => {
       // The tree has already resolved `x`, so the writer has a chord to
       // write and no reason to write a reference to one.
-      expect(roundTrip("C^7 |x ")).to.equal("[ C^7 | C^7 ] Z");
+      expect(roundTrip("C^7 |x ")).to.equal("[C^7 |C^7 ]Z");
     });
 
     it("keeps a back reference the parser could not resolve", () => {
       // Nothing preceded it, so there is no chord to write in its place.
-      expect(roundTrip("W/C |D-7 ")).to.equal("[ W/C | D-7 ] Z");
+      expect(roundTrip("W/C |D-7 ")).to.equal("[W/C |D-7 ]Z");
     });
   });
 
   describe("repeats and endings", () => {
     it("writes each ending with its own number", () => {
-      expect(roundTrip("{C^7 |N1D-7 }N2G7 ")).to.equal("{ C^7 N1 D-7 N2 G7 } Z");
+      expect(roundTrip("{C^7 |N1D-7 }N2G7 ")).to.equal("{C^7 N1D-7 N2G7 }Z");
     });
 
     it("writes a section whose bars all live in its endings", () => {
-      expect(roundTrip("[*BN1C^7 }N2D-7 ")).to.equal("{ *B N1 C^7 N2 D-7 } Z");
+      expect(roundTrip("[*BN1C^7 }N2D-7 ")).to.equal("{*BN1C^7 N2D-7 }Z");
     });
 
     it("closes a repeat the chart left open", () => {
       const { chart } = parse("{C^7 |D-7 ");
       expect(chart.sections[0].repeat?.unclosed).to.equal(true);
-      expect(write(chart).text).to.equal("{ C^7 | D-7 } Z");
+      expect(write(chart).text).to.equal("{C^7 |D-7 }Z");
     });
   });
 
   describe("annotations and navigation", () => {
     it("writes a bar's annotation inside that bar", () => {
-      expect(roundTrip("C^7 <Solos>|D-7 ")).to.equal("[ <Solos> C^7 | D-7 ] Z");
+      expect(roundTrip("C^7 <Solos>|D-7 ")).to.equal("[<Solos>C^7 |D-7 ]Z");
     });
 
     it("writes a chart-level annotation after every section", () => {
       const { chart } = parse("C^7 ");
       chart.annotations.push({ text: "Fine", position: 0 });
-      expect(write(chart).text).to.equal("[ C^7 ] <Fine> Z");
+      expect(write(chart).text).to.equal("[C^7 ]<Fine>Z");
     });
 
     it("writes a segno and a coda at the section each one names", () => {
-      expect(roundTrip("[*AC^7 ][*BS D-7 ")).to.equal("[ *A C^7 ] [ S *B D-7 ] Z");
+      expect(roundTrip("[*AC^7 ][*BS D-7 ")).to.equal("[*AC^7 ][S*B D-7 ]Z");
     });
 
     it("writes a marker standing after the last section", () => {
@@ -176,7 +176,7 @@ describe("iReal grid writer", () => {
       // index one past the end, which had nowhere to go before.
       const { chart } = parse("C^7 ");
       chart.navigation.partMarkerSections = [1];
-      expect(write(chart).text).to.equal("[ C^7 ] U Z");
+      expect(write(chart).text).to.equal("[C^7 ]UZ");
     });
   });
 
@@ -193,7 +193,7 @@ describe("iReal grid writer", () => {
       const { chart } = parse("C^7 ");
       chart.sections[0].bars[0].annotations.push({ text: "*64Hey", position: 0 });
       const text = write(chart).text;
-      expect(text).to.equal("[ <*00*64Hey> C^7 ] Z");
+      expect(text).to.equal("[<*00*64Hey>C^7 ]Z");
       expect(parse(text).chart.sections[0].bars[0].annotations[0].text).to.equal("*64Hey");
     });
 
@@ -202,7 +202,7 @@ describe("iReal grid writer", () => {
       chart.sections[0].bars[0].annotations.push({ text: "a > b | c", position: 0 });
       const { text, errors } = write(chart);
       expect(errors.join()).to.match(/cannot hold/);
-      expect(text).to.equal("[ <a  b  c> C^7 ] Z");
+      expect(text).to.equal("[<a  b  c>C^7 ]Z");
     });
 
     it("reports a section label of more than one character", () => {
@@ -210,7 +210,7 @@ describe("iReal grid writer", () => {
       chart.sections[0].label = "Intro";
       const { text, errors } = write(chart);
       expect(errors.join()).to.match(/one word character/);
-      expect(text).to.equal("[ *I C^7 ] Z");
+      expect(text).to.equal("[*IC^7 ]Z");
     });
 
     it("reports a time signature whose code already means something else", () => {
@@ -218,17 +218,19 @@ describe("iReal grid writer", () => {
       chart.sections[0].timeSignature = { numerator: 1, denominator: 2 };
       const { text, errors } = write(chart);
       expect(errors.join()).to.match(/T12 already spells/);
-      expect(text).to.equal("[ C^7 ] Z");
+      expect(text).to.equal("[C^7 ]Z");
     });
 
     it("reports a back reference that would bind to the wrong chord", () => {
       // The tree's own order can put a section holding an unresolved
       // reference after one holding chords, which the text cannot express.
       const { chart } = parse("C^7 ");
-      chart.sections.push({ bars: [{ cells: [{ kind: "sameChord", small: false }], annotations: [], fermata: false }] });
+      chart.sections.push({
+        bars: [{ cells: [{ kind: "sameChord", small: false, slot: 0 }], annotations: [], fermata: false, cellCount: 1 }],
+      });
       const { text, errors } = write(chart);
       expect(errors.join()).to.match(/now follows one/);
-      expect(text).to.equal("[ C^7 ] [ n ] Z");
+      expect(text).to.equal("[C^7 ][n]Z");
     });
 
     it("reports a chord whose text would read back as a different chord", () => {
@@ -249,10 +251,10 @@ describe("iReal grid writer", () => {
 
     it("reports a back reference over a bass that carries no bass", () => {
       const { chart } = parse("C^7 ");
-      chart.sections[0].bars[0].cells = [{ kind: "sameChordWithBass", small: false }];
+      chart.sections[0].bars[0].cells = [{ kind: "sameChordWithBass", small: false, slot: 0 }];
       const { text, errors } = write(chart);
       expect(errors.join()).to.match(/carries no bass/);
-      expect(text).to.equal("[ p ] Z");
+      expect(text).to.equal("[p ]Z");
     });
 
     it("reports a repeat with numbered endings that holds none", () => {

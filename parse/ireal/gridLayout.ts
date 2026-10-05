@@ -41,6 +41,13 @@ export interface LaidOutCell {
   chord?: ParsedChord;
   alternative?: ParsedChord;
   /**
+   * Which of the bar's cells this one occupies, counting from zero. Read
+   * with `LaidOutBar.cellCount`, it says where in the bar the chord falls,
+   * which is what lets a renderer put two chords on the first and third
+   * beats rather than merely side by side.
+   */
+  slot: number;
+  /**
    * The bass of an unresolved `sameChordWithBass` cell, which the parser
    * leaves in place when no chord preceded it. Dropping it would lose a
    * note the chart names, and the chord preservation invariant cannot see
@@ -56,6 +63,8 @@ export interface LaidOutBar {
   openBarline: Barline;
   annotations: Annotation[];
   fermata: boolean;
+  /** How many cells the bar is written across, which a slot indexes into. */
+  cellCount: number;
   /** 1, 2, and so on, when this bar belongs to a repeat's numbered ending. */
   endingNumber?: number;
   /**
@@ -275,7 +284,9 @@ export function layoutChart(chart: IrealChart, options: LayoutOptions = {}): Cha
         alternative: cell.alternative,
         bass: cell.bass,
         small: cell.small,
+        slot: cell.slot,
       })),
+      cellCount: current.bar.cellCount,
       // The first bar of a line takes only the opening half of the barline
       // before it, because the closing half was printed at the end of the
       // previous line.

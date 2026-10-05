@@ -89,20 +89,21 @@ const chordCellArb: fc.Arbitrary<Cell> = fc
     small: fc.boolean(),
     alternative: fc.option(chordArb, { nil: undefined }),
   })
-  .map((cell): Cell => ({ kind: "chord", chord: cell.chord, small: cell.small, alternative: cell.alternative ?? undefined }));
+  .map((cell): Cell => ({ kind: "chord", chord: cell.chord, small: cell.small, alternative: cell.alternative ?? undefined, slot: 0 }));
 
 const noChordCellArb: fc.Arbitrary<Cell> = fc
   .record({ small: fc.boolean(), alternative: fc.option(chordArb, { nil: undefined }) })
-  .map((cell): Cell => ({ kind: "noChord", small: cell.small, alternative: cell.alternative ?? undefined }));
+  .map((cell): Cell => ({ kind: "noChord", small: cell.small, alternative: cell.alternative ?? undefined, slot: 0 }));
 
 const backReferenceCellArb: fc.Arbitrary<Cell> = fc.oneof(
-  fc.record({ small: fc.boolean() }).map((cell): Cell => ({ kind: "sameChord", small: cell.small })),
+  fc.record({ small: fc.boolean() }).map((cell): Cell => ({ kind: "sameChord", small: cell.small, slot: 0 })),
   fc
     .record({ small: fc.boolean(), root: rootArb, accidental: accidentalArb })
     .map((cell): Cell => ({
       kind: "sameChordWithBass",
       bass: { root: cell.root, accidental: cell.accidental },
       small: cell.small,
+      slot: 0,
     })),
 );
 
@@ -118,12 +119,33 @@ const annotationArb: fc.Arbitrary<Annotation> = fc
   .stringMatching(/^[A-Za-z][A-Za-z0-9 .,']{0,14}$/)
   .map((text): Annotation => ({ text, position: 0 }));
 
+/**
+ * A bar, with its cells placed across a run that may be wider than they
+ * are.
+ *
+ * The slots the cells are generated with are discarded and assigned here,
+ * because a position only makes sense against the bar holding it. Spreading
+ * them over a wider run is what exercises the padding: a bar of two chords
+ * written across four cells has to be written back out with the spaces
+ * that put them there.
+ */
 function barOf(cells: fc.Arbitrary<Cell>): fc.Arbitrary<Bar> {
-  return fc.record({
-    cells: fc.array(cells, { minLength: 1, maxLength: 3 }),
-    annotations: fc.array(annotationArb, { maxLength: 2 }),
-    fermata: fc.boolean(),
-  });
+  return fc
+    .record({
+      cells: fc.array(cells, { minLength: 1, maxLength: 3 }),
+      annotations: fc.array(annotationArb, { maxLength: 2 }),
+      fermata: fc.boolean(),
+      width: fc.integer({ min: 0, max: 3 }),
+      offset: fc.integer({ min: 0, max: 3 }),
+    })
+    .map((spec): Bar => {
+      const cellCount = spec.cells.length + spec.width;
+      // Distinct, increasing positions inside the run, starting no later
+      // than the padding allows.
+      const start = Math.min(spec.offset, cellCount - spec.cells.length);
+      const placed = spec.cells.map((cell, index) => ({ ...cell, slot: start + index }));
+      return { cells: placed, annotations: spec.annotations, fermata: spec.fermata, cellCount };
+    });
 }
 
 const barArb: fc.Arbitrary<Bar> = barOf(cellArb);

@@ -41,6 +41,16 @@ export interface Cell {
   small: boolean;
   /** The `(...)` alternative chord, written beside the cell's own chord. */
   alternative?: ParsedChord;
+  /**
+   * Which of the bar's cells this one occupies, counting from zero.
+   *
+   * iReal Pro writes a bar as a fixed run of cells and pads the empty ones
+   * with spaces, so where a chord sits says when in the bar it falls:
+   * measured over a real library, 7,569 bars hold one chord on the first
+   * cell of four and 4,445 hold two on the first and third, which is beats
+   * one and three. Dropping the padding as meaningless loses that.
+   */
+  slot: number;
 }
 
 export interface Annotation {
@@ -54,6 +64,13 @@ export interface Bar {
   /** Bar-level text annotations, for example `<Solos>`. */
   annotations: Annotation[];
   fermata: boolean;
+  /**
+   * How many cells the bar was written across, which is what a `slot` is an
+   * index into. Charts write the same bar at different granularities, most
+   * often four cells and sometimes two, so a position only means anything
+   * as a fraction of this.
+   */
+  cellCount: number;
 }
 
 export interface Ending {

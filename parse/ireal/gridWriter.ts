@@ -150,18 +150,49 @@ function cellText(cell: Cell, state: WriteState, ctx: ABCContext): string {
   return parts.join("");
 }
 
+/**
+ * A bar, written as the run of cells it occupies.
+ *
+ * A space is one empty cell, so the padding is the layout: a chord on the
+ * third cell of four is a chord with two spaces before it, which is what
+ * says it falls on the third beat. Nothing may be joined with a space for
+ * readability here, since a space is content.
+ *
+ * The fermata and the annotations are not cells and occupy none, so they
+ * lead the bar and sit flush against the first cell.
+ */
 function barText(bar: Bar, state: WriteState, ctx: ABCContext): string {
   const parts: string[] = [];
-  // A fermata belongs to the bar rather than to a cell, and the parser
-  // takes it from anywhere within the bar, so it leads.
   if (bar.fermata) parts.push("f");
   for (const annotation of bar.annotations) parts.push(annotationText(annotation, ctx));
-  for (const cell of bar.cells) parts.push(cellText(cell, state, ctx));
-  return parts.filter((part) => part !== "").join(" ");
+
+  const bySlot = new Map<number, Cell>();
+  const beyond: Cell[] = [];
+  for (const cell of bar.cells) {
+    if (cell.slot >= 0 && cell.slot < bar.cellCount && !bySlot.has(cell.slot)) bySlot.set(cell.slot, cell);
+    else beyond.push(cell);
+  }
+  if (beyond.length > 0) {
+    report(ctx, `A bar holds ${beyond.length} cell(s) with no position inside its ${bar.cellCount} cells`);
+  }
+
+  for (let slot = 0; slot < bar.cellCount; slot++) {
+    const cell = bySlot.get(slot);
+    parts.push(cell === undefined ? " " : cellText(cell, state, ctx));
+  }
+  for (const cell of beyond) parts.push(cellText(cell, state, ctx));
+  return parts.join("");
 }
 
+/**
+ * The bars of one section, separated by a barline and nothing else.
+ *
+ * No space is written around the separator, because a space beside it
+ * would be read as an empty cell of the bar it touches and widen that bar
+ * by one.
+ */
 function barsText(bars: Bar[], state: WriteState, ctx: ABCContext): string {
-  return bars.map((bar) => barText(bar, state, ctx)).join(" | ");
+  return bars.map((bar) => barText(bar, state, ctx)).join("|");
 }
 
 /** A label is one character, which is all the `*X` marker has room for. */
@@ -240,7 +271,10 @@ function sectionText(section: Section, chart: IrealChart, index: number, state: 
   // malformed input rather than about the music, and writing a chart that
   // says what it means is worth losing that one flag.
   parts.push(repeat ? "}" : "]");
-  return parts.filter((part) => part !== "").join(" ");
+  // Joined with nothing at all. A space between a marker and a bar would
+  // be read as an empty first cell of that bar and shift every chord in it
+  // along by one, which is the whole reason the padding is meaningful.
+  return parts.join("");
 }
 
 export function writeGrid(chart: IrealChart, ctx: ABCContext): string {
@@ -261,5 +295,5 @@ export function writeGrid(chart: IrealChart, ctx: ABCContext): string {
   // again rather than attaching to a bar.
   for (const annotation of chart.annotations) parts.push(annotationText(annotation, ctx));
   parts.push("Z");
-  return parts.filter((part) => part !== "").join(" ");
+  return parts.join("");
 }

@@ -162,7 +162,14 @@ function flushBar(walk: Walk): void {
     walk.annotations = [];
     return;
   }
-  const bar: Bar = { cells: walk.cells, annotations: walk.annotations, fermata: false };
+  // ABCx writes no padding, so a bar is exactly as many cells as it has
+  // chords and each one follows the last.
+  const bar: Bar = {
+    cells: walk.cells,
+    annotations: walk.annotations,
+    fermata: false,
+    cellCount: walk.cells.length,
+  };
   if (walk.currentEnding !== null) walk.currentEnding.bars.push(bar);
   else {
     ensureSection(walk).bars.push(bar);
@@ -244,7 +251,7 @@ export function abcxTuneToIrealChart(tune: Tune, ctx: ABCContext): IrealChart {
     for (const node of system) {
       if (node instanceof ChordSymbol) {
         const chord = readChord(node.token.lexeme, ctx, node.token.position);
-        if (chord !== null) walk.cells.push({ kind: "chord", chord, small: false });
+        if (chord !== null) walk.cells.push({ kind: "chord", chord, small: false, slot: walk.cells.length });
       } else if (node instanceof BarLine) {
         readBarLine(node, walk);
       } else if (node instanceof Inline_field) {

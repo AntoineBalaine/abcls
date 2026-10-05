@@ -84,6 +84,10 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
   const markers: Marker[] = [];
 
   let cells: Cell[] = [];
+  // Where the next cell sits, and how wide the bar has been so far. iReal
+  // Pro writes a bar as a run of cells and pads the empty ones, so a space
+  // or a comma advances the position without holding anything.
+  let slot = 0;
   let annotations: Annotation[] = [];
   let fermata = false;
   let repeatPreviousBar = false;
@@ -100,11 +104,16 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
   let carriedAnnotations: Annotation[] = [];
   let carriedFermata = false;
 
-  function pushCell(cell: Cell): void {
+  // Takes a cell without its position, because the position is this
+  // function's to know: it is where the bar has got to, not something a
+  // caller can work out.
+  function pushCell(partial: Omit<Cell, "slot">): void {
+    const cell: Cell = { ...partial, slot };
     if (pendingAlternative !== undefined) {
       cell.alternative = pendingAlternative;
       pendingAlternative = undefined;
     }
+    slot++;
     cells.push(cell);
     pendingSmall = false;
   }
@@ -119,7 +128,15 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
     } else {
       markers.push({
         kind: "bar",
-        bar: { cells, annotations: [...carriedAnnotations, ...annotations], fermata: fermata || carriedFermata },
+        bar: {
+          cells,
+          annotations: [...carriedAnnotations, ...annotations],
+          fermata: fermata || carriedFermata,
+          // A bar written with no padding at all still has as many cells
+          // as it has chords, so a position is always a fraction of
+          // something rather than of zero.
+          cellCount: Math.max(slot, cells.length, 1),
+        },
         repeatPreviousBar,
         repeatPreviousTwoBars,
         position: barPosition,
@@ -128,6 +145,7 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
       carriedFermata = false;
     }
     cells = [];
+    slot = 0;
     annotations = [];
     fermata = false;
     repeatPreviousBar = false;
@@ -167,6 +185,7 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
           pushCell({ kind: "sameChord", small: pendingSmall });
         } else {
           repeatPreviousBar = true;
+          slot++;
         }
         break;
       case GridTT.REPEAT_TWO_BARS:
@@ -175,6 +194,7 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
           pushCell({ kind: "sameChord", small: pendingSmall });
         } else {
           repeatPreviousTwoBars = true;
+          slot++;
         }
         break;
       case GridTT.ANNOTATION:
@@ -242,12 +262,21 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
         markers.push({ kind: "partMarker", position: token.position });
         break;
       case GridTT.PAD:
+        // A comma holds an empty cell, so it moves the position on without
+        // putting anything in it.
+        slot++;
+        break;
+      case GridTT.WHITESPACE:
+        // So does a space, one cell per character. This is the padding
+        // that says where in the bar a chord falls, and reading it as
+        // nothing is what lost that.
+        slot += token.lexeme.length;
+        break;
       case GridTT.LAYOUT:
       case GridTT.SPACER:
-      case GridTT.WHITESPACE:
       case GridTT.UNKNOWN:
-        // Padding, layout and spacing carry no musical meaning, and an
-        // unknown character was already reported by the scanner.
+        // A size marker and a vertical spacer say nothing about position,
+        // and an unknown character was already reported by the scanner.
         break;
     }
   }
@@ -312,8 +341,11 @@ function resolveBackReferences(markers: Marker[], ctx: ABCContext): Marker[] {
       const second = bars[bars.length - 1];
       const firstCopy = copyCells(first.cells);
       const secondCopy = copyCells(second.cells);
-      addBar({ cells: firstCopy, annotations: marker.bar.annotations, fermata: marker.bar.fermata }, marker.position);
-      addBar({ cells: secondCopy, annotations: [], fermata: false }, marker.position);
+      addBar(
+        { cells: firstCopy, annotations: marker.bar.annotations, fermata: marker.bar.fermata, cellCount: first.cellCount },
+        marker.position
+      );
+      addBar({ cells: secondCopy, annotations: [], fermata: false, cellCount: second.cellCount }, marker.position);
       continue;
     }
     if (marker.repeatPreviousBar) {
@@ -321,7 +353,11 @@ function resolveBackReferences(markers: Marker[], ctx: ABCContext): Marker[] {
         report(ctx, "A bar repeats the previous bar, but no bar came before it", "x", marker.position);
         continue;
       }
-      marker.bar.cells = copyCells(bars[bars.length - 1].cells);
+      const source = bars[bars.length - 1];
+      marker.bar.cells = copyCells(source.cells);
+      // The repeated bar shows what that bar showed, so it is laid out the
+      // same way. Its own padding only said where the marker itself sat.
+      marker.bar.cellCount = source.cellCount;
     }
     addBar(marker.bar, marker.position);
   }
