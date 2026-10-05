@@ -2,7 +2,7 @@
   "name": "abcls-parser",
   "displayName": "abcls-parser",
   "description": "Abc notation parser",
-  "version": "0.1.0",
+  "version": "0.1.14",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

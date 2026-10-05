@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.1.14 (2026-10-04)
+
+### chordShorthand
+
+- add MinorMajor7 ('-^') combined-symbol quality
+- recognize iReal's real sus-chord ordering (extension before 'sus')
+
+### chore
+
+- publish via tarball
+- package release flow
+
+### ireal
+
+- prune the unused converter exports and prefix the tree types
+- read a minor key's number notation against its parallel major
+- spell a chromatic degree the scale lowers as a raised degree
+- lay the parsed chart out into display lines
+- keep a sus chord's extension when writing chord text
+- parse grid tokens into a chart tree
+- add a total-coverage scanner for iReal Pro grid notation
+- attach a lone section label to the next bar with content
+- derive barlines from bar structure, not from bar text
+- keep section labels (as ABC '[P:X]' fields), show real repeats once
+- stop rendering a single-bar hold ('x') as a repeat sign
+- strip vertical-alignment spacer characters ('Y')
+- fix stray unmatched braces and use :|: for consecutive repeats
+- resolve section labels, repeat/coda structure, and more
+- generalize isRepeatBar to multi-cell repeat-only bars
+- don't crash on a repeat-bar cell mixed into a multi-cell bar
+- translate iReal Pro's "-" minor-key suffix to ABC's "m"
+- fix repeat bars, line wrapping, and full-bar rest notation
+- embed the source link as a header comment by default
+- fix review findings and expose the converter from the package root
+- add ABCx to iReal Pro chord chart converter
+
+### music-theory
+
+- Nashville numbering reads a minor key off its relative major
+- add Nashville and regular number-notation degree helpers
+
+### music-theory/ireal
+
+- add Altered chord quality ('alt') support
+
 ## 0.1.13 (2026-08-30)
 
 ### chore
