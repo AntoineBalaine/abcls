@@ -39,6 +39,12 @@ import { Annotation, Bar, Bass, Cell, IrealChart, Repeat, Section, TimeSignature
  */
 interface WriteState {
   chordWritten: boolean;
+  /**
+   * Whether the chords being written are small. Because an `s` marker lasts
+   * until an `l` marker, the writer marks only where small chords begin
+   * and where they end, rather than every small chord.
+   */
+  small: boolean;
 }
 
 function report(ctx: ABCContext, message: string): void {
@@ -115,7 +121,9 @@ function chordText(chord: ParsedChord | undefined, ctx: ABCContext): string {
 
 function cellText(cell: Cell, state: WriteState, ctx: ABCContext): string {
   const parts: string[] = [];
-  if (cell.small) parts.push("s");
+  if (cell.small && !state.small) parts.push("s");
+  if (!cell.small && state.small) parts.push("l");
+  state.small = cell.small;
 
   if (cell.kind === "chord") {
     const text = chordText(cell.chord, ctx);
@@ -278,7 +286,7 @@ function sectionText(section: Section, chart: IrealChart, index: number, state: 
 }
 
 export function writeGrid(chart: IrealChart, ctx: ABCContext): string {
-  const state: WriteState = { chordWritten: false };
+  const state: WriteState = { chordWritten: false, small: false };
   reportUnreachableNavigation(chart, ctx);
 
   const parts: string[] = [];

@@ -94,10 +94,12 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
   let repeatPreviousBar = false;
   let repeatPreviousTwoBars = false;
   let barPosition = 0;
-  // The `s` cue-size marker and the `(...)` alternative chord both stand
-  // beside a cell rather than being one, so each waits here for the cell
-  // it belongs to.
-  let pendingSmall = false;
+  // The `s` marker makes every chord after it small until an `l` marker
+  // restores the normal size, across barlines as well, so it is a state of
+  // the whole chart rather than of one cell. The `(...)` alternative chord
+  // stands beside a cell rather than being one, so it waits here for the
+  // cell it belongs to.
+  let small = false;
   let pendingAlternative: ParsedChord | undefined;
   // An annotation or a fermata written in a bar that turns out to hold no
   // cell belongs to the next bar that does, which is the rule that makes
@@ -116,7 +118,6 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
     }
     slot++;
     cells.push(cell);
-    pendingSmall = false;
   }
 
   function flushBar(position: number): void {
@@ -151,7 +152,6 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
     fermata = false;
     repeatPreviousBar = false;
     repeatPreviousTwoBars = false;
-    pendingSmall = false;
     pendingAlternative = undefined;
     barPosition = position;
   }
@@ -164,17 +164,17 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
           report(ctx, `Unparsable chord in iReal Pro grid text: '${token.lexeme}'`, token.lexeme, token.position);
           break;
         }
-        pushCell({ kind: "chord", chord, small: pendingSmall });
+        pushCell({ kind: "chord", chord, small });
         break;
       }
       case GridTT.NO_CHORD:
-        pushCell({ kind: "noChord", small: pendingSmall });
+        pushCell({ kind: "noChord", small });
         break;
       case GridTT.SAME_CHORD:
-        pushCell({ kind: "sameChord", small: pendingSmall });
+        pushCell({ kind: "sameChord", small });
         break;
       case GridTT.SAME_CHORD_WITH_BASS:
-        pushCell({ kind: "sameChordWithBass", bass: sameChordBass(token.lexeme), small: pendingSmall });
+        pushCell({ kind: "sameChordWithBass", bass: sameChordBass(token.lexeme), small });
         break;
       case GridTT.REPEAT_ONE_BAR:
         // A repeat marker is a statement about a whole bar, so one sharing
@@ -183,7 +183,7 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
         // here, and the condition is reported either way.
         if (cells.length > 0) {
           report(ctx, "A repeat-previous-bar cell shares its bar with chord cells; read as a repeat of the previous cell", token.lexeme, token.position);
-          pushCell({ kind: "sameChord", small: pendingSmall });
+          pushCell({ kind: "sameChord", small });
         } else {
           repeatPreviousBar = true;
           slot++;
@@ -192,7 +192,7 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
       case GridTT.REPEAT_TWO_BARS:
         if (cells.length > 0) {
           report(ctx, "A repeat-previous-two-bars cell shares its bar with chord cells; read as a repeat of the previous cell", token.lexeme, token.position);
-          pushCell({ kind: "sameChord", small: pendingSmall });
+          pushCell({ kind: "sameChord", small });
         } else {
           repeatPreviousTwoBars = true;
           slot++;
@@ -215,7 +215,10 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
         fermata = true;
         break;
       case GridTT.SMALL:
-        pendingSmall = true;
+        small = true;
+        break;
+      case GridTT.LAYOUT:
+        small = false;
         break;
       case GridTT.BAR:
         flushBar(token.position + token.lexeme.length);
@@ -274,11 +277,10 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
         // nothing is what lost that.
         slot += token.lexeme.length;
         break;
-      case GridTT.LAYOUT:
       case GridTT.SPACER:
       case GridTT.UNKNOWN:
-        // A size marker and a vertical spacer say nothing about position,
-        // and an unknown character was already reported by the scanner.
+        // A vertical spacer says nothing about position, and an unknown
+        // character was already reported by the scanner.
         break;
     }
   }

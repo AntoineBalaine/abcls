@@ -56,10 +56,12 @@ describe("iReal grid parser", () => {
       expect(barTexts(chart.sections[0].bars)).to.deep.equal(["D-7", "G7"]);
     });
 
-    it("marks the cell after `s` as cue sized, and only that cell", () => {
-      const { chart } = parse("sC^7 D-7 |");
+    it("marks the cells after `s` as cue sized, until an `l` marker", () => {
+      // The protocol says `s` makes the chords that follow it small and `l`
+      // restores the normal size, so `s` alone does not stop at one cell.
+      const { chart } = parse("sC^7 D-7 lG7 |");
       const cells = chart.sections[0].bars[0].cells;
-      expect(cells.map((c) => c.small)).to.deep.equal([true, false]);
+      expect(cells.map((c) => c.small)).to.deep.equal([true, true, false]);
     });
 
     it("records a fermata on its bar", () => {
@@ -88,6 +90,21 @@ describe("iReal grid parser", () => {
       const bars = chart.sections[0].bars;
       expect(bars.map((bar) => bar.cellCount)).to.deep.equal([4, 4, 4]);
       expect(bars[2].cells.map((cell) => cell.slot)).to.deep.equal([0, 2, 3]);
+    });
+  });
+
+  describe("small chords", () => {
+    it("keeps chords small from an `s` marker until an `l` marker, across barlines", () => {
+      // From 9.20 Special: the four chords after `s` are all small, and so
+      // is the bar after them, until `l` restores the normal size.
+      const { chart } = parse("C,   |sC7,B7,Bb7,A7|D9   |lG7   |");
+      const bars = chart.sections[0].bars;
+      expect(bars.map((bar) => bar.cells.map((cell) => cell.small))).to.deep.equal([
+        [false],
+        [true, true, true, true],
+        [true],
+        [false],
+      ]);
     });
   });
 
