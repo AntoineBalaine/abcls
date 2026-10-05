@@ -1,6 +1,6 @@
 {
   "name": "abcls-midi",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",

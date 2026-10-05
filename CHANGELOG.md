@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.15 (2026-10-05)
+
+### ireal
+
+- write a chart back out as iReal Pro grid text
+- export an iReal Pro link from ABCx with the chart's structure intact
+- keep the cell a chord was written on, rather than dropping the padding
+- do not count a comma as a cell, so that `D9,   |` is four cells wide rather than five
+- keep chords small from `s` until `l`, rather than only the chord after `s`
+- delete the ABCx conversion path
+
 ## 0.1.14 (2026-10-04)
 
 ### chordShorthand
