@@ -6,9 +6,6 @@
     "abcls-kak-install": "./dist/install.js",
     "abcls-kak-client": "./dist/abc-kak-client.js"
   },
-  "dependencies": {
-    "abcls": "^0.1.0"
-  },
   "engines": {
     "node": ">=20.0.0"
   },

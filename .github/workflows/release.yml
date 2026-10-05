@@ -23,41 +23,54 @@ jobs:
       - run: npm run build:ci
       - run: npm test
 
-  publish-npm:
+  publish-release:
     needs: build-and-test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
           cache: "npm"
-          registry-url: "https://registry.npmjs.org"
       - run: npm install
       # Build the monorepo (esbuild needs compiled output)
       - run: npm run build:ci
 
-      # Publish abcls (CLI + LSP server)
+      # Pack abcls-parser (standalone parser package, already built by build:ci above)
+      - name: Pack abcls-parser
+        run: cd parse && npm pack
+
+      # Pack abcls (CLI + LSP server)
       - name: Build abcls package
         run: bash abc-cli/publish.sh
-      - name: Publish abcls
-        run: cd abc-cli/dist && npm publish || echo "Version already published, skipping"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Pack abcls
+        run: cd abc-cli/dist && npm pack
 
-      # Publish abcls-kak (Kakoune plugin)
+      # Pack abcls-kak (Kakoune plugin)
       - name: Build abcls-kak package
         run: bash abc-kak/publish.sh
-      - name: Publish abcls-kak
-        run: cd abc-kak/publish-dist && npm publish || echo "Version already published, skipping"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Pack abcls-kak
+        run: cd abc-kak/publish-dist && npm pack
 
-      # Publish abcls-parser (standalone parser package, already built by build:ci above)
-      - name: Publish abcls-parser
-        run: cd parse && npm publish || echo "Version already published, skipping"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Collect tarballs, plus a fixed-name copy of each so
+      # .../releases/latest/download/<name>-latest.tgz always resolves to the newest release.
+      - name: Collect release assets
+        run: |
+          mkdir -p release-assets
+          cp parse/abcls-parser-*.tgz release-assets/
+          cp parse/abcls-parser-*.tgz release-assets/abcls-parser-latest.tgz
+          cp abc-cli/dist/abcls-*.tgz release-assets/
+          cp abc-cli/dist/abcls-*.tgz release-assets/abcls-latest.tgz
+          cp abc-kak/publish-dist/abcls-kak-*.tgz release-assets/
+          cp abc-kak/publish-dist/abcls-kak-*.tgz release-assets/abcls-kak-latest.tgz
+
+      - name: Create GitHub Release with tarball assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*.tgz
+          generate_release_notes: true
 
   publish-vscode:
     needs: build-and-test
