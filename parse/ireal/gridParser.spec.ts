@@ -80,6 +80,17 @@ describe("iReal grid parser", () => {
     });
   });
 
+  describe("cell positions", () => {
+    it("does not count a comma as a cell, because it only separates two chords", () => {
+      // From 9.20 Special: each bar is one chord and three spaces, four cells
+      // in all, so that four of them fill iReal Pro's sixteen cell row.
+      const { chart } = parse("D9,   |sC7,B7,Bb7,A7|G7, sAb7,G7|");
+      const bars = chart.sections[0].bars;
+      expect(bars.map((bar) => bar.cellCount)).to.deep.equal([4, 4, 4]);
+      expect(bars[2].cells.map((cell) => cell.slot)).to.deep.equal([0, 2, 3]);
+    });
+  });
+
   describe("resolution: a bar that repeats the bar before it", () => {
     it("takes a copy of the preceding bar's cells", () => {
       const { chart, errors } = parse("C^7 A-7 |x |");

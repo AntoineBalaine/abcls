@@ -86,7 +86,8 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
   let cells: Cell[] = [];
   // Where the next cell sits, and how wide the bar has been so far. iReal
   // Pro writes a bar as a run of cells and pads the empty ones, so a space
-  // or a comma advances the position without holding anything.
+  // advances the position without holding anything, while a comma, which
+  // only separates two chords, does not advance it.
   let slot = 0;
   let annotations: Annotation[] = [];
   let fermata = false;
@@ -262,12 +263,13 @@ function collectMarkers(tokens: GridToken[], ctx: ABCContext): Marker[] {
         markers.push({ kind: "partMarker", position: token.position });
         break;
       case GridTT.PAD:
-        // A comma holds an empty cell, so it moves the position on without
-        // putting anything in it.
-        slot++;
+        // A comma only separates two chords and takes no cell of its own:
+        // the protocol says it separates chords "without adding empty
+        // cells". Because counting it as a cell made `D9,   |` five cells
+        // wide, rows of four such bars overflowed iReal Pro's sixteen.
         break;
       case GridTT.WHITESPACE:
-        // So does a space, one cell per character. This is the padding
+        // A space holds an empty cell, one cell per character. This is the padding
         // that says where in the bar a chord falls, and reading it as
         // nothing is what lost that.
         slot += token.lexeme.length;
