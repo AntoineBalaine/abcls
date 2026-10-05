@@ -43,14 +43,8 @@ export * from "./music-theory";
 // Reading an iReal Pro chart: link fields, then the grid language itself
 // through its scanner, parser and layout. These are what a consumer that
 // renders a chart uses, so that no stage after the parser has to recover
-// structure from a string.
-//
-// The ABCx conversion in `ireal/importFromIreal.ts` is deliberately not
-// exported. Nothing consumes it: the application it was written for now
-// reads charts through the scanner and parser below, and
-// `ireal/exportToIreal.ts`'s link writer never had a consumer at all.
-// Advertising either from the package root would claim a supported API for
-// code nobody calls, which is also code whose defects nobody finds.
+// structure from a string. `exportAbcxToIrealLink` is the other direction,
+// ABCx source to a link, and is the one entry point that work exposes.
 //
 // Every tree type carries an `Ireal` prefix. A bare `Annotation` collided
 // with the ABC annotation expression of the same name, and because an
@@ -89,3 +83,4 @@ export type {
   LayoutOptions,
 } from "./ireal/gridLayout";
 export { parseIrealKey } from "./ireal/keyField";
+export { exportAbcxToIrealLink } from "./ireal/exportToIreal";

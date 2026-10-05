@@ -328,3 +328,42 @@ tree assembled by hand or read out of ABCx.
 compares the chord rather than the text, because comparing the text is
 exactly the mistake that let this through the first time. The writer runs it
 over every chord it writes and reports any that fails.
+
+## ABCx has no decoration syntax, so a segno is a quoted annotation
+
+Measured rather than assumed, which is what the plan asked for. Both of
+ABC's decoration spellings fail in ABCx: `!segno!` and `+segno+` each scan
+into an error node followed by the letters read as separate chord symbols,
+with no error reported, so `!segno! C` yields chords named `e`, `g` and
+`C`. A quoted annotation parses cleanly and is what the export uses, so a
+segno is written `"^segno"` and a coda `"^coda"`.
+
+The cost is that an annotation whose whole text is one of those two words
+is read as the marker rather than as text to print. An annotation that
+merely contains the word is left alone, which is the common case: "to coda
+now" stays an annotation.
+
+iReal Pro's `U` part marker has no ABCx spelling and the export never
+produces one. The writer can still emit it from a tree that holds one,
+which is how a chart read from a link keeps its part markers.
+
+## Two chord spellings lose content in the ABCx scanner, upstream of this module
+
+Both found while testing the ABCx reader, and neither is detectable in it,
+since each fragment scans as a complete chord on its own.
+
+A capitalised quality splits the symbol. `BbMaj7` is scanned as two chord
+symbols, `BbM` and `a`, because `M` is a quality the ABCx chord pattern
+accepts and `aj7` then begins a new symbol with the lowercase root `a`. The
+result is two chords where the source wrote one, and nothing is reported.
+Writing the quality in lower case, `Bbmaj7`, scans as one symbol.
+
+A suspension after an extension is truncated. `C7sus4` is scanned as `C7`
+alone, and `C13sus4` as `C13`, because `pChordSymbol` puts the quality
+before the digits and so cannot match a quality that follows them. The
+`sus4` is dropped silently. This repo's own ABCx writer already works
+around it from the other side, spelling a sus chord quality first
+(`Csus47`), which is recorded in `chordShorthand.ts`.
+
+Fixing either means changing `pChordSymbol` and `scanChordSymbol`, which
+every ABCx consumer shares, so neither is changed here.
