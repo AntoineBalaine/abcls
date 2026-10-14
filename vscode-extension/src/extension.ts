@@ -10,6 +10,7 @@ import { registerCommands } from "./extensionCommands";
 import { registerRendererCommands, setLspClient } from "./renderer";
 import { registerSelectorCommands } from "./selectorCommands";
 import { registerTransformCommands } from "./transformCommands";
+import { registerUriHandler } from "./uriHandler";
 
 let client: LanguageClient;
 
@@ -64,6 +65,9 @@ export async function activate(context: ExtensionContext) {
 
   // register renderer commands (preview, export, print)
   registerRendererCommands(context);
+
+  // let outside programs open a score and its preview through vscode:// links
+  registerUriHandler(context);
 
   // register playback commands (play, stop, pause) only if experimental playback is enabled
   if (playbackEnabled) {

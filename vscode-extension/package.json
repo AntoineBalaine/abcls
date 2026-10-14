@@ -14,7 +14,8 @@
   "license": "GPL-3.0-or-later",
   "icon": "assets/trebleclef_abc.png",
   "activationEvents": [
-    "onLanguage:abc"
+    "onLanguage:abc",
+    "onUri"
   ],
   "main": "./dist/extension.js",
   "contributes": {
