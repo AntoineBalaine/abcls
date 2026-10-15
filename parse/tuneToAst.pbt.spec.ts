@@ -1,3 +1,4 @@
+import * as abcjs from "abcjs";
 import { expect } from "chai";
 import * as fc from "fast-check";
 import { SemanticAnalyzer } from "./analyzers/semantic-analyzer";
@@ -6,9 +7,24 @@ import { ABCContext } from "./parsers/Context";
 import { AbcErrorReporter } from "./parsers/ErrorReporter";
 import { parse } from "./parsers/parse";
 import { Scanner } from "./parsers/scan";
+import { Token } from "./parsers/scan";
+import { tuneToAbcText, tuneToAst } from "./tuneToAst";
+import {
+  BarElement,
+  ElementType,
+  KeyAccidental,
+  KeyRoot,
+  MediaType,
+  MeterType,
+  Mode,
+  NoteElement,
+  Pitch,
+  RestType,
+  Tune,
+  VoiceElement,
+} from "./types/abcjs-ast";
+import { BarLine, Beam, Chord, Note, Rest } from "./types/Expr";
 import { createRational } from "./Visitors/fmt/rational";
-import { BarElement, ElementType, KeyAccidental, KeyRoot, MediaType, MeterType, Mode, NoteElement, Pitch, RestType, Tune, VoiceElement } from "./types/abcjs-ast";
-import { tuneToAbcText } from "./tuneToAst";
 
 /**
  * The same makeTune shape parse/musicxml/normalize.pbt.spec.ts already uses,
@@ -91,15 +107,15 @@ const noteArb: fc.Arbitrary<NoteElement> = fc
     };
   });
 
-const restArb: fc.Arbitrary<NoteElement> = fc
-  .record({ numerator: fc.integer({ min: 1, max: 3 }), denominator: denominatorArb })
-  .map(({ numerator, denominator }): NoteElement => ({
+const restArb: fc.Arbitrary<NoteElement> = fc.record({ numerator: fc.integer({ min: 1, max: 3 }), denominator: denominatorArb }).map(
+  ({ numerator, denominator }): NoteElement => ({
     el_type: ElementType.Note,
     startChar: 0,
     endChar: 0,
     duration: createRational(numerator, denominator),
     rest: { type: RestType.Rest },
-  }));
+  })
+);
 
 const barArb: fc.Arbitrary<BarElement> = fc.constant({
   el_type: ElementType.Bar,
@@ -108,7 +124,11 @@ const barArb: fc.Arbitrary<BarElement> = fc.constant({
   type: "bar_thin" as never,
 });
 
-const voiceElementArb: fc.Arbitrary<VoiceElement> = fc.oneof({ arbitrary: noteArb, weight: 3 }, { arbitrary: restArb, weight: 1 }, { arbitrary: barArb, weight: 1 });
+const voiceElementArb: fc.Arbitrary<VoiceElement> = fc.oneof(
+  { arbitrary: noteArb, weight: 3 },
+  { arbitrary: restArb, weight: 1 },
+  { arbitrary: barArb, weight: 1 }
+);
 
 describe("tuneToAbcText property-based round trip", () => {
   it("always produces ABC text that reparses successfully and preserves pitch and duration for arbitrary well-formed Tune objects", () => {
@@ -145,6 +165,114 @@ describe("tuneToAbcText property-based round trip", () => {
           const originalDuration = original.duration.numerator / original.duration.denominator;
           const reparsedDuration = reparsedNote.duration.numerator / reparsedNote.duration.denominator;
           expect(reparsedDuration).to.be.closeTo(originalDuration, 1e-9);
+        }
+      }),
+      { numRuns: 100 }
+    );
+  });
+});
+
+/**
+ * Beam groups for the beaming properties. Because the interpreter only
+ * beams notes shorter than a quarter, groups are made of eighths, and the
+ * unbeamed items are quarters or lone eighths.
+ */
+type BeamItem = { kind: "group"; pitches: number[] } | { kind: "quarter"; pitch: number } | { kind: "eighth"; pitch: number };
+
+const beamItemArb: fc.Arbitrary<BeamItem> = fc.oneof(
+  fc.array(pitchNumberArb, { minLength: 2, maxLength: 4 }).map((pitches): BeamItem => ({ kind: "group", pitches })),
+  pitchNumberArb.map((pitch): BeamItem => ({ kind: "quarter", pitch })),
+  pitchNumberArb.map((pitch): BeamItem => ({ kind: "eighth", pitch }))
+);
+
+function plainNote(pitch: number, denominator: number): NoteElement {
+  return { el_type: ElementType.Note, startChar: 0, endChar: 0, duration: createRational(1, denominator), pitches: [{ pitch, name: "", verticalPos: pitch }] };
+}
+
+function beamItemsToElements(measures: BeamItem[][]): VoiceElement[] {
+  const out: VoiceElement[] = [];
+  for (const items of measures) {
+    for (const item of items) {
+      if (item.kind === "quarter") out.push(plainNote(item.pitch, 4));
+      else if (item.kind === "eighth") out.push(plainNote(item.pitch, 8));
+      else {
+        item.pitches.forEach((pitch, i) => {
+          const element = plainNote(pitch, 8);
+          if (i === 0) element.startBeam = true;
+          if (i === item.pitches.length - 1) element.endBeam = true;
+          out.push(element);
+        });
+      }
+    }
+    out.push({ el_type: ElementType.Bar, startChar: 0, endChar: 0, type: "bar_thin" as never });
+  }
+  return out;
+}
+
+/**
+ * Reads the beam flags that abcjs assigns to the notes of an ABC string.
+ * Because the abcls interpreter currently beams eighth notes across spaces
+ * (a known interpreter bug, outside the scope of the import work), abcjs,
+ * the renderer the output is meant for, is the reference here.
+ */
+function abcjsBeamSignature(abc: string): string[] {
+  const tune = abcjs.parseOnly(abc)[0] as unknown as {
+    lines: Array<{ staff?: Array<{ voices: Array<Array<{ el_type: string; startBeam?: boolean; endBeam?: boolean }>> }> }>;
+  };
+  const flags: Array<{ startBeam?: boolean; endBeam?: boolean }> = [];
+  for (const line of tune.lines) {
+    for (const staff of line.staff ?? []) {
+      for (const voice of staff.voices) {
+        for (const element of voice) if (element.el_type === "note") flags.push(element);
+      }
+    }
+  }
+  return flags.map((n, i) => `${i}:${n.startBeam ? "s" : ""}${n.endBeam ? "e" : ""}`).filter((s) => !s.endsWith(":"));
+}
+
+function beamSignature(elements: VoiceElement[]): string[] {
+  return elements
+    .filter((e): e is NoteElement => e.el_type === ElementType.Note)
+    .map((n, i) => `${i}:${n.startBeam ? "s" : ""}${n.endBeam ? "e" : ""}`)
+    .filter((s) => !s.endsWith(":"));
+}
+
+function collectBeams(node: unknown, out: Beam[]): void {
+  if (node instanceof Beam) out.push(node);
+  if (Array.isArray(node)) {
+    for (const child of node) collectBeams(child, out);
+  } else if (node && typeof node === "object" && !(node instanceof Token)) {
+    for (const value of Object.values(node)) {
+      if (value && typeof value === "object") collectBeams(value, out);
+    }
+  }
+}
+
+const beamMeasuresArb = fc.array(fc.array(beamItemArb, { minLength: 1, maxLength: 4 }), { minLength: 1, maxLength: 4 });
+
+describe("tuneToAbcText beaming properties", () => {
+  it("preserves the beam flags through a text round trip read by abcjs", () => {
+    fc.assert(
+      fc.property(beamMeasuresArb, (measures) => {
+        const elements = beamItemsToElements(measures);
+        const text = tuneToAbcText(makeTune(elements), new ABCContext(new AbcErrorReporter()));
+        expect(abcjsBeamSignature(text), text).to.deep.equal(beamSignature(elements));
+      }),
+      { numRuns: 100 }
+    );
+  });
+
+  it("never puts a bar line, a rest, or fewer than two notes inside a Beam", () => {
+    fc.assert(
+      fc.property(beamMeasuresArb, fc.array(restArb, { maxLength: 3 }), (measures, rests) => {
+        const elements = beamItemsToElements(measures);
+        // Because rests must close a group, a few rests are inserted at random positions.
+        rests.forEach((rest, i) => elements.splice((i * 7) % (elements.length + 1), 0, rest));
+        const beams: Beam[] = [];
+        collectBeams(tuneToAst(makeTune(elements), new ABCContext()), beams);
+        for (const beam of beams) {
+          expect(beam.contents.some((c) => c instanceof BarLine || c instanceof Rest)).to.equal(false);
+          expect(beam.contents.filter((c) => c instanceof Note || c instanceof Chord).length).to.be.greaterThan(1);
         }
       }),
       { numRuns: 100 }

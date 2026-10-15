@@ -332,6 +332,35 @@ function applyTupletInfo(element: NoteElement, note: OsmdNote): void {
   }
 }
 
+/**
+ * Marks the first and last element of a beam group. Because ABC cannot beam
+ * across a bar line, a beam that crosses one is split at each measure
+ * boundary, and a segment of a single note gets no flags at all. Every note
+ * of a chord shares the beam, so the chord's first note is enough.
+ */
+function applyBeamFlags(element: NoteElement, note: OsmdNote): void {
+  const beam = note.NoteBeam;
+  if (!beam || note.isRest()) return;
+  // Because a beam may list every note of a chord, the members are reduced
+  // to one note per voice entry (the entry's first note) before comparing.
+  const members: OsmdNote[] = [];
+  for (const member of beam.Notes) {
+    const entry = member.ParentVoiceEntry;
+    if (member.isRest() || entry?.IsGrace) continue;
+    const representative = entry?.Notes[0] ?? member;
+    if (!members.includes(representative)) members.push(representative);
+  }
+  const index = members.indexOf(note);
+  if (index === -1 || members.length < 2) return;
+  const previous = members[index - 1];
+  const next = members[index + 1];
+  const startsSegment = !previous || previous.SourceMeasure !== note.SourceMeasure;
+  const endsSegment = !next || next.SourceMeasure !== note.SourceMeasure;
+  if (startsSegment && endsSegment) return;
+  if (startsSegment) element.startBeam = true;
+  if (endsSegment) element.endBeam = true;
+}
+
 interface StaffAccumulator {
   osmdStaff: OsmdStaff;
   instrument: Instrument;
@@ -448,6 +477,7 @@ function pushNoteOrGraceForVoiceEntry(
     decoration,
   };
   applyTupletInfo(element, notes[0]);
+  applyBeamFlags(element, notes[0]);
   const pending = acc.pendingGraceNotes[voiceIndex];
   if (pending.length > 0) {
     element.gracenotes = pending;
@@ -688,13 +718,15 @@ export function importFromMusicSheet(sheet: MusicSheet): Tune {
 
   // Because a staff whose voices all lack pitched notes would render as an
   // empty staff, it is removed together with its voices. An all-rest score
-  // still keeps its first staff, so that the result remains a valid tune.
+  // still keeps the first voice of its first staff, so that the result
+  // remains a valid tune.
   const keptByStaff = allAccumulators.map(pitchedVoiceIndices);
   let accumulators = allAccumulators.filter((_, i) => keptByStaff[i].length > 0);
   let flat = allFlat.filter((_, i) => keptByStaff[i].length > 0);
   if (accumulators.length === 0 && allAccumulators.length > 0) {
     accumulators = [allAccumulators[0]];
     flat = [allFlat[0]];
+    if (allAccumulators[0].voices.length > 0) filterVoices(allAccumulators[0], [0]);
   } else {
     allAccumulators.forEach((acc, i) => {
       if (keptByStaff[i].length > 0) filterVoices(acc, keptByStaff[i]);

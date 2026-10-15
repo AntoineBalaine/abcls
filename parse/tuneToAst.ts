@@ -1,26 +1,6 @@
 import { ABCContext } from "./parsers/Context";
 import { Token, TT } from "./parsers/scan";
 import {
-  BarLine,
-  Chord,
-  Decoration,
-  Grace_group,
-  Info_line,
-  MultiMeasureRest,
-  Note,
-  Pitch as PitchExpr,
-  Rest,
-  Rhythm,
-  Tune as TuneExpr,
-  Tune_Body,
-  Tune_header,
-  Tuplet,
-  music_code,
-  tune_body_code,
-} from "./types/Expr";
-import { AbcFormatter } from "./Visitors/Formatter";
-import { createRational, divideRational, IRational, rationalToRhythmExpr } from "./Visitors/fmt/rational";
-import {
   AccidentalType,
   BarElement,
   Decorations,
@@ -38,6 +18,28 @@ import {
   Tune,
   VoiceElement,
 } from "./types/abcjs-ast";
+import {
+  BarLine,
+  Beam,
+  Beam_contents,
+  Chord,
+  Decoration,
+  Grace_group,
+  Info_line,
+  MultiMeasureRest,
+  Note,
+  Pitch as PitchExpr,
+  Rest,
+  Rhythm,
+  Tune as TuneExpr,
+  Tune_Body,
+  Tune_header,
+  Tuplet,
+  music_code,
+  tune_body_code,
+} from "./types/Expr";
+import { createRational, divideRational, IRational, rationalToRhythmExpr } from "./Visitors/fmt/rational";
+import { AbcFormatter } from "./Visitors/Formatter";
 
 /**
  * Default note length reconstruction always uses. Because a Tune object
@@ -305,22 +307,71 @@ function firstStaffOf(tune: Tune): { key: KeySignature; meter?: Meter } | null {
   return null;
 }
 
+/**
+ * The beam group being collected by buildVoiceBody. Because the formatter
+ * only writes notes without separating spaces when they sit inside a Beam
+ * expression, a flagged run of notes is gathered here and wrapped at the end.
+ */
+interface BeamRunContext {
+  run: music_code[];
+  noteCount: number;
+  open: boolean;
+}
+
+/**
+ * Emits the collected run: as a Beam when it holds at least two notes,
+ * otherwise as plain elements, since a beam needs two notes. Resets the run.
+ */
+function flushBeamRun(ctx: ABCContext, beamRun: BeamRunContext, out: music_code[]): void {
+  if (beamRun.noteCount >= 2) {
+    out.push(new Beam(ctx.generateId(), beamRun.run as Beam_contents[]));
+  } else {
+    out.push(...beamRun.run);
+  }
+  beamRun.run = [];
+  beamRun.noteCount = 0;
+  beamRun.open = false;
+}
+
 function buildVoiceBody(ctx: ABCContext, elements: VoiceElement[], defaultLength: IRational): music_code[] {
   const out: music_code[] = [];
   const openSlurs: OpenSlur[] = [];
+  const beamRun: BeamRunContext = { run: [], noteCount: 0, open: false };
   for (const element of elements) {
     if (isBarElement(element)) {
+      flushBeamRun(ctx, beamRun, out);
       const barElement = element as BarElement;
       out.push(new BarLine(ctx.generateId(), [synth_barlineToken(ctx, barElement)]));
       continue;
     }
     if (element.el_type === ElementType.Note) {
-      out.push(...noteElementToMusicCode(ctx, element as NoteElement, defaultLength, openSlurs));
+      const noteElement = element as NoteElement;
+      const code = noteElementToMusicCode(ctx, noteElement, defaultLength, openSlurs);
+      // Because Rest is not a valid Beam content, a rest always closes the run.
+      if (noteElement.rest) {
+        flushBeamRun(ctx, beamRun, out);
+        out.push(...code);
+        continue;
+      }
+      if (noteElement.startBeam) {
+        flushBeamRun(ctx, beamRun, out);
+        beamRun.open = true;
+      }
+      if (beamRun.open) {
+        beamRun.run.push(...code);
+        beamRun.noteCount += 1;
+        if (noteElement.endBeam) flushBeamRun(ctx, beamRun, out);
+      } else {
+        out.push(...code);
+      }
+      continue;
     }
+    flushBeamRun(ctx, beamRun, out);
     // Clef/Key/Meter/Tempo mid-body elements are not reconstructed as inline
     // fields in this version; the tune-level K:/M: header lines emitted from
     // the first staff's values cover the common case.
   }
+  flushBeamRun(ctx, beamRun, out);
   return out;
 }
 
