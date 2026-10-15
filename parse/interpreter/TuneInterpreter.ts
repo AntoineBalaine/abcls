@@ -305,6 +305,9 @@ function calculateRhythm(
  * Based on abcjs beaming algorithm:
  * - Notes with duration < 0.25 can be beamed
  * - Beams break on: quarter notes, rests, bars, whitespace
+ * - Whitespace is known through the parser: notes written without spaces
+ *   between them are grouped into a Beam expression, so a note outside a
+ *   Beam expression stands alone
  * - Track potentialStartBeam and potentialEndBeam per voice
  */
 
@@ -337,8 +340,16 @@ function endBeamGroup(voiceState: VoiceState): void {
  * Because beaming needs to be determined after each note is created,
  * we call this after creating each note element.
  */
-function processBeaming(noteElement: NoteElement, voiceState: VoiceState, isRest: boolean): void {
+function processBeaming(noteElement: NoteElement, voiceState: VoiceState, isRest: boolean, insideBeamExpr: boolean): void {
   const duration = noteElement.duration;
+
+  // Because the parser only groups notes that are written without spaces
+  // into a Beam expression, a note outside one is separated by whitespace
+  // and can never be part of a beam group.
+  if (!insideBeamExpr) {
+    endBeamGroup(voiceState);
+    return;
+  }
 
   // Beam breaks on:
   // 1. Quarter notes or longer (duration >= 1/4)
@@ -1096,6 +1107,11 @@ export class TuneInterpreter implements Visitor<void> {
   // Processing context tracking
   processingContext: "file_header" | "tune_header" | "tune_body" = "file_header";
 
+  // Number of Beam expressions currently being visited. Because the parser
+  // only creates a Beam expression for notes written without spaces, notes
+  // visited at depth 0 are separated by whitespace and are never beamed.
+  beamExprDepth = 0;
+
   private sourceText: string = "";
   private lineOffsets: number[] = [];
 
@@ -1464,7 +1480,7 @@ export class TuneInterpreter implements Visitor<void> {
       // Process tuplets (before beaming, as tuplets affect note grouping)
       applyTuplet(element, voiceState);
 
-      processBeaming(element, voiceState, false); // false = not a rest
+      processBeaming(element, voiceState, false, this.beamExprDepth > 0); // false = not a rest
 
       // Process slurs
       if (element.pitches) {
@@ -1547,7 +1563,7 @@ export class TuneInterpreter implements Visitor<void> {
 
     // Process beaming for this rest (beams break on rests, voiceState already retrieved above)
     if (voiceState) {
-      processBeaming(element, voiceState, true); // true = is a rest
+      processBeaming(element, voiceState, true, this.beamExprDepth > 0); // true = is a rest
     }
   }
 
@@ -1617,7 +1633,7 @@ export class TuneInterpreter implements Visitor<void> {
       // Process tuplets (before beaming, as tuplets affect note grouping)
       applyTuplet(element, voiceState);
 
-      processBeaming(element, voiceState, false); // false = not a rest
+      processBeaming(element, voiceState, false, this.beamExprDepth > 0); // false = not a rest
 
       // Process slurs
       if (element.pitches) {
@@ -1986,9 +2002,11 @@ export class TuneInterpreter implements Visitor<void> {
 
     // The beaming will be handled automatically by processBeaming()
     // as we visit each note/chord/rest within the beam
+    this.beamExprDepth++;
     for (const content of expr.contents) {
       content.accept(this);
     }
+    this.beamExprDepth--;
 
     // After visiting all notes in the beam, check if we need to end the current beam group
     // (in case the user's beam ends but we have a valid beam group running)
