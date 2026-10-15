@@ -28,6 +28,7 @@ import {
   OrnamentEnum,
   Tuplet as OsmdTuplet,
 } from "opensheetmusicdisplay";
+import { createEmptyTune } from "../interpreter/InterpreterState";
 import {
   Tune,
   Staff,
@@ -53,9 +54,9 @@ import {
   Pitch as TunePitch,
   GraceNote,
   BarType,
+  isBarElement,
 } from "../types/abcjs-ast";
-import { IRational, createRational } from "../Visitors/fmt/rational";
-import { createEmptyTune } from "../interpreter/InterpreterState";
+import { IRational, addRational, createRational, greaterRational, subtractRational } from "../Visitors/fmt/rational";
 import { INVERSE_ARTICULATION_MAP, INVERSE_ORNAMENT_MAP } from "./decorationMap";
 import { UnsupportedMusicXmlFeatureError } from "./importErrors";
 
@@ -204,7 +205,8 @@ function keyInstructionToSignature(key: KeyInstruction): KeySignature {
 function rhythmInstructionToMeter(rhythm: RhythmInstruction): Meter {
   const beats = rhythm.Rhythm.Numerator;
   const beatType = rhythm.Rhythm.Denominator;
-  const type = rhythm.SymbolEnum === RhythmSymbolEnum.COMMON ? MeterType.CommonTime : rhythm.SymbolEnum === RhythmSymbolEnum.CUT ? MeterType.CutTime : MeterType.Specified;
+  const type =
+    rhythm.SymbolEnum === RhythmSymbolEnum.COMMON ? MeterType.CommonTime : rhythm.SymbolEnum === RhythmSymbolEnum.CUT ? MeterType.CutTime : MeterType.Specified;
   return { type, value: [createRational(beats, beatType)] };
 }
 
@@ -336,6 +338,30 @@ interface StaffAccumulator {
   voices: OsmdVoice[];
   elementsByVoice: VoiceElement[][];
   pendingGraceNotes: GraceNote[][];
+  /**
+   * Because voices can later be dropped and sliced into systems by measure,
+   * each voice's elements are recorded per measure:
+   * measuresByVoice[voiceIndex][measureIndex] is that measure's element list.
+   * elementsByVoice is only derived from it by flattenAccumulator.
+   */
+  measuresByVoice: VoiceElement[][][];
+  /**
+   * Because MusicXML attaches clefs, keys and meters to a staff rather than
+   * to a voice, they are stored per measure and inserted into the voices
+   * when flattening, so that dropping a voice never loses them.
+   */
+  attributesByMeasure: VoiceElement[][];
+}
+
+/**
+ * Per-measure timing state of one staff. Because OSMD only reports the
+ * entries that exist, the cursor is what reveals the silent stretches that
+ * need padding rests.
+ */
+interface MeasureCursorContext {
+  measureLength: IRational;
+  cursorByVoice: IRational[];
+  hadEntryByVoice: boolean[];
 }
 
 function collectVoicesForStaff(sheet: MusicSheet, globalStaffIndex: number): OsmdVoice[] {
@@ -378,6 +404,7 @@ function convertMeasureAttributes(measure: SourceMeasure, globalStaffIndex: numb
 function pushNoteOrGraceForVoiceEntry(
   acc: StaffAccumulator,
   voiceIndex: number,
+  target: VoiceElement[],
   voiceEntry: VoiceEntry,
   slurAllocator: SlurLabelAllocator
 ): void {
@@ -405,7 +432,7 @@ function pushNoteOrGraceForVoiceEntry(
       duration,
       rest: { type: RestType.Rest },
     };
-    acc.elementsByVoice[voiceIndex].push(element);
+    target.push(element);
     return;
   }
 
@@ -426,7 +453,41 @@ function pushNoteOrGraceForVoiceEntry(
     element.gracenotes = pending;
     acc.pendingGraceNotes[voiceIndex] = [];
   }
-  acc.elementsByVoice[voiceIndex].push(element);
+  target.push(element);
+}
+
+/**
+ * Returns the length that every voice's content must fill in this measure.
+ * Because OSMD sets a measure's Duration from the position reached by the
+ * last voice it read, a measure whose last voice ends early (after a
+ * <backup>) reports a Duration shorter than its longest voice. The length is
+ * therefore the larger of Duration and the latest end of any non-grace entry
+ * across all staves, so that every staff agrees on it. A pickup (implicit)
+ * measure only uses the latest end, so that it is not padded into a full
+ * measure.
+ */
+function measureLengthFor(measure: SourceMeasure): IRational {
+  const nominal = fractionToRational(measure.Duration);
+  let latestEnd: IRational | null = null;
+  for (const container of measure.VerticalSourceStaffEntryContainers) {
+    for (const entry of container.StaffEntries) {
+      if (!entry) continue;
+      for (const voiceEntry of entry.VoiceEntries) {
+        if (voiceEntry.IsGrace || voiceEntry.Notes.length === 0) continue;
+        const end = addRational(fractionToRational(voiceEntry.Timestamp), fractionToRational(voiceEntry.Notes[0].Length));
+        if (latestEnd === null || greaterRational(end, latestEnd)) latestEnd = end;
+      }
+    }
+  }
+  if (latestEnd === null) return nominal;
+  if (measure.ImplicitMeasure) return latestEnd;
+  return greaterRational(latestEnd, nominal) ? latestEnd : nominal;
+}
+
+function pushGapRest(target: VoiceElement[], gap: IRational, type: RestType): void {
+  if (gap.numerator <= 0) return;
+  const rest: NoteElement = { el_type: ElementType.Note, startChar: 0, endChar: 0, duration: gap, rest: { type } };
+  target.push(rest);
 }
 
 function buildStaffAccumulator(sheet: MusicSheet, osmdStaff: OsmdStaff, instrument: Instrument, globalStaffIndex: number): StaffAccumulator {
@@ -437,37 +498,122 @@ function buildStaffAccumulator(sheet: MusicSheet, osmdStaff: OsmdStaff, instrume
     voices,
     elementsByVoice: voices.map(() => []),
     pendingGraceNotes: voices.map(() => []),
+    measuresByVoice: voices.map(() => []),
+    attributesByMeasure: [],
   };
   const slurAllocator = new SlurLabelAllocator();
 
   for (const measure of sheet.SourceMeasures) {
+    const measureLists: VoiceElement[][] = voices.map(() => []);
     if (measure.beginsWithLineRepetition()) {
-      for (let voiceIndex = 0; voiceIndex < voices.length; voiceIndex++) {
+      for (const list of measureLists) {
         const openRepeat: BarElement = { el_type: ElementType.Bar, startChar: 0, endChar: 0, type: BarType.BarLeftRepeat };
-        acc.elementsByVoice[voiceIndex].push(openRepeat);
+        list.push(openRepeat);
       }
     }
-    const attributeElements = convertMeasureAttributes(measure, globalStaffIndex);
-    if (attributeElements.length > 0 && acc.elementsByVoice.length > 0) {
-      acc.elementsByVoice[0].push(...attributeElements);
-    }
+    acc.attributesByMeasure.push(convertMeasureAttributes(measure, globalStaffIndex));
+
+    const cursor: MeasureCursorContext = {
+      measureLength: measureLengthFor(measure),
+      cursorByVoice: voices.map(() => createRational(0)),
+      hadEntryByVoice: voices.map(() => false),
+    };
     for (const container of measure.VerticalSourceStaffEntryContainers) {
       const entry = container.StaffEntries[globalStaffIndex];
       if (!entry) continue;
       for (const voiceEntry of entry.VoiceEntries) {
         const voiceIndex = voices.findIndex((v) => v.VoiceId === voiceEntry.ParentVoice.VoiceId);
         if (voiceIndex === -1) continue;
-        pushNoteOrGraceForVoiceEntry(acc, voiceIndex, voiceEntry, slurAllocator);
+        advanceCursorForEntry(cursor, voiceIndex, voiceEntry, measureLists[voiceIndex]);
+        pushNoteOrGraceForVoiceEntry(acc, voiceIndex, measureLists[voiceIndex], voiceEntry, slurAllocator);
       }
     }
+
     const closeType = measure.endsWithLineRepetition() ? BarType.BarRightRepeat : BarType.BarThin;
     for (let voiceIndex = 0; voiceIndex < voices.length; voiceIndex++) {
+      const list = measureLists[voiceIndex];
+      if (!cursor.hadEntryByVoice[voiceIndex]) {
+        pushGapRest(list, cursor.measureLength, RestType.Invisible);
+      } else {
+        pushGapRest(list, subtractRational(cursor.measureLength, cursor.cursorByVoice[voiceIndex]), RestType.Rest);
+      }
       const barElement: BarElement = { el_type: ElementType.Bar, startChar: 0, endChar: 0, type: closeType };
-      acc.elementsByVoice[voiceIndex].push(barElement);
+      list.push(barElement);
+      acc.measuresByVoice[voiceIndex].push(list);
     }
   }
 
   return acc;
+}
+
+/**
+ * Pads the silent stretch before a voice entry with a visible rest, then
+ * moves the voice's cursor to the end of the entry. Grace entries take no
+ * time, so they leave the cursor untouched. An entry that starts before the
+ * cursor (overlapping content, which OMR output can produce) is left as is.
+ */
+function advanceCursorForEntry(cursor: MeasureCursorContext, voiceIndex: number, voiceEntry: VoiceEntry, target: VoiceElement[]): void {
+  if (voiceEntry.IsGrace || voiceEntry.Notes.length === 0) return;
+  const start = fractionToRational(voiceEntry.Timestamp);
+  const current = cursor.cursorByVoice[voiceIndex];
+  if (greaterRational(start, current)) {
+    pushGapRest(target, subtractRational(start, current), RestType.Rest);
+  }
+  const end = addRational(start, fractionToRational(voiceEntry.Notes[0].Length));
+  cursor.cursorByVoice[voiceIndex] = greaterRational(end, current) ? end : current;
+  cursor.hadEntryByVoice[voiceIndex] = true;
+}
+
+function hasPitchedNote(measures: VoiceElement[][]): boolean {
+  for (const measure of measures) {
+    for (const element of measure) {
+      if (element.el_type === ElementType.Note && ((element as NoteElement).pitches?.length ?? 0) > 0) return true;
+    }
+  }
+  return false;
+}
+
+/** Returns the indices of the voices that contain at least one pitched note. */
+function pitchedVoiceIndices(acc: StaffAccumulator): number[] {
+  const keep: number[] = [];
+  acc.measuresByVoice.forEach((measures, voiceIndex) => {
+    if (hasPitchedNote(measures)) keep.push(voiceIndex);
+  });
+  return keep;
+}
+
+/** Keeps only the voices whose indices are listed in `keep`. */
+function filterVoices(acc: StaffAccumulator, keep: number[]): void {
+  acc.voices = keep.map((i) => acc.voices[i]);
+  acc.measuresByVoice = keep.map((i) => acc.measuresByVoice[i]);
+  acc.pendingGraceNotes = keep.map((i) => acc.pendingGraceNotes[i]);
+  acc.elementsByVoice = keep.map(() => []);
+}
+
+/**
+ * Builds one voice's element list for the measures in [fromMeasure, toMeasure).
+ * The staff's attribute elements go into voice 0 only, right after a leading
+ * left-repeat bar, because the left repeat belongs to the boundary before the
+ * measure while the attributes belong to the measure itself.
+ */
+function flattenMeasureRange(acc: StaffAccumulator, voiceIndex: number, fromMeasure: number, toMeasure: number): VoiceElement[] {
+  const out: VoiceElement[] = [];
+  const measures = acc.measuresByVoice[voiceIndex];
+  for (let m = fromMeasure; m < toMeasure && m < measures.length; m++) {
+    const list = measures[m];
+    const attributes = voiceIndex === 0 ? (acc.attributesByMeasure[m] ?? []) : [];
+    const startsWithLeftRepeat = list.length > 0 && isBarElement(list[0]) && (list[0] as BarElement).type === BarType.BarLeftRepeat;
+    if (startsWithLeftRepeat) {
+      out.push(list[0], ...attributes, ...list.slice(1));
+    } else {
+      out.push(...attributes, ...list);
+    }
+  }
+  return out;
+}
+
+function flattenAccumulator(acc: StaffAccumulator): void {
+  acc.elementsByVoice = acc.measuresByVoice.map((_, voiceIndex) => flattenMeasureRange(acc, voiceIndex, 0, acc.attributesByMeasure.length));
 }
 
 interface FlatStaffEntry {
@@ -537,8 +683,25 @@ function applyInstrumentGrouping(staves: Staff[], flat: FlatStaffEntry[]): void 
 }
 
 export function importFromMusicSheet(sheet: MusicSheet): Tune {
-  const flat = flattenStaves(sheet);
-  const accumulators = flat.map((entry, index) => buildStaffAccumulator(sheet, entry.osmdStaff, entry.instrument, index));
+  const allFlat = flattenStaves(sheet);
+  const allAccumulators = allFlat.map((entry, index) => buildStaffAccumulator(sheet, entry.osmdStaff, entry.instrument, index));
+
+  // Because a staff whose voices all lack pitched notes would render as an
+  // empty staff, it is removed together with its voices. An all-rest score
+  // still keeps its first staff, so that the result remains a valid tune.
+  const keptByStaff = allAccumulators.map(pitchedVoiceIndices);
+  let accumulators = allAccumulators.filter((_, i) => keptByStaff[i].length > 0);
+  let flat = allFlat.filter((_, i) => keptByStaff[i].length > 0);
+  if (accumulators.length === 0 && allAccumulators.length > 0) {
+    accumulators = [allAccumulators[0]];
+    flat = [allFlat[0]];
+  } else {
+    allAccumulators.forEach((acc, i) => {
+      if (keptByStaff[i].length > 0) filterVoices(acc, keptByStaff[i]);
+    });
+  }
+  accumulators.forEach(flattenAccumulator);
+
   const staves = accumulators.map(buildTuneStaff);
   applyInstrumentGrouping(staves, flat);
 
