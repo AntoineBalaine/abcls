@@ -3,6 +3,7 @@ import { Token, TT } from "./parsers/scan";
 import {
   AccidentalType,
   BarElement,
+  BarType,
   Decorations,
   ElementType,
   GraceNote,
@@ -264,11 +265,10 @@ interface VoiceEntry {
  * voice id. A given voice id always writes to the same (staffNum, index)
  * slot across the whole tune (per TuneInterpreter's vxNomenclatures), so
  * concatenating that slot's content across systems in system order
- * reconstructs the voice's full continuous body. This also means the
- * output does not preserve the original line-break positions from
- * tune.systems, which is intentional: the plan this implements treats line
- * breaks as a rendering concern the Formatter's own line-wrapping decides,
- * not something reconstruction needs to reproduce.
+ * reconstructs the voice's full continuous body. Because the Formatter does
+ * not wrap lines, this concatenated form writes each voice on one line; line
+ * breaks are only produced when tuneToAst receives TuneToAbcOptions, in which
+ * case resolveSlices splits the voices into systems.
  */
 function collectVoiceEntries(tune: Tune): VoiceEntry[] {
   const order: string[] = [];
@@ -333,9 +333,18 @@ function flushBeamRun(ctx: ABCContext, beamRun: BeamRunContext, out: music_code[
   beamRun.open = false;
 }
 
-function buildVoiceBody(ctx: ABCContext, elements: VoiceElement[], defaultLength: IRational): music_code[] {
+/**
+ * State of one voice that must survive across buildVoiceBody calls. Because
+ * a slur can open in one system and close in the next, the open slurs are
+ * carried from one system's call to the next.
+ */
+interface VoiceBodyState {
+  openSlurs: OpenSlur[];
+}
+
+function buildVoiceBody(ctx: ABCContext, elements: VoiceElement[], defaultLength: IRational, state: VoiceBodyState): music_code[] {
   const out: music_code[] = [];
-  const openSlurs: OpenSlur[] = [];
+  const openSlurs = state.openSlurs;
   const beamRun: BeamRunContext = { run: [], noteCount: 0, open: false };
   for (const element of elements) {
     if (isBarElement(element)) {
@@ -386,12 +395,105 @@ function synth_barlineToken(ctx: ABCContext, _bar: BarElement): Token {
 }
 
 /**
+ * How tuneToAst breaks the output into lines (systems).
+ * - "source" keeps the Tune's own systems, and falls back to a fixed number
+ *   of bars per line when the Tune has a single system.
+ * - "fixed" always breaks every `barsPerLine` bars.
+ */
+export type TuneToAbcLineBreaks = { mode: "source"; fallbackBarsPerLine: number } | { mode: "fixed"; barsPerLine: number };
+
+export interface TuneToAbcOptions {
+  /** When omitted, each voice is written on a single line, as before. */
+  lineBreaks?: TuneToAbcLineBreaks;
+}
+
+/** One output system: for each voice id, the elements of that voice in the system. */
+interface SystemSlice {
+  elementsByVoiceId: Map<string, VoiceElement[]>;
+}
+
+/** Builds one slice per music line of tune.systems, keyed by the same voice ids as collectVoiceEntries. */
+function collectSystemSlices(tune: Tune): SystemSlice[] {
+  const slices: SystemSlice[] = [];
+  for (const system of tune.systems) {
+    if (!isMusicLine(system)) continue;
+    const staffSystem = system as StaffSystem;
+    const elementsByVoiceId = new Map<string, VoiceElement[]>();
+    staffSystem.staff.forEach((staff, staffIndex) => {
+      staff.voices.forEach((elements, voiceIndex) => {
+        const id = staff.voiceIds?.[voiceIndex] ?? `${staffIndex}-${voiceIndex}`;
+        elementsByVoiceId.set(id, [...(elementsByVoiceId.get(id) ?? []), ...elements]);
+      });
+    });
+    slices.push({ elementsByVoiceId });
+  }
+  return slices;
+}
+
+/**
+ * Because the importer writes a left-repeat bar at the start of a repeated
+ * measure in addition to the previous measure's closing bar, only the bars
+ * that are not left repeats count as measure ends.
+ */
+function isClosingBar(element: VoiceElement): boolean {
+  return isBarElement(element) && (element as BarElement).type !== BarType.BarLeftRepeat;
+}
+
+/** Splits a voice after every `barsPerLine`-th closing bar. A trailing chunk without a closing bar is kept. */
+function chunkByBars(elements: VoiceElement[], barsPerLine: number): VoiceElement[][] {
+  const chunks: VoiceElement[][] = [];
+  let current: VoiceElement[] = [];
+  let bars = 0;
+  for (const element of elements) {
+    current.push(element);
+    if (isClosingBar(element)) {
+      bars += 1;
+      if (bars === barsPerLine) {
+        chunks.push(current);
+        current = [];
+        bars = 0;
+      }
+    }
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
+/**
+ * Chunks every voice into lines of `barsPerLine` bars. A voice with fewer
+ * chunks than the others gets empty lists in the later slices, so that every
+ * slice lists every voice.
+ */
+function sliceByFixedBars(voiceEntries: VoiceEntry[], barsPerLine: number): SystemSlice[] {
+  const chunksByVoice = voiceEntries.map((voice) => chunkByBars(voice.elements, Math.max(1, barsPerLine)));
+  const sliceCount = Math.max(1, ...chunksByVoice.map((chunks) => chunks.length));
+  const slices: SystemSlice[] = [];
+  for (let k = 0; k < sliceCount; k++) {
+    const elementsByVoiceId = new Map<string, VoiceElement[]>();
+    voiceEntries.forEach((voice, i) => elementsByVoiceId.set(voice.id, chunksByVoice[i][k] ?? []));
+    slices.push({ elementsByVoiceId });
+  }
+  return slices;
+}
+
+function synthVoiceMarker(ctx: ABCContext, id: string): Info_line {
+  return new Info_line(ctx.generateId(), [synthToken(ctx, TT.INF_HDR, "V:"), synthToken(ctx, TT.INFO_STR, id)]);
+}
+
+function resolveSlices(tune: Tune, voiceEntries: VoiceEntry[], lineBreaks: TuneToAbcLineBreaks): SystemSlice[] {
+  if (lineBreaks.mode === "fixed") return sliceByFixedBars(voiceEntries, lineBreaks.barsPerLine);
+  const slices = collectSystemSlices(tune);
+  if (slices.length <= 1) return sliceByFixedBars(voiceEntries, lineBreaks.fallbackBarsPerLine);
+  return slices;
+}
+
+/**
  * Converts a Tune (interpreter output) into a synthetic ABC AST (a Tune
  * Expr), reusing the existing Formatter for stringification rather than
  * writing a bespoke text serializer, per the architecture decision recorded
  * in .private/3.tune-to-abc-serializer.md.
  */
-export function tuneToAst(tune: Tune, ctx: ABCContext): TuneExpr {
+export function tuneToAst(tune: Tune, ctx: ABCContext, options?: TuneToAbcOptions): TuneExpr {
   const voiceEntries = collectVoiceEntries(tune);
   const headerLines: Info_line[] = [];
 
@@ -443,15 +545,33 @@ export function tuneToAst(tune: Tune, ctx: ABCContext): TuneExpr {
   // sequence has no such tokens unless explicitly inserted here.
   const eol = () => synthToken(ctx, TT.EOL, "\n");
   const bodySequence: tune_body_code[][] = [];
-  if (isSingleDefaultVoice) {
+  if (options?.lineBreaks) {
+    // Because ABC writes a multi-voice score system by system, each output
+    // system holds one line per voice (deferred style), in header order.
+    const states = new Map<string, VoiceBodyState>(voiceEntries.map((voice) => [voice.id, { openSlurs: [] }]));
+    for (const slice of resolveSlices(tune, voiceEntries, options.lineBreaks)) {
+      const system: tune_body_code[] = [];
+      if (isSingleDefaultVoice) {
+        if (voiceEntries.length === 1) {
+          const voice = voiceEntries[0];
+          system.push(...buildVoiceBody(ctx, slice.elementsByVoiceId.get(voice.id) ?? [], DEFAULT_NOTE_LENGTH, states.get(voice.id)!), eol());
+        }
+      } else {
+        for (const voice of voiceEntries) {
+          const content = buildVoiceBody(ctx, slice.elementsByVoiceId.get(voice.id) ?? [], DEFAULT_NOTE_LENGTH, states.get(voice.id)!);
+          system.push(synthVoiceMarker(ctx, voice.id), eol(), ...content, eol());
+        }
+      }
+      bodySequence.push(system);
+    }
+  } else if (isSingleDefaultVoice) {
     if (voiceEntries.length === 1) {
-      bodySequence.push(buildVoiceBody(ctx, voiceEntries[0].elements, DEFAULT_NOTE_LENGTH));
+      bodySequence.push(buildVoiceBody(ctx, voiceEntries[0].elements, DEFAULT_NOTE_LENGTH, { openSlurs: [] }));
     }
   } else {
     for (const voice of voiceEntries) {
-      const marker = new Info_line(ctx.generateId(), [synthToken(ctx, TT.INF_HDR, "V:"), synthToken(ctx, TT.INFO_STR, voice.id)]);
-      const content = buildVoiceBody(ctx, voice.elements, DEFAULT_NOTE_LENGTH);
-      bodySequence.push([marker, eol(), ...content, eol()]);
+      const content = buildVoiceBody(ctx, voice.elements, DEFAULT_NOTE_LENGTH, { openSlurs: [] });
+      bodySequence.push([synthVoiceMarker(ctx, voice.id), eol(), ...content, eol()]);
     }
   }
 
@@ -469,8 +589,8 @@ export function tuneToAst(tune: Tune, ctx: ABCContext): TuneExpr {
  * existing Formatter for stringification. See tuneToAst for the AST
  * reconstruction itself.
  */
-export function tuneToAbcText(tune: Tune, ctx: ABCContext): string {
-  const ast = tuneToAst(tune, ctx);
+export function tuneToAbcText(tune: Tune, ctx: ABCContext, options?: TuneToAbcOptions): string {
+  const ast = tuneToAst(tune, ctx, options);
   const formatter = new AbcFormatter(ctx);
   return formatter.format(ast);
 }

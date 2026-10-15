@@ -677,18 +677,37 @@ function findFirstClefAndKey(elements: VoiceElement[]): { clef?: ClefType; key?:
   return { clef, key };
 }
 
-function buildTuneStaff(acc: StaffAccumulator): Staff {
+/**
+ * Builds the staff of one system, holding the measures in
+ * [fromMeasure, toMeasure). Because every system must start with the same
+ * staff metadata, the clef and key come from the first ones found in the
+ * whole of voice 0; changes in the middle of the tune remain elements.
+ */
+function buildTuneStaffForRange(acc: StaffAccumulator, fromMeasure: number, toMeasure: number): Staff {
   const { clef, key } = findFirstClefAndKey(acc.elementsByVoice[0] ?? []);
   const clefProperties = { type: clef ?? ClefType.Treble };
   const staff: Staff = {
     clef: clefProperties,
     workingClef: clefProperties,
     key: key ?? { root: KeyRoot.C, acc: KeyAccidental.None, mode: Mode.Major, accidentals: [] },
-    voices: acc.elementsByVoice,
+    voices: acc.measuresByVoice.map((_, voiceIndex) => flattenMeasureRange(acc, voiceIndex, fromMeasure, toMeasure)),
     voiceIds: acc.voices.map((v) => String(v.VoiceId)),
     title: acc.instrument.Name ? [acc.instrument.Name] : undefined,
   };
   return staff;
+}
+
+/**
+ * Returns the indices of the measures that start a system: the first
+ * measure, plus every measure for which the MusicXML says
+ * <print new-system="yes"/> (exposed by OSMD as printNewSystemXml).
+ */
+function computeSystemStarts(sheet: MusicSheet): number[] {
+  const starts = [0];
+  sheet.SourceMeasures.forEach((measure, index) => {
+    if (index > 0 && measure.printNewSystemXml) starts.push(index);
+  });
+  return starts;
 }
 
 /**
@@ -734,14 +753,22 @@ export function importFromMusicSheet(sheet: MusicSheet): Tune {
   }
   accumulators.forEach(flattenAccumulator);
 
-  const staves = accumulators.map(buildTuneStaff);
-  applyInstrumentGrouping(staves, flat);
+  // Because the source's system breaks are recorded by splitting
+  // tune.systems, a caller that concatenates the systems per voice (as
+  // tuneToAst does without options) still sees each voice's full content.
+  const measureCount = sheet.SourceMeasures.length;
+  const starts = computeSystemStarts(sheet);
+  const systems: StaffSystem[] = starts.map((start, k) => {
+    const end = k + 1 < starts.length ? starts[k + 1] : measureCount;
+    const staves = accumulators.map((acc) => buildTuneStaffForRange(acc, start, end));
+    applyInstrumentGrouping(staves, flat);
+    return { staff: staves };
+  });
 
-  const system: StaffSystem = { staff: staves };
   const tune = createEmptyTune();
-  tune.systems = [system];
-  tune.staffNum = staves.length;
+  tune.systems = systems;
+  tune.staffNum = accumulators.length;
   tune.voiceNum = accumulators.reduce((sum, acc) => sum + acc.voices.length, 0);
-  tune.lineNum = 1;
+  tune.lineNum = systems.length;
   return tune;
 }

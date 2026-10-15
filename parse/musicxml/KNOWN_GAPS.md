@@ -73,3 +73,21 @@ importFromMusicSheet uses Note.NoteTuplet (singular, the innermost tuplet)
 and ignores any outer tuplets in NoteTuplets; a note with more than one
 entry in NoteTuplets throws, since silently dropping the outer tuplet
 would misrepresent the note's actual grouping.
+
+## Approximations in the ABC output (no error thrown)
+
+The following content is imported, but written to ABC in a simplified form.
+
+- Secondary beam breaks (Beam.SecondaryBreakIndices) and beams over rests
+  are not represented, because ABC has no direct notation for them: a rest
+  closes the beam group, and a beam that crosses a bar line is split there.
+- Entries that overlap the previous entry of the same voice (which OMR
+  output can produce) are kept as they are, without padding or correction.
+- Silent stretches of a voice are padded with rests: `x` for a measure in
+  which the voice has no entry at all, `z` for a gap inside a measure.
+  Voices without any pitched note are dropped.
+- Line breaks follow `<print new-system="yes"/>` only when tuneToAbcText
+  receives TuneToAbcOptions (the xml2abc command always passes them);
+  without options each voice is written on a single line.
+- Every bar line is written as a plain `|`, so a left repeat currently
+  prints as an extra `|`.
