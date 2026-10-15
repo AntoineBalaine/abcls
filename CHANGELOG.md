@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0 (2026-10-14)
+
+### vscode-extension
+
+- open a score and its preview from a vscode:// link
+
 ## 0.1.15 (2026-10-05)
 
 ### ireal

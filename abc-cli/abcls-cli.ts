@@ -16,7 +16,7 @@ import { renderCommand } from "./commands/render";
 
 const program = new Command();
 
-program.name("abcls").description("ABC notation language server and CLI tools").version("0.1.15");
+program.name("abcls").description("ABC notation language server and CLI tools").version("0.2.0");
 
 // Add commands
 program.addCommand(formatCommand);
