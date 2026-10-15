@@ -562,24 +562,6 @@ function splitByChannel(notes: Note[]): Note[][] {
   return [...channelMap.values()];
 }
 
-function cleanupTime(ns: NoteSequence): NoteSequence {
-  let min = Infinity;
-  ns.notes.forEach((n) => {
-    if (n.startTime < min) min = n.startTime;
-  });
-  if (min !== 0) {
-    ns.notes.forEach((n) => {
-      n.startTime -= min;
-      n.endTime -= min;
-    });
-    ns.tempos.forEach((tempo) => {
-      if (0 < tempo.time) tempo.time -= min;
-    });
-    ns.totalTime -= min;
-  }
-  return ns;
-}
-
 function guessClef(ins: Note[]): string {
   const total = ins.reduce((sum, n) => sum + n.pitch, 0);
   const pitch = total / ins.length;
@@ -640,13 +622,54 @@ function segmentToString(ns: NoteSequence, ins: Note[], instrumentId: number, te
   return abcString;
 }
 
+const HEADER_LINE = /^(?:[A-Za-z]:|%%)/;
+const NOTE_PATTERN = /\^?([A-Ga-g])([,']*)|(\|)/g;
+
+/**
+ * Because the generator writes a sharp on the notes that need one and nothing
+ * on the others, while ABC keeps an accidental in force until the end of the
+ * bar for the same pitch, a natural note that follows a sharp of the same
+ * pitch in a bar would be read as sharp. Because readers differ on whether an
+ * accidental reaches the other octaves of the same letter (the editor's own
+ * transforms treat it as reaching them), the `=` is also written in front of
+ * the same letter in another octave. This walks every music line and writes
+ * it, so that the pitches of the MIDI file are the pitches of the score under
+ * either reading. The key is C major, so the default is natural.
+ */
+export function restateNaturals(abc: string): string {
+  return abc
+    .split("\n")
+    .map((line) => {
+      if (HEADER_LINE.test(line)) return line;
+      const sharpened = new Set<string>();
+      return line.replace(NOTE_PATTERN, (match: string, letter?: string, _marks?: string, bar?: string) => {
+        if (bar) {
+          sharpened.clear();
+          return match;
+        }
+        const key = letter!.toUpperCase();
+        if (match.startsWith("^")) {
+          sharpened.add(key);
+          return match;
+        }
+        if (sharpened.has(key)) {
+          sharpened.delete(key);
+          return "=" + match;
+        }
+        return match;
+      });
+    })
+    .join("\n");
+}
+
 export function tone2abc(ns: NoteSequence, options?: ConversionOptions): string {
   let abcString = "X:1\n";
   if (options) {
     if (options.title) abcString += `T:${options.title}\n`;
     if (options.composer) abcString += `C:${options.composer}\n`;
   }
-  cleanupTime(ns);
+  // The notes keep the positions they have in the file, so that a first note
+  // that starts after the beginning of the bar is preceded by a rest.
 
   const ctx: ConversionContext = {
     tupletNum: 0,
@@ -662,5 +685,5 @@ export function tone2abc(ns: NoteSequence, options?: ConversionOptions): string 
       abcString += segmentToString(ns, ins, instrumentId, tempo, ctx);
     });
   });
-  return abcString;
+  return restateNaturals(abcString);
 }

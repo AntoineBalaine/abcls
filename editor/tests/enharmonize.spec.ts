@@ -1011,3 +1011,17 @@ describe("enharmonizeToKey", () => {
     });
   });
 });
+
+describe("enharmonizeToKey with beamed notes", () => {
+  it("keeps a natural that cancels a carried sharp, as the note it follows", () => {
+    // Because the notes are written without spaces they form one beam, and the
+    // interpreter used to skip the accidentals inside it.
+    expect(runEnharmonizeToKey("X:1\nK:Cm\n^D2z2=D,2D,2|\n")).to.contain("E2z2D,2D,2|");
+  });
+
+  it("gives the same result for spaced and beamed notes", () => {
+    const spaced = runEnharmonizeToKey("X:1\nK:Cm\n^D2 z2 =D,2 D,2|\n");
+    const beamed = runEnharmonizeToKey("X:1\nK:Cm\n^D2z2=D,2D,2|\n");
+    expect(beamed.replace(/ /g, "")).to.equal(spaced.replace(/ /g, ""));
+  });
+});

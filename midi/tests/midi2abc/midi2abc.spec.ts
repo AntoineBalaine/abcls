@@ -2,6 +2,7 @@ import { Scanner, parse, ABCContext, File_structure } from "abcls-parser";
 import { expect } from "chai";
 import { abc2midi } from "../../src/abc2midi/abc2midi";
 import { midi2abc } from "../../src/midi2abc/midi2abc";
+import { restateNaturals } from "../../src/midi2abc/tone2abc/tone2abc";
 
 // =============================================================================
 // Helpers
@@ -52,6 +53,22 @@ function parseAbcString(abc: string): { ast: File_structure; ctx: ABCContext } {
 // =============================================================================
 
 describe("midi2abc", () => {
+  it("writes a natural sign on a note that follows a sharp of the same pitch in the bar", () => {
+    expect(restateNaturals("V:1\nC2^C2C2|C2\n")).to.equal("V:1\nC2^C2=C2|C2\n");
+    // another octave of the same letter is restated too, and a bar line ends the accidental
+    expect(restateNaturals("^C2c2|^C2C2|\n")).to.equal("^C2=c2|^C2=C2|\n");
+    // headers are left alone
+    expect(restateNaturals("K:C clef=F4\n")).to.equal("K:C clef=F4\n");
+  });
+
+  it("keeps a leading silence as a rest instead of moving the first note to the start", () => {
+    // MINIMAL_MIDI with a delay of 96 ticks (one quarter note) before the note-on.
+    const delayed = new Uint8Array(MINIMAL_MIDI);
+    delayed[29] = 0x60;
+    const abc = midi2abc(delayed);
+    expect(abc).to.match(/z\d*\s*C/);
+  });
+
   it("converts a minimal MIDI file with one note to ABC", () => {
     const result = midi2abc(MINIMAL_MIDI);
     expect(result).to.include("X:1");

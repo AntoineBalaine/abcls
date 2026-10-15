@@ -582,7 +582,18 @@ export class ContextInterpreter implements Visitor<void> {
       this.pushSnapshot(expr);
     }
   }
-  visitBeamExpr(_expr: Beam): void {}
+  /**
+   * Because notes that are written without spaces between them form one beam,
+   * and an accidental on any of them stays in force until the end of the bar,
+   * the contents of a beam are visited one by one. Without this, a beamed
+   * `^D2=D2D2` would leave no trace in the accidental snapshots.
+   */
+  visitBeamExpr(expr: Beam): void {
+    for (const element of expr.contents) {
+      if (element instanceof Token) continue;
+      element.accept(this);
+    }
+  }
   visitTupletExpr(_expr: Tuplet): void {}
   visitGraceGroupExpr(_expr: Grace_group): void {}
   visitDecorationExpr(_expr: Decoration): void {}
