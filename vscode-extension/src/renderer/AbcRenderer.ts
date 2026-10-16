@@ -9,12 +9,16 @@ import { pathToFileURL } from "url";
 import { ABCContext, AbcErrorReporter, filterVoicesInAbc } from "abcls-parser";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
+import { createPreviewSyncState, PreviewSyncState, previewRangeForSelection } from "./cursorSync";
 
 let panel: vscode.WebviewPanel | undefined;
 let outputChannel: vscode.OutputChannel;
 let svgHandler: ((svg: string) => void) | undefined;
 let _context: vscode.ExtensionContext;
 let _client: LanguageClient | undefined;
+// What the preview shows, so that an editor selection is only mirrored when
+// its offsets point at the same notes in the rendered score.
+let previewSyncState: PreviewSyncState | undefined;
 
 /**
  * Set the LSP client for preview content requests
@@ -77,6 +81,7 @@ export async function showPreview(context: vscode.ExtensionContext, theme?: "lig
         theme: theme,
       });
     }
+    await postCursorPosition(getEditor());
   }
 }
 
@@ -145,6 +150,13 @@ export function registerRendererEvents(context: vscode.ExtensionContext) {
     })
   );
 
+  // Highlight in the preview the notes under the editor's cursor or selection
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorSelection(async (eventArgs) => {
+      await postCursorPosition(eventArgs.textEditor);
+    })
+  );
+
   // Handle configuration changes
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async () => {
@@ -186,6 +198,7 @@ function initializePanel(context: vscode.ExtensionContext, viewColumn?: vscode.V
 
   panel.onDidDispose(() => {
     panel = undefined;
+    previewSyncState = undefined;
   });
 }
 
@@ -232,6 +245,31 @@ async function updatePreview(eventArgs: vscode.TextEditor | vscode.TextDocumentC
   });
 
   panel.title = "abc: " + getFileNameFromEditor();
+
+  // Because the re-rendered score has lost its highlight, and the cursor
+  // offsets were not valid while the new content was being computed, the
+  // cursor is sent again once the content is in place.
+  await postCursorPosition(editor);
+}
+
+/**
+ * Sends the editor's selection to the preview, which highlights the notes it
+ * covers. Nothing is sent when the preview's offsets do not match the
+ * document's, so that a highlight made by clicking in the preview is kept.
+ */
+async function postCursorPosition(editor: vscode.TextEditor | undefined) {
+  if (!panel || !editor) return;
+  const document = editor.document;
+  const selection = editor.selection;
+  const range = previewRangeForSelection(
+    previewSyncState,
+    document.uri.toString(),
+    document.version,
+    document.offsetAt(selection.anchor),
+    document.offsetAt(selection.active)
+  );
+  if (!range) return;
+  await panel.webview.postMessage({ command: "cursorMove", start: range.start, end: range.end });
 }
 
 /**
@@ -248,9 +286,14 @@ async function getCurrentEditorContent(): Promise<string> {
   const uri = editor.document.uri.toString();
 
   if (filePath.endsWith(".abc") || filePath.endsWith(".abcx")) {
+    // Because the document may change while the content is being computed,
+    // its version and text are read before the request.
+    const version = editor.document.version;
+    const documentText = editor.document.getText();
     let content = await getPreviewContent(uri);
     // Apply voice filter if %%abcls-voices directive is present
     content = applyVoiceFilter(content);
+    previewSyncState = createPreviewSyncState(uri, version, documentText, content);
     return content;
   }
 

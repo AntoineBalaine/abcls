@@ -186,6 +186,12 @@ export class AbcLspServer {
    * Handles the appropriate conversion based on document type:
    * - ABCx files: returns formatted content directly
    * - ABC files: converts linear tunes to deferred style, leaves others unchanged
+   *
+   * Because the preview maps clicks to the editor, and the editor's cursor to
+   * the preview, through character offsets, an ABC file that needs no
+   * conversion is returned as its exact source text. Re-stringifying it would
+   * normalise header lines (for instance "Q:1/4=160" into "Q:1/4 = 160") and
+   * shift every offset that follows.
    */
   getPreviewContent(uri: string): string {
     const abcDocument = this.abcDocuments.get(uri);
@@ -204,6 +210,10 @@ export class AbcLspServer {
     // so we use type assertion since we know this is AbcDocument after the AbcxDocument check.
     const doc = abcDocument as AbcDocument;
     const ast = doc.AST!;
+    const hasLinearTune = ast.contents.some((content) => content instanceof Tune && content.linear === true);
+    if (!hasLinearTune) {
+      return doc.document.getText();
+    }
     const convertedContents: Array<Tune | Token> = [];
 
     for (const content of ast.contents) {

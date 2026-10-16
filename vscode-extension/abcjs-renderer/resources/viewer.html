@@ -99,6 +99,11 @@
 
       var abc = `{editorContent}`;
 
+      // The tunes returned by the last render, and the editor's last selection
+      // (character offsets), kept so that the highlight survives a re-render.
+      var renderedTunes = [];
+      var cursorRange = null;
+
       function optionChanged() {
         drawTune(abc);
       }
@@ -107,7 +112,8 @@
        * Run abcjs, render the score from ABC notation.
        */
       function drawTune(abcCode) {
-        ABCJS.renderAbc("paper", abcCode, options);
+        renderedTunes = ABCJS.renderAbc("paper", abcCode, options);
+        highlightCursorRange();
 
         const showSource = options.showTransposedSource;
         const source = document.getElementById("source");
@@ -166,6 +172,23 @@
         }
       }
 
+      /**
+       * Highlights the notes covered by the editor's selection, and scrolls the
+       * first of them into view when it is off screen. abcjs matches a collapsed
+       * cursor against the element that ends at the cursor, the way its own
+       * editor does.
+       */
+      function highlightCursorRange() {
+        var tune = renderedTunes[0];
+        if (!cursorRange || !tune || !tune.engraver) return;
+        tune.engraver.rangeHighlight(cursorRange.start, cursorRange.end);
+        var first = tune.engraver.selected && tune.engraver.selected[0];
+        var element = first && first.elemset && first.elemset[0];
+        if (element && element.scrollIntoView) {
+          element.scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+      }
+
       function clickListener(abcElem, tuneNumber, classes) {
         vscode.postMessage({
           name: "click",
@@ -200,6 +223,11 @@
             // Merge config with existing options to preserve clickListener, startingTune, format
             Object.assign(options, message.content);
             drawTune(abc);
+            break;
+
+          case "cursorMove":
+            cursorRange = { start: message.start, end: message.end };
+            highlightCursorRange();
             break;
 
           case "setTheme":

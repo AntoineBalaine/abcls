@@ -914,6 +914,7 @@
     "package-bundle": "node esbuild.js --production",
     "copy-binary": "node -e \"const fs=require('fs');const path=require('path');const os=require('os');const binDir='bin';const srcDir=path.join('..','native','build');const binaryName=os.platform()==='win32'?'mscore.exe':'mscore';fs.mkdirSync(binDir,{recursive:true});const src=path.join(srcDir,binaryName);const dest=path.join(binDir,binaryName);if(fs.existsSync(src)){fs.copyFileSync(src,dest);fs.chmodSync(dest,0o755);console.log('Copied',binaryName,'to',binDir);}else{console.warn('Warning:',src,'not found. Build native package first.');}\"",
     "pretest": "npm run compile && npm run lint",
+    "test": "mocha --require tsx 'src/**/*.spec.ts'",
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
     "_test": "node ../out/vscode-extension/test/runTest.js",
