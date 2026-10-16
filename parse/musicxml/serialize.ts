@@ -1,4 +1,4 @@
-import { ScorePartwiseIR, PartListEntryIR, PartIR, MeasureIR, NoteIR, AttributesIR } from "./ir";
+import { ScorePartwiseIR, PartListEntryIR, PartIR, MeasureIR, NoteIR, AttributesIR, HarmonyIR } from "./ir";
 
 interface XmlNode {
   tag: string;
@@ -152,11 +152,33 @@ function buildNoteXml(note: NoteIR): XmlNode {
   return el("note", undefined, children);
 }
 
+/**
+ * Writes one <harmony>. The XSD order is root, kind, bass, then degrees, and
+ * <degree-alter> is required even when the degree is not altered.
+ */
+function buildHarmonyXml(harmony: HarmonyIR): XmlNode {
+  const root = el("root", undefined, [
+    textEl("root-step", harmony.rootStep, { text: harmony.rootText }),
+    harmony.rootAlter !== undefined ? textEl("root-alter", harmony.rootAlter) : undefined,
+  ]);
+  const bass =
+    harmony.bassStep !== undefined
+      ? el("bass", undefined, [textEl("bass-step", harmony.bassStep), harmony.bassAlter !== undefined ? textEl("bass-alter", harmony.bassAlter) : undefined])
+      : undefined;
+  const degrees = (harmony.degrees ?? []).map((degree) =>
+    el("degree", undefined, [textEl("degree-value", degree.value), textEl("degree-alter", degree.alter), textEl("degree-type", degree.type)])
+  );
+  return el("harmony", undefined, [root, textEl("kind", harmony.kind, { text: harmony.kindText }), bass, ...degrees]);
+}
+
 function buildMeasureXml(measure: MeasureIR): XmlNode {
   const children: Array<XmlNode | undefined> = [];
   if (measure.newSystem) children.push(el("print", { "new-system": "yes" }));
   if (measure.attributes) children.push(buildAttributesXml(measure.attributes));
-  for (const note of measure.content) children.push(buildNoteXml(note));
+  for (const note of measure.content) {
+    for (const harmony of note.harmonies ?? []) children.push(buildHarmonyXml(harmony));
+    children.push(buildNoteXml(note));
+  }
   return el("measure", { number: measure.number }, children);
 }
 

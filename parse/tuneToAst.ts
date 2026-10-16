@@ -1,6 +1,7 @@
 import { ABCContext } from "./parsers/Context";
 import { Token, TT } from "./parsers/scan";
 import {
+  ChordProperties,
   AccidentalType,
   BarElement,
   BarType,
@@ -26,6 +27,7 @@ import {
   VoiceElement,
 } from "./types/abcjs-ast";
 import {
+  Annotation,
   BarLine,
   Directive,
   Inline_field,
@@ -168,8 +170,24 @@ interface OpenSlur {
  * only existed to fit MusicXML's 1-16 numbering) since ABC's slur
  * parentheses carry no explicit number.
  */
+/**
+ * Writes the chord symbols of an element as ABC annotations ("Am7"). Because
+ * ABC has no way to escape a double quote inside an annotation, a name that
+ * contains one is dropped rather than written as broken ABC.
+ */
+function buildChordSymbolExprs(ctx: ABCContext, chords: ChordProperties[] | undefined): Annotation[] {
+  const out: Annotation[] = [];
+  for (const chord of chords ?? []) {
+    if (chord.name.includes('"')) continue;
+    out.push(new Annotation(ctx.generateId(), synthToken(ctx, TT.ANNOTATION, `"${chord.name}"`)));
+  }
+  return out;
+}
+
 function noteElementToMusicCode(ctx: ABCContext, element: NoteElement, defaultLength: IRational, openSlurs: OpenSlur[]): music_code[] {
   const out: music_code[] = [];
+
+  out.push(...buildChordSymbolExprs(ctx, element.chord));
 
   out.push(...buildDecorationExprs(ctx, element.decoration));
 

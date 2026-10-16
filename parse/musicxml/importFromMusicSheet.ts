@@ -27,6 +27,8 @@ import {
   OrnamentContainer,
   OrnamentEnum,
   Tuplet as OsmdTuplet,
+  ChordSymbolContainer,
+  SourceStaffEntry,
   Beam,
 } from "opensheetmusicdisplay";
 import { createEmptyTune } from "../interpreter/InterpreterState";
@@ -37,6 +39,8 @@ import {
   VoiceElement,
   NoteElement,
   BarElement,
+  ChordPlacement,
+  ChordProperties,
   ClefElement,
   KeyElement,
   MeterElement,
@@ -484,6 +488,33 @@ function convertTrailingClefs(measure: SourceMeasure, globalStaffIndex: number):
   return elements;
 }
 
+/**
+ * Renders the chord symbols (<harmony>) of a staff entry as text, such as
+ * "Am7", "C/E" or "N.C.". Because opensheetmusicdisplay already spells chord
+ * kinds the way lead sheets do, its own renderer is used rather than a second
+ * table. The key is only needed for transposition, which never happens here.
+ */
+function chordSymbolsOf(entry: SourceStaffEntry): ChordProperties[] {
+  return entry.ChordContainers.map((container) => ({
+    name: ChordSymbolContainer.calculateChordText(container, 0, undefined as unknown as KeyInstruction),
+    position: ChordPlacement.Default,
+  }));
+}
+
+/**
+ * Attaches chord symbols to the element that the last voice entry pushed
+ * onto the list, if it pushed one. Returns whether they were attached,
+ * because a grace entry pushes nothing and the symbols must then wait for
+ * the next voice entry of the same staff entry.
+ */
+function attachChordSymbols(list: VoiceElement[], lengthBefore: number, chordSymbols: ChordProperties[]): boolean {
+  if (list.length <= lengthBefore) return false;
+  const last = list[list.length - 1];
+  if (last.el_type !== ElementType.Note) return false;
+  (last as NoteElement).chord = chordSymbols;
+  return true;
+}
+
 function pushNoteOrGraceForVoiceEntry(
   acc: StaffAccumulator,
   voiceIndex: number,
@@ -608,11 +639,17 @@ function buildStaffAccumulator(sheet: MusicSheet, osmdStaff: OsmdStaff, instrume
     for (const container of measure.VerticalSourceStaffEntryContainers) {
       const entry = container.StaffEntries[globalStaffIndex];
       if (!entry) continue;
+      // Because a chord symbol belongs to the staff entry rather than to one
+      // voice, it goes onto the first element that one of its voices pushes.
+      const chordSymbols = chordSymbolsOf(entry);
+      let chordSymbolsPlaced = chordSymbols.length === 0;
       for (const voiceEntry of entry.VoiceEntries) {
         const voiceIndex = voices.findIndex((v) => v.VoiceId === voiceEntry.ParentVoice.VoiceId);
         if (voiceIndex === -1) continue;
         advanceCursorForEntry(cursor, voiceIndex, voiceEntry, measureLists[voiceIndex]);
+        const lengthBefore = measureLists[voiceIndex].length;
         pushNoteOrGraceForVoiceEntry(acc, voiceIndex, measureLists[voiceIndex], voiceEntry, slurAllocator);
+        if (!chordSymbolsPlaced) chordSymbolsPlaced = attachChordSymbols(measureLists[voiceIndex], lengthBefore, chordSymbols);
       }
     }
 

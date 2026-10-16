@@ -26,6 +26,28 @@ export interface GraceIR {
   slash: boolean;
 }
 
+export interface DegreeIR {
+  value: number;
+  alter: number;
+  type: "add" | "alter" | "subtract";
+}
+
+/**
+ * A chord symbol (<harmony>). The kind is one of the XSD's kind-value
+ * strings, such as "minor-seventh". The optional text attributes carry the
+ * spelling the author wrote, such as "-7", for renderers that honour them.
+ */
+export interface HarmonyIR {
+  rootStep: string;
+  rootAlter?: number;
+  rootText?: string;
+  kind: string;
+  kindText?: string;
+  bassStep?: string;
+  bassAlter?: number;
+  degrees?: DegreeIR[];
+}
+
 export interface NoteIR {
   kind: "note" | "backup" | "forward";
   voice?: number;
@@ -37,6 +59,9 @@ export interface NoteIR {
   tieStop?: boolean;
   grace?: GraceIR;
   notations?: NotationsIR;
+  // Because <harmony> is a sibling that precedes the <note> it sounds with,
+  // the serializer writes these immediately before this note.
+  harmonies?: HarmonyIR[];
 }
 
 export interface AttributesIR {

@@ -83,7 +83,7 @@ The following content is imported, but written to ABC in a simplified form.
   closes the beam group, and a beam that crosses a bar line is split there.
 - Entries that overlap the previous entry of the same voice (which OMR
   output can produce) are kept as they are, without padding or correction.
-- Silent stretches of a voice are padded with rests: `x` for a measure in
+- Silent stretches of a voice are padded with rests: `X` for a measure in
   which the voice has no entry at all, `z` for a gap inside a measure.
   Voices without any pitched note are dropped.
 - Line breaks follow `<print new-system="yes"/>` only when tuneToAbcText
@@ -99,3 +99,25 @@ The following content is imported, but written to ABC in a simplified form.
   of its longest voice. Because OSMD derives the duration from the content,
   a measure in which every voice stops early (for instance an OMR measure
   that lost its final rest) is not padded up to the time signature.
+
+## Chord symbols
+
+Chord symbols (`<harmony>`) are imported as ABC annotations, such as
+`"Am7"`, and ABC annotations that read as chord symbols are exported as
+`<harmony>`. The following is not preserved.
+
+- opensheetmusicdisplay ignores the `text` attribute of `<kind>` and spells
+  every kind its own way, so an imported symbol always uses OSMD's spelling
+  (`Cmaj6` rather than `C6`, `Cm7` rather than `C-7`). A kind that OSMD
+  does not name (`other`, `pedal`, `Neapolitan`, `Italian`, `French`,
+  `German`, `Tristan`) imports as its root alone. Because of this, an ABC
+  symbol that exports as kind `other` (for instance `C7sus4` or `C6/9`)
+  comes back as its root alone after a round trip.
+- Fret diagrams (`<frame>`), `<offset>`, `<function>` and `<numeral>`
+  harmonies are not read; the symbol is attached to the first element of
+  its staff entry at that entry's time.
+- An ABC annotation that is not a chord symbol (a positioned annotation such
+  as `"^allegro"`, or plain text such as `"Fine"`) is not exported, because
+  it is text rather than a harmony. It would belong in `<direction><words>`.
+- An ABC annotation containing a double quote cannot be written, because
+  ABC has no escape for it, and is dropped on import.

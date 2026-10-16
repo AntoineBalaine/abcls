@@ -5,6 +5,7 @@ import {
   VoiceElement,
   isMusicLine,
   isNoteElement,
+  NoteElement,
   isBarElement,
   BarElement,
   isKeyElement,
@@ -19,8 +20,9 @@ import {
   Decorations,
 } from "../types/abcjs-ast";
 import { IRational, findGCD } from "../Visitors/fmt/rational";
+import { parseChordSymbol } from "./chordSymbols";
 import { ARTICULATION_MAP, ORNAMENT_MAP } from "./decorationMap";
-import { ScorePartwiseIR, PartIR, PartListEntryIR, MeasureIR, NoteIR, AttributesIR, PitchIR, NotationsIR } from "./ir";
+import { ScorePartwiseIR, PartIR, PartListEntryIR, MeasureIR, NoteIR, AttributesIR, PitchIR, NotationsIR, HarmonyIR } from "./ir";
 
 function lcm(a: number, b: number): number {
   if (a === 0 || b === 0) return 0;
@@ -358,17 +360,31 @@ class SlurNumberAllocator {
   }
 }
 
+/**
+ * Converts the chord symbols of a note or rest into harmonies. Text that is
+ * not a chord symbol (a positioned annotation such as "^allegro") is
+ * skipped, because a <harmony> cannot carry it.
+ */
+function buildHarmoniesIR(element: NoteElement): HarmonyIR[] | undefined {
+  const harmonies: HarmonyIR[] = [];
+  for (const chord of element.chord ?? []) {
+    const harmony = parseChordSymbol(chord.name);
+    if (harmony) harmonies.push(harmony);
+  }
+  return harmonies.length > 0 ? harmonies : undefined;
+}
+
 function buildVoiceMeasureNotes(measureElements: VoiceElement[], voiceNumber: number, divisions: number, slurAllocator: SlurNumberAllocator): NoteIR[] {
   const notes: NoteIR[] = [];
   for (const element of measureElements) {
     if (!isNoteElement(element)) continue;
+    // Because a harmony sounds with the first <note> of its element (a grace
+    // note when there is one), it is attached to the first IR pushed for it.
+    const firstIndexOfElement = notes.length;
     const durationInDivisions = rationalToDivisions(element.duration, divisions);
-    if (element.rest) {
+    if (element.rest || !element.pitches || element.pitches.length === 0) {
       notes.push({ kind: "note", voice: voiceNumber, duration: durationInDivisions, rest: true });
-      continue;
-    }
-    if (!element.pitches || element.pitches.length === 0) {
-      notes.push({ kind: "note", voice: voiceNumber, duration: durationInDivisions, rest: true });
+      attachHarmonies(notes, firstIndexOfElement, element);
       continue;
     }
     if (element.gracenotes) {
@@ -397,8 +413,14 @@ function buildVoiceMeasureNotes(measureElements: VoiceElement[], voiceNumber: nu
         notations: buildNotationsIR(element.decoration, startSlurs, endSlurs),
       });
     });
+    attachHarmonies(notes, firstIndexOfElement, element);
   }
   return notes;
+}
+
+function attachHarmonies(notes: NoteIR[], firstIndexOfElement: number, element: NoteElement): void {
+  const harmonies = buildHarmoniesIR(element);
+  if (harmonies && notes[firstIndexOfElement]) notes[firstIndexOfElement].harmonies = harmonies;
 }
 
 function buildPart(collected: CollectedStaff, partId: string, divisions: number): PartIR {

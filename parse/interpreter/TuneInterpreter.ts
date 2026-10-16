@@ -1552,6 +1552,11 @@ export class TuneInterpreter implements Visitor<void> {
       rest: { type: restType },
     };
 
+    // Because a chord symbol may sit on a rest (a chord change during a
+    // silence), the pending symbols attach to the rest rather than drifting
+    // to the next note.
+    if (voiceState) applyChordSymbols(element, voiceState);
+
     this.pushElement(element);
 
     // Process beaming for this rest (beams break on rests, voiceState already retrieved above)
