@@ -3,10 +3,10 @@ import {
   Staff,
   StaffSystem,
   VoiceElement,
-  ElementType,
   isMusicLine,
   isNoteElement,
   isBarElement,
+  BarElement,
   isKeyElement,
   isMeterElement,
   isClefElement,
@@ -19,8 +19,8 @@ import {
   Decorations,
 } from "../types/abcjs-ast";
 import { IRational, findGCD } from "../Visitors/fmt/rational";
-import { ScorePartwiseIR, PartIR, PartListEntryIR, MeasureIR, NoteIR, AttributesIR, PitchIR, NotationsIR } from "./ir";
 import { ARTICULATION_MAP, ORNAMENT_MAP } from "./decorationMap";
+import { ScorePartwiseIR, PartIR, PartListEntryIR, MeasureIR, NoteIR, AttributesIR, PitchIR, NotationsIR } from "./ir";
 
 function lcm(a: number, b: number): number {
   if (a === 0 || b === 0) return 0;
@@ -47,10 +47,18 @@ export function computeDivisions(tune: Tune): number {
 
 export function splitVoiceIntoMeasures(voiceElements: VoiceElement[]): VoiceElement[][] {
   const measures: VoiceElement[][] = [[]];
+  let hasContent = false;
   for (const element of voiceElements) {
     if (isBarElement(element)) {
+      // Because a barline that arrives while the current measure is still
+      // empty (an opening repeat right after a closing barline, or at the
+      // very start) does not close a measure, we skip it, which avoids
+      // exporting a spurious empty measure.
+      if (!hasContent) continue;
       measures.push([]);
+      hasContent = false;
     } else {
+      hasContent = true;
       measures[measures.length - 1].push(element);
     }
   }
@@ -58,6 +66,29 @@ export function splitVoiceIntoMeasures(voiceElements: VoiceElement[]): VoiceElem
     measures.pop();
   }
   return measures;
+}
+
+/**
+ * Because splitVoiceIntoMeasures discards the barlines, we need a separate
+ * pass to learn which measures start a new system: those are the measures
+ * that follow a barline carrying lineBreakAfter.
+ */
+export function findSystemStartMeasureIndexes(voiceElements: VoiceElement[]): Set<number> {
+  const starts = new Set<number>();
+  let measureIndex = 0;
+  let hasContent = false;
+  for (const element of voiceElements) {
+    if (!isBarElement(element)) {
+      hasContent = true;
+      continue;
+    }
+    // Mirrors splitVoiceIntoMeasures, which skips a barline that follows no content.
+    if (!hasContent) continue;
+    hasContent = false;
+    measureIndex++;
+    if ((element as BarElement).lineBreakAfter) starts.add(measureIndex);
+  }
+  return starts;
 }
 
 interface CollectedStaff {
@@ -79,13 +110,21 @@ function collectContinuousVoicesByStaff(tune: Tune): CollectedStaff[] {
       voiceCount = Math.max(voiceCount, staff.voices.length);
     }
     const voices: VoiceElement[][] = Array.from({ length: voiceCount }, () => []);
-    for (const system of musicSystems) {
+    musicSystems.forEach((system, systemIndex) => {
       const staff = system.staff[staffIndex];
-      if (!staff) continue;
+      if (!staff) return;
+      const isLastSystem = systemIndex === musicSystems.length - 1;
       staff.voices.forEach((voiceElements, voiceIndex) => {
         voices[voiceIndex].push(...voiceElements);
+        // Because each ABC source line becomes its own system, the end of a
+        // system that is not the last one is a line break. We flag a copy of
+        // its closing barline so that the caller's Tune is left untouched.
+        const last = voiceElements[voiceElements.length - 1];
+        if (!isLastSystem && last && isBarElement(last)) {
+          voices[voiceIndex][voices[voiceIndex].length - 1] = { ...(last as BarElement), lineBreakAfter: true };
+        }
       });
-    }
+    });
     if (representative) {
       result.push({ representative, voices });
     }
@@ -162,10 +201,13 @@ export function meterToBeatsAndType(meter: Meter | undefined): { beats: string; 
   // MeterType.CommonTime/CutTime is also used for ABC mensural symbols
   // (o, c, o., c.), whose values are not 4/4 or 2/2, so the symbol is only
   // emitted when the value actually reduces to a whole note.
-  const reducesToWholeNote = total !== 0 && denominator !== 0 && (() => {
-    const g = findGCD(Math.abs(total), Math.abs(denominator));
-    return total / g === 1 && denominator / g === 1;
-  })();
+  const reducesToWholeNote =
+    total !== 0 &&
+    denominator !== 0 &&
+    (() => {
+      const g = findGCD(Math.abs(total), Math.abs(denominator));
+      return total / g === 1 && denominator / g === 1;
+    })();
   const isGenuineCommonTime = meter.type === MeterType.CommonTime && reducesToWholeNote;
   const isGenuineCutTime = meter.type === MeterType.CutTime && reducesToWholeNote;
   const symbol = isGenuineCommonTime ? "common" : isGenuineCutTime ? "cut" : undefined;
@@ -248,8 +290,7 @@ function buildNotationsIR(decoration: Decorations[] | undefined, startSlurs: num
       }
     }
   }
-  const hasContent =
-    notations.slurStarts || notations.slurStops || notations.articulations || notations.ornaments || notations.technical || notations.fermata;
+  const hasContent = notations.slurStarts || notations.slurStops || notations.articulations || notations.ornaments || notations.technical || notations.fermata;
   return hasContent ? notations : undefined;
 }
 
@@ -362,8 +403,15 @@ function buildVoiceMeasureNotes(measureElements: VoiceElement[], voiceNumber: nu
 
 function buildPart(collected: CollectedStaff, partId: string, divisions: number): PartIR {
   const voiceMeasures = collected.voices.map((v) => splitVoiceIntoMeasures(v));
+  const systemStarts = new Set<number>();
+  for (const voice of collected.voices) {
+    for (const index of findSystemStartMeasureIndexes(voice)) systemStarts.add(index);
+  }
   // MusicXML's <part> requires minOccurs="1" on <measure>.
-  const measureCount = Math.max(1, voiceMeasures.reduce((max, m) => Math.max(max, m.length), 0));
+  const measureCount = Math.max(
+    1,
+    voiceMeasures.reduce((max, m) => Math.max(max, m.length), 0)
+  );
   const slurAllocator = new SlurNumberAllocator();
   const measures: MeasureIR[] = [];
   for (let measureIndex = 0; measureIndex < measureCount; measureIndex++) {
@@ -378,11 +426,12 @@ function buildPart(collected: CollectedStaff, partId: string, divisions: number)
       }
       const voiceNotes = buildVoiceMeasureNotes(measureElements, voiceIndex + 1, divisions, slurAllocator);
       content.push(...voiceNotes);
-      cursor = voiceNotes.reduce((sum, n) => sum + (n.grace || n.chord ? 0 : n.duration ?? 0), 0);
+      cursor = voiceNotes.reduce((sum, n) => sum + (n.grace || n.chord ? 0 : (n.duration ?? 0)), 0);
     });
     const attributeSourceElements = voiceMeasures.flatMap((vm) => vm[measureIndex] ?? []);
-    const attributes = measureIndex === 0 ? buildMeasureAttributes(attributeSourceElements, divisions) : buildMeasureAttributes(attributeSourceElements, undefined);
-    measures.push({ number: measureIndex + 1, attributes, content });
+    const attributes =
+      measureIndex === 0 ? buildMeasureAttributes(attributeSourceElements, divisions) : buildMeasureAttributes(attributeSourceElements, undefined);
+    measures.push({ number: measureIndex + 1, attributes, content, ...(systemStarts.has(measureIndex) ? { newSystem: true } : {}) });
   }
   return { id: partId, measures };
 }

@@ -54,6 +54,8 @@ export interface AttributesIR {
 export interface MeasureIR {
   number: number;
   attributes?: AttributesIR;
+  // True when this measure is the first of a new system (<print new-system="yes"/>).
+  newSystem?: boolean;
   content: NoteIR[];
 }
 

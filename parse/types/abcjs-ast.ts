@@ -443,6 +443,11 @@ export interface BarElement extends BaseElement {
   startEnding?: string;
   endEnding?: boolean;
   barNumber?: number;
+  // Because ABC expresses a line break as an end-of-line right after a
+  // barline, the interpreter marks a barline that ends a source line, and the
+  // MusicXML exporter turns the mark into <print new-system="yes"/> on the
+  // measure that follows.
+  lineBreakAfter?: boolean;
 }
 
 export interface ClefElement extends BaseElement {

@@ -69,7 +69,9 @@ describe("importFromMusicSheet rest padding", () => {
     expect(measure2).to.have.length(1);
     expect(measure2[0].rest?.type).to.equal(RestType.Invisible);
     expect(measure2[0].duration).to.deep.equal({ numerator: 1, denominator: 1 });
-    expect(tuneToAbcText(tune, new ABCContext())).to.contain("x8");
+    const abc = tuneToAbcText(tune, new ABCContext());
+    expect(abc).to.match(/\bX\b/);
+    expect(abc).not.to.contain("x8");
   });
 
   it("pads the silent stretch before a lone note with a visible rest", () => {

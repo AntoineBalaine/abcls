@@ -47,7 +47,7 @@ import {
   music_code,
   tune_body_code,
 } from "./types/Expr";
-import { createRational, divideRational, IRational, rationalToRhythmExpr } from "./Visitors/fmt/rational";
+import { addRational, createRational, divideRational, equalRational, IRational, rationalToRhythmExpr } from "./Visitors/fmt/rational";
 import { AbcFormatter } from "./Visitors/Formatter";
 
 /**
@@ -412,10 +412,59 @@ function attributeToInlineField(ctx: ABCContext, element: VoiceElement, state: V
   return null;
 }
 
+/**
+ * Computes the length of a measure from a meter written as ABC text (such as
+ * "C", "C|", "6/8" or "3/4+2/4"), or null when the text is not understood.
+ */
+function meterTextToMeasureLength(meterText: string | null): IRational | null {
+  if (meterText === null) return null;
+  if (meterText === "C" || meterText === "C|") return createRational(1);
+  let total = createRational(0);
+  for (const part of meterText.split("+")) {
+    const match = /^(\d+)\/(\d+)$/.exec(part);
+    if (!match) return null;
+    total = addRational(total, createRational(Number(match[1]), Number(match[2])));
+  }
+  return total;
+}
+
+/**
+ * Finds the invisible rests that fill a whole measure on their own. Because
+ * an empty measure written as "x8" is longer and less readable than ABC's
+ * invisible multi-measure rest, buildVoiceBody writes these as "X". The meter
+ * is tracked through the voice because a meter change alters the length that
+ * counts as a whole measure.
+ */
+function findWholeMeasureRests(elements: VoiceElement[], initialMeterText: string | null): Set<NoteElement> {
+  const found = new Set<NoteElement>();
+  let measureLength = meterTextToMeasureLength(initialMeterText);
+  let notesInMeasure: NoteElement[] = [];
+  const closeMeasure = (): void => {
+    const only = notesInMeasure.length === 1 ? notesInMeasure[0] : undefined;
+    if (only && measureLength && only.rest?.type === RestType.Invisible && equalRational(only.duration, measureLength)) {
+      found.add(only);
+    }
+    notesInMeasure = [];
+  };
+  for (const element of elements) {
+    if (isBarElement(element)) {
+      closeMeasure();
+    } else if (element.el_type === ElementType.Note) {
+      notesInMeasure.push(element as NoteElement);
+    } else if (element.el_type === ElementType.Meter) {
+      const meterElement = element as MeterElement;
+      measureLength = meterTextToMeasureLength(meterToAbcString({ type: meterElement.type, value: meterElement.value }));
+    }
+  }
+  closeMeasure();
+  return found;
+}
+
 function buildVoiceBody(ctx: ABCContext, elements: VoiceElement[], defaultLength: IRational, state: VoiceBodyState): music_code[] {
   const out: music_code[] = [];
   const openSlurs = state.openSlurs;
   const beamRun: BeamRunContext = { run: [], noteCount: 0, open: false };
+  const wholeMeasureRests = findWholeMeasureRests(elements, state.meterText);
   for (const element of elements) {
     if (isBarElement(element)) {
       flushBeamRun(ctx, beamRun, out);
@@ -425,6 +474,11 @@ function buildVoiceBody(ctx: ABCContext, elements: VoiceElement[], defaultLength
     }
     if (element.el_type === ElementType.Note) {
       const noteElement = element as NoteElement;
+      if (wholeMeasureRests.has(noteElement)) {
+        flushBeamRun(ctx, beamRun, out);
+        out.push(new MultiMeasureRest(ctx.generateId(), synthToken(ctx, TT.REST, "X"), undefined));
+        continue;
+      }
       const code = noteElementToMusicCode(ctx, noteElement, defaultLength, openSlurs);
       // Because Rest is not a valid Beam content, a rest always closes the run.
       if (noteElement.rest) {

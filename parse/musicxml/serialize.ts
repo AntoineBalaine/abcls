@@ -96,9 +96,30 @@ function buildNotationsXml(note: NoteIR): XmlNode | undefined {
   if (note.tieStart) children.push(el("tied", { type: "start" }));
   if (n?.slurStarts) for (const num of n.slurStarts) children.push(el("slur", { type: "start", number: num }));
   if (n?.slurStops) for (const num of n.slurStops) children.push(el("slur", { type: "stop", number: num }));
-  if (n?.ornaments && n.ornaments.length) children.push(el("ornaments", undefined, n.ornaments.map((o) => el(o))));
-  if (n?.technical && n.technical.length) children.push(el("technical", undefined, n.technical.map((t) => el(t))));
-  if (n?.articulations && n.articulations.length) children.push(el("articulations", undefined, n.articulations.map((a) => el(a))));
+  if (n?.ornaments && n.ornaments.length)
+    children.push(
+      el(
+        "ornaments",
+        undefined,
+        n.ornaments.map((o) => el(o))
+      )
+    );
+  if (n?.technical && n.technical.length)
+    children.push(
+      el(
+        "technical",
+        undefined,
+        n.technical.map((t) => el(t))
+      )
+    );
+  if (n?.articulations && n.articulations.length)
+    children.push(
+      el(
+        "articulations",
+        undefined,
+        n.articulations.map((a) => el(a))
+      )
+    );
   if (n?.fermata) children.push(el("fermata", n.fermata === "inverted" ? { type: "inverted" } : undefined));
   const present = children.filter((c): c is XmlNode => c !== undefined);
   return present.length ? el("notations", undefined, present) : undefined;
@@ -133,17 +154,14 @@ function buildNoteXml(note: NoteIR): XmlNode {
 
 function buildMeasureXml(measure: MeasureIR): XmlNode {
   const children: Array<XmlNode | undefined> = [];
+  if (measure.newSystem) children.push(el("print", { "new-system": "yes" }));
   if (measure.attributes) children.push(buildAttributesXml(measure.attributes));
   for (const note of measure.content) children.push(buildNoteXml(note));
   return el("measure", { number: measure.number }, children);
 }
 
 function buildPartXml(part: PartIR): XmlNode {
-  return el(
-    "part",
-    { id: part.id },
-    part.measures.map(buildMeasureXml)
-  );
+  return el("part", { id: part.id }, part.measures.map(buildMeasureXml));
 }
 
 export function serializeScorePartwise(ir: ScorePartwiseIR): string {

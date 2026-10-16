@@ -1646,6 +1646,21 @@ export class TuneInterpreter implements Visitor<void> {
     }
   }
 
+  /**
+   * Because a source line that ends right after a barline is a line break
+   * the author chose, we flag that barline so that the MusicXML export can
+   * emit a <print new-system="yes"/> for the measure that follows it.
+   */
+  markLineBreakAfterLastBar(): void {
+    if (this.processingContext !== "tune_body") return;
+    if (this.state.currentSystemNum === -1 || this.state.currentStaffNum === -1 || this.state.currentVoiceIndex === -1) return;
+    const elements = this.getCurrentVoiceElements();
+    const last = elements[elements.length - 1];
+    if (last && last.el_type === ElementType.Bar) {
+      (last as BarElement).lineBreakAfter = true;
+    }
+  }
+
   visitBarLineExpr(expr: BarLine): void {
     const barType = determineBarType(expr.barline);
 
@@ -1681,6 +1696,10 @@ export class TuneInterpreter implements Visitor<void> {
   }
 
   visitToken(token: Token): void {
+    if (token.type === TT.EOL) {
+      this.markLineBreakAfterLastBar();
+      return;
+    }
     if (token.type === TT.SLUR) {
       const voiceState = this.state.voices.get(this.state.currentVoice);
       if (voiceState) {
