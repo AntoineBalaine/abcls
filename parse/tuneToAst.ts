@@ -4,6 +4,12 @@ import {
   AccidentalType,
   BarElement,
   BarType,
+  BracketBracePosition,
+  ClefElement,
+  ClefType,
+  KeyElement,
+  MeterElement,
+  Staff,
   Decorations,
   ElementType,
   GraceNote,
@@ -21,6 +27,8 @@ import {
 } from "./types/abcjs-ast";
 import {
   BarLine,
+  Directive,
+  Inline_field,
   Beam,
   Beam_contents,
   Chord,
@@ -258,6 +266,10 @@ interface VoiceEntry {
   id: string;
   name?: string;
   elements: VoiceElement[];
+  /** Index of the voice's staff in the first system that contains the voice. */
+  staffIndex: number;
+  /** Clef of that staff, which every voice of the staff shares. */
+  clef: ClefType;
 }
 
 /**
@@ -282,7 +294,7 @@ function collectVoiceEntries(tune: Tune): VoiceEntry[] {
         const id = staff.voiceIds?.[voiceIndex] ?? `${staffIndex}-${voiceIndex}`;
         let entry = byId.get(id);
         if (!entry) {
-          entry = { id, name: staff.voiceNames?.[voiceIndex], elements: [] };
+          entry = { id, name: staff.voiceNames?.[voiceIndex], elements: [], staffIndex, clef: staff.clef?.type ?? ClefType.Treble };
           byId.set(id, entry);
           order.push(id);
         } else if (!entry.name && staff.voiceNames?.[voiceIndex]) {
@@ -340,6 +352,64 @@ function flushBeamRun(ctx: ABCContext, beamRun: BeamRunContext, out: music_code[
  */
 interface VoiceBodyState {
   openSlurs: OpenSlur[];
+  /**
+   * The attributes in effect in the voice. Because the importer copies the
+   * staff's clef, key and meter elements into every voice at every measure
+   * where they appear, an element equal to the current state produces no
+   * inline field, which avoids repeating the header at the start of a voice.
+   */
+  clef: ClefType;
+  keyText: string;
+  meterText: string | null;
+}
+
+/** The key and meter written in the tune header, which every voice starts from. */
+interface HeaderAttributes {
+  keyText: string;
+  meterText: string | null;
+}
+
+function createVoiceBodyState(voice: VoiceEntry | undefined, header: HeaderAttributes): VoiceBodyState {
+  return { openSlurs: [], clef: voice?.clef ?? ClefType.Treble, keyText: header.keyText, meterText: header.meterText };
+}
+
+function synthInlineField(ctx: ABCContext, field: string, text: string): Inline_field {
+  const fieldToken = synthToken(ctx, TT.INF_HDR, field);
+  const valueToken = synthToken(ctx, TT.INFO_STR, text);
+  const leftBracket = synthToken(ctx, TT.INLN_FLD_LFT_BRKT, "[");
+  const rightBracket = synthToken(ctx, TT.INLN_FLD_RGT_BRKT, "]");
+  // Because the Formatter prints an inline field from value2 when it is
+  // present, passing the value token there yields [K:clef=bass].
+  return new Inline_field(ctx.generateId(), fieldToken, [fieldToken], [valueToken], leftBracket, rightBracket);
+}
+
+/**
+ * Converts a clef, key or meter element found in the middle of a voice into
+ * an inline field, when it differs from the voice's current state. A key
+ * change does not mention the clef, because an inline K: without clef= keeps
+ * the clef in effect.
+ */
+function attributeToInlineField(ctx: ABCContext, element: VoiceElement, state: VoiceBodyState): Inline_field | null {
+  if (element.el_type === ElementType.Clef) {
+    const clef = (element as ClefElement).type;
+    if (clef === state.clef) return null;
+    state.clef = clef;
+    return synthInlineField(ctx, "K:", `clef=${clef}`);
+  }
+  if (element.el_type === ElementType.Key) {
+    const keyText = keySignatureToAbcString(element as KeyElement);
+    if (keyText === state.keyText) return null;
+    state.keyText = keyText;
+    return synthInlineField(ctx, "K:", keyText);
+  }
+  if (element.el_type === ElementType.Meter) {
+    const meterElement = element as MeterElement;
+    const meterText = meterToAbcString({ type: meterElement.type, value: meterElement.value });
+    if (meterText === null || meterText === state.meterText) return null;
+    state.meterText = meterText;
+    return synthInlineField(ctx, "M:", meterText);
+  }
+  return null;
 }
 
 function buildVoiceBody(ctx: ABCContext, elements: VoiceElement[], defaultLength: IRational, state: VoiceBodyState): music_code[] {
@@ -376,9 +446,9 @@ function buildVoiceBody(ctx: ABCContext, elements: VoiceElement[], defaultLength
       continue;
     }
     flushBeamRun(ctx, beamRun, out);
-    // Clef/Key/Meter/Tempo mid-body elements are not reconstructed as inline
-    // fields in this version; the tune-level K:/M: header lines emitted from
-    // the first staff's values cover the common case.
+    // Tempo and other mid-body elements are not reconstructed yet.
+    const inlineField = attributeToInlineField(ctx, element, state);
+    if (inlineField) out.push(inlineField);
   }
   flushBeamRun(ctx, beamRun, out);
   return out;
@@ -476,6 +546,84 @@ function sliceByFixedBars(voiceEntries: VoiceEntry[], barsPerLine: number): Syst
   return slices;
 }
 
+/** Returns the text of one staff in a %%score directive: its voice ids, in parentheses when there are several. */
+function scoreStaffText(voiceIds: string[]): string {
+  return voiceIds.length > 1 ? `(${voiceIds.join(" ")})` : voiceIds[0];
+}
+
+/**
+ * The group being collected by buildScoreDirective: the staff texts inside an
+ * open brace or bracket, and the delimiters that will surround them.
+ */
+interface ScoreGroupContext {
+  items: string[];
+  open: string[] | null;
+  delimiters: [string, string];
+}
+
+/** Closes the open group, if any. The staves inside it are joined with "|", so that their bar lines are connected. */
+function closeScoreGroup(group: ScoreGroupContext): void {
+  if (group.open === null) return;
+  group.items.push(`${group.delimiters[0]}${group.open.join(" | ")}${group.delimiters[1]}`);
+  group.open = null;
+}
+
+/**
+ * Returns, for each staff index, the staff that defines its brace and bracket
+ * markers: the first music line that has a staff at that index. Because a
+ * voice's staffIndex comes from the first system that contains the voice,
+ * looking only at the first system could miss staves.
+ */
+function stavesByIndex(tune: Tune, staffCount: number): Array<Staff | undefined> {
+  const out: Array<Staff | undefined> = new Array(staffCount).fill(undefined);
+  for (const system of tune.systems) {
+    if (!isMusicLine(system)) continue;
+    (system as StaffSystem).staff.forEach((staff, index) => {
+      if (index < staffCount && out[index] === undefined) out[index] = staff;
+    });
+  }
+  return out;
+}
+
+/**
+ * Builds the %%score directive that keeps the voices of one staff on the
+ * same staff and groups the staves of one instrument. Because abcjs gives
+ * each voice its own staff when there is no %%score, the directive is only
+ * needed when a staff has several voices or staves are braced or bracketed.
+ * Every voice is listed, so that none is left untypeset; a brace and a
+ * bracket on the same staff (nested groups) only keep the brace.
+ */
+function buildScoreDirective(ctx: ABCContext, tune: Tune, voiceEntries: VoiceEntry[]): Directive | null {
+  if (voiceEntries.length <= 1) return null;
+  const staffCount = Math.max(...voiceEntries.map((v) => v.staffIndex)) + 1;
+  const staves = stavesByIndex(tune, staffCount);
+  const idsByStaff = staves.map((_, staffIndex) => voiceEntries.filter((v) => v.staffIndex === staffIndex).map((v) => v.id));
+  const hasSharedStaff = idsByStaff.some((ids) => ids.length > 1);
+  const hasGroup = staves.some((staff) => staff?.brace !== undefined || staff?.bracket !== undefined);
+  if (!hasSharedStaff && !hasGroup) return null;
+
+  const group: ScoreGroupContext = { items: [], open: null, delimiters: ["{", "}"] };
+  for (let staffIndex = 0; staffIndex < staffCount; staffIndex++) {
+    if (idsByStaff[staffIndex].length === 0) continue;
+    const staff = staves[staffIndex];
+    const text = scoreStaffText(idsByStaff[staffIndex]);
+    const marker = staff?.brace ?? staff?.bracket;
+    if (marker === BracketBracePosition.Start) {
+      closeScoreGroup(group);
+      group.open = [text];
+      group.delimiters = staff?.brace !== undefined ? ["{", "}"] : ["[", "]"];
+    } else if (group.open !== null && (marker === BracketBracePosition.Continue || marker === BracketBracePosition.End)) {
+      group.open.push(text);
+      if (marker === BracketBracePosition.End) closeScoreGroup(group);
+    } else {
+      closeScoreGroup(group);
+      group.items.push(text);
+    }
+  }
+  closeScoreGroup(group);
+  return new Directive(ctx.generateId(), synthToken(ctx, TT.IDENTIFIER, "score"), [synthToken(ctx, TT.IDENTIFIER, group.items.join(" "))]);
+}
+
 function synthVoiceMarker(ctx: ABCContext, id: string): Info_line {
   return new Info_line(ctx.generateId(), [synthToken(ctx, TT.INF_HDR, "V:"), synthToken(ctx, TT.INFO_STR, id)]);
 }
@@ -495,7 +643,7 @@ function resolveSlices(tune: Tune, voiceEntries: VoiceEntry[], lineBreaks: TuneT
  */
 export function tuneToAst(tune: Tune, ctx: ABCContext, options?: TuneToAbcOptions): TuneExpr {
   const voiceEntries = collectVoiceEntries(tune);
-  const headerLines: Info_line[] = [];
+  const headerLines: Array<Info_line | Directive> = [];
 
   headerLines.push(new Info_line(ctx.generateId(), [synthToken(ctx, TT.INF_HDR, "X:"), synthToken(ctx, TT.INFO_STR, "1")]));
 
@@ -506,9 +654,14 @@ export function tuneToAst(tune: Tune, ctx: ABCContext, options?: TuneToAbcOption
 
   const isSingleDefaultVoice = voiceEntries.length <= 1 && (voiceEntries.length === 0 || !voiceEntries[0].id);
 
+  const scoreDirective = buildScoreDirective(ctx, tune, voiceEntries);
+  if (scoreDirective) headerLines.push(scoreDirective);
+
   if (!isSingleDefaultVoice) {
     for (const voice of voiceEntries) {
-      const parts = [synthToken(ctx, TT.INF_HDR, "V:"), synthToken(ctx, TT.INFO_STR, voice.id)];
+      // Because treble is ABC's default clef, it is left implicit.
+      const definition = voice.clef === ClefType.Treble ? voice.id : `${voice.id} clef=${voice.clef}`;
+      const parts = [synthToken(ctx, TT.INF_HDR, "V:"), synthToken(ctx, TT.INFO_STR, definition)];
       headerLines.push(new Info_line(ctx.generateId(), parts));
     }
   }
@@ -516,6 +669,10 @@ export function tuneToAst(tune: Tune, ctx: ABCContext, options?: TuneToAbcOption
   headerLines.push(new Info_line(ctx.generateId(), [synthToken(ctx, TT.INF_HDR, "L:"), synthToken(ctx, TT.INFO_STR, "1/8")]));
 
   const staffDefaults = firstStaffOf(tune);
+  const header: HeaderAttributes = {
+    keyText: staffDefaults ? keySignatureToAbcString(staffDefaults.key) : "C",
+    meterText: meterToAbcString(staffDefaults?.meter),
+  };
   if (staffDefaults) {
     headerLines.push(
       new Info_line(ctx.generateId(), [synthToken(ctx, TT.INF_HDR, "K:"), synthToken(ctx, TT.KEY_SIGNATURE, keySignatureToAbcString(staffDefaults.key))])
@@ -548,29 +705,26 @@ export function tuneToAst(tune: Tune, ctx: ABCContext, options?: TuneToAbcOption
   if (options?.lineBreaks) {
     // Because ABC writes a multi-voice score system by system, each output
     // system holds one line per voice (deferred style), in header order.
-    const states = new Map<string, VoiceBodyState>(voiceEntries.map((voice) => [voice.id, { openSlurs: [] }]));
+    // A voice with nothing in a system is left out of that system, because
+    // its empty line would be a blank line, which ends an ABC tune.
+    const states = new Map<string, VoiceBodyState>(voiceEntries.map((voice) => [voice.id, createVoiceBodyState(voice, header)]));
     for (const slice of resolveSlices(tune, voiceEntries, options.lineBreaks)) {
       const system: tune_body_code[] = [];
-      if (isSingleDefaultVoice) {
-        if (voiceEntries.length === 1) {
-          const voice = voiceEntries[0];
-          system.push(...buildVoiceBody(ctx, slice.elementsByVoiceId.get(voice.id) ?? [], DEFAULT_NOTE_LENGTH, states.get(voice.id)!), eol());
-        }
-      } else {
-        for (const voice of voiceEntries) {
-          const content = buildVoiceBody(ctx, slice.elementsByVoiceId.get(voice.id) ?? [], DEFAULT_NOTE_LENGTH, states.get(voice.id)!);
-          system.push(synthVoiceMarker(ctx, voice.id), eol(), ...content, eol());
-        }
+      for (const voice of voiceEntries) {
+        const content = buildVoiceBody(ctx, slice.elementsByVoiceId.get(voice.id) ?? [], DEFAULT_NOTE_LENGTH, states.get(voice.id)!);
+        if (content.length === 0) continue;
+        if (!isSingleDefaultVoice) system.push(synthVoiceMarker(ctx, voice.id), eol());
+        system.push(...content, eol());
       }
-      bodySequence.push(system);
+      if (system.length > 0) bodySequence.push(system);
     }
   } else if (isSingleDefaultVoice) {
     if (voiceEntries.length === 1) {
-      bodySequence.push(buildVoiceBody(ctx, voiceEntries[0].elements, DEFAULT_NOTE_LENGTH, { openSlurs: [] }));
+      bodySequence.push(buildVoiceBody(ctx, voiceEntries[0].elements, DEFAULT_NOTE_LENGTH, createVoiceBodyState(voiceEntries[0], header)));
     }
   } else {
     for (const voice of voiceEntries) {
-      const content = buildVoiceBody(ctx, voice.elements, DEFAULT_NOTE_LENGTH, { openSlurs: [] });
+      const content = buildVoiceBody(ctx, voice.elements, DEFAULT_NOTE_LENGTH, createVoiceBodyState(voice, header));
       bodySequence.push([synthVoiceMarker(ctx, voice.id), eol(), ...content, eol()]);
     }
   }

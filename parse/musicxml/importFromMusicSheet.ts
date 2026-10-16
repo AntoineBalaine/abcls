@@ -27,6 +27,7 @@ import {
   OrnamentContainer,
   OrnamentEnum,
   Tuplet as OsmdTuplet,
+  Beam,
 } from "opensheetmusicdisplay";
 import { createEmptyTune } from "../interpreter/InterpreterState";
 import {
@@ -56,7 +57,7 @@ import {
   BarType,
   isBarElement,
 } from "../types/abcjs-ast";
-import { IRational, addRational, createRational, greaterRational, subtractRational } from "../Visitors/fmt/rational";
+import { IRational, addRational, createRational, equalRational, greaterRational, subtractRational } from "../Visitors/fmt/rational";
 import { INVERSE_ARTICULATION_MAP, INVERSE_ORNAMENT_MAP } from "./decorationMap";
 import { UnsupportedMusicXmlFeatureError } from "./importErrors";
 
@@ -133,18 +134,25 @@ const C_CLEF_LINE_TO_TYPE: Partial<Record<number, { base: ClefType; plus8: ClefT
   4: { base: ClefType.Tenor, plus8: ClefType.TenorPlus8, minus8: ClefType.TenorMinus8 },
 };
 
-function clefInstructionToType(clef: ClefInstruction): ClefType {
-  if (clef.ClefType === ClefEnum.TAB) {
-    throw new UnsupportedMusicXmlFeatureError("TAB clef");
-  }
+/**
+ * Returns the ClefType of a clef, or undefined when AbcLs has no equivalent
+ * for it (TAB clefs, C clefs on lines 1, 2 and 5, ...).
+ */
+function representableClefType(clef: ClefInstruction): ClefType | undefined {
+  if (clef.ClefType === ClefEnum.TAB) return undefined;
   const entry = clef.ClefType === ClefEnum.C ? C_CLEF_LINE_TO_TYPE[clef.Line] : CLEF_ENUM_TO_TYPE[clef.ClefType];
-  if (!entry) {
-    const label = clef.ClefType === ClefEnum.C ? `C clef on line ${clef.Line}` : `clef enum value ${ClefEnum[clef.ClefType] ?? clef.ClefType}`;
-    throw new UnsupportedMusicXmlFeatureError(label);
-  }
+  if (!entry) return undefined;
   if (clef.OctaveOffset === 1) return entry.plus8;
   if (clef.OctaveOffset === -1) return entry.minus8;
   return entry.base;
+}
+
+function clefInstructionToType(clef: ClefInstruction): ClefType {
+  const type = representableClefType(clef);
+  if (type !== undefined) return type;
+  if (clef.ClefType === ClefEnum.TAB) throw new UnsupportedMusicXmlFeatureError("TAB clef");
+  const label = clef.ClefType === ClefEnum.C ? `C clef on line ${clef.Line}` : `clef enum value ${ClefEnum[clef.ClefType] ?? clef.ClefType}`;
+  throw new UnsupportedMusicXmlFeatureError(label);
 }
 
 /**
@@ -207,7 +215,9 @@ function rhythmInstructionToMeter(rhythm: RhythmInstruction): Meter {
   const beatType = rhythm.Rhythm.Denominator;
   const type =
     rhythm.SymbolEnum === RhythmSymbolEnum.COMMON ? MeterType.CommonTime : rhythm.SymbolEnum === RhythmSymbolEnum.CUT ? MeterType.CutTime : MeterType.Specified;
-  return { type, value: [createRational(beats, beatType)] };
+  // Because a time signature is not a fraction to reduce (6/8 is not 3/4),
+  // the value keeps the written numbers, as the interpreter's own meters do.
+  return { type, value: [{ numerator: beats, denominator: beatType }] };
 }
 
 const ARTICULATION_ENUM_TO_NAME: Partial<Record<ArticulationEnum, string>> = {
@@ -333,38 +343,59 @@ function applyTupletInfo(element: NoteElement, note: OsmdNote): void {
 }
 
 /**
- * Marks the first and last element of a beam group. Because ABC cannot beam
- * across a bar line, a beam that crosses one is split at each measure
- * boundary, and a segment of a single note gets no flags at all. Every note
- * of a chord shares the beam, so the chord's first note is enough.
+ * Splits a beam's members into the segments that ABC can write as one beam
+ * group. Because ABC cannot beam across a bar line, and because a rest
+ * closes a group in the ABC output, a new segment starts at a measure
+ * change, after a rest member, and after a silent stretch between two
+ * consecutive members (a rest that is not part of the beam, or a gap that
+ * the importer pads with a rest). A beam may list every note of a chord, so
+ * each voice entry is represented by its first note.
+ */
+function beamSegments(beam: Beam): OsmdNote[][] {
+  const segments: OsmdNote[][] = [[]];
+  let previousEnd: IRational | null = null;
+  let previousMeasure: SourceMeasure | null = null;
+  const seen = new Set<VoiceEntry>();
+  for (const member of beam.Notes) {
+    const entry = member.ParentVoiceEntry;
+    if (!entry || seen.has(entry) || entry.IsGrace) continue;
+    seen.add(entry);
+    const current = segments[segments.length - 1];
+    if (member.isRest()) {
+      if (current.length > 0) segments.push([]);
+      previousEnd = null;
+      continue;
+    }
+    const start = fractionToRational(entry.Timestamp);
+    const startsNewSegment = previousMeasure !== member.SourceMeasure || (previousEnd !== null && !equalRational(previousEnd, start));
+    if (startsNewSegment && current.length > 0) segments.push([]);
+    segments[segments.length - 1].push(entry.Notes[0]);
+    previousEnd = addRational(start, fractionToRational(entry.Notes[0].Length));
+    previousMeasure = member.SourceMeasure;
+  }
+  return segments;
+}
+
+/**
+ * Marks the first and last element of the beam segment that contains the
+ * note (see beamSegments). A segment of a single note gets no flags, since
+ * a beam needs two notes.
  */
 function applyBeamFlags(element: NoteElement, note: OsmdNote): void {
   const beam = note.NoteBeam;
   if (!beam || note.isRest()) return;
-  // Because a beam may list every note of a chord, the members are reduced
-  // to one note per voice entry (the entry's first note) before comparing.
-  const members: OsmdNote[] = [];
-  for (const member of beam.Notes) {
-    const entry = member.ParentVoiceEntry;
-    if (member.isRest() || entry?.IsGrace) continue;
-    const representative = entry?.Notes[0] ?? member;
-    if (!members.includes(representative)) members.push(representative);
-  }
-  const index = members.indexOf(note);
-  if (index === -1 || members.length < 2) return;
-  const previous = members[index - 1];
-  const next = members[index + 1];
-  const startsSegment = !previous || previous.SourceMeasure !== note.SourceMeasure;
-  const endsSegment = !next || next.SourceMeasure !== note.SourceMeasure;
-  if (startsSegment && endsSegment) return;
-  if (startsSegment) element.startBeam = true;
-  if (endsSegment) element.endBeam = true;
+  const segment = beamSegments(beam).find((candidate) => candidate.includes(note));
+  if (!segment || segment.length < 2) return;
+  if (segment[0] === note) element.startBeam = true;
+  if (segment[segment.length - 1] === note) element.endBeam = true;
 }
 
 interface StaffAccumulator {
   osmdStaff: OsmdStaff;
   instrument: Instrument;
   voices: OsmdVoice[];
+  /** The ABC voice id of each voice, unique across the whole tune (see assignVoiceIds). */
+  voiceIds: string[];
   elementsByVoice: VoiceElement[][];
   pendingGraceNotes: GraceNote[][];
   /**
@@ -426,6 +457,29 @@ function convertMeasureAttributes(measure: SourceMeasure, globalStaffIndex: numb
       const meterElement: MeterElement = { el_type: ElementType.Meter, startChar: 0, endChar: 0, type: meter.type, value: meter.value };
       elements.push(meterElement);
     }
+  }
+  return elements;
+}
+
+/**
+ * Returns the clef changes that OSMD stores at the end of a measure. Because
+ * OSMD moves a clef change to the end of the previous measure (where a
+ * courtesy clef is drawn) instead of the start of the measure in which it
+ * takes effect, these clefs belong to the start of the next measure.
+ */
+function convertTrailingClefs(measure: SourceMeasure, globalStaffIndex: number): VoiceElement[] {
+  const entry = measure.LastInstructionsStaffEntries?.[globalStaffIndex];
+  if (!entry) return [];
+  const elements: VoiceElement[] = [];
+  for (const instruction of entry.Instructions) {
+    if (!(instruction instanceof ClefInstruction)) continue;
+    // Because mid-tune clef changes used to be ignored entirely, a change to
+    // a clef that AbcLs cannot represent is skipped rather than rejected, so
+    // that scores which imported before still import.
+    const type = representableClefType(instruction);
+    if (type === undefined) continue;
+    const clefElement: ClefElement = { el_type: ElementType.Clef, startChar: 0, endChar: 0, type, verticalPos: 0 };
+    elements.push(clefElement);
   }
   return elements;
 }
@@ -526,12 +580,14 @@ function buildStaffAccumulator(sheet: MusicSheet, osmdStaff: OsmdStaff, instrume
     osmdStaff,
     instrument,
     voices,
+    voiceIds: voices.map((v) => String(v.VoiceId)),
     elementsByVoice: voices.map(() => []),
     pendingGraceNotes: voices.map(() => []),
     measuresByVoice: voices.map(() => []),
     attributesByMeasure: [],
   };
   const slurAllocator = new SlurLabelAllocator();
+  let pendingClefs: VoiceElement[] = [];
 
   for (const measure of sheet.SourceMeasures) {
     const measureLists: VoiceElement[][] = voices.map(() => []);
@@ -541,7 +597,8 @@ function buildStaffAccumulator(sheet: MusicSheet, osmdStaff: OsmdStaff, instrume
         list.push(openRepeat);
       }
     }
-    acc.attributesByMeasure.push(convertMeasureAttributes(measure, globalStaffIndex));
+    acc.attributesByMeasure.push([...pendingClefs, ...convertMeasureAttributes(measure, globalStaffIndex)]);
+    pendingClefs = convertTrailingClefs(measure, globalStaffIndex);
 
     const cursor: MeasureCursorContext = {
       measureLength: measureLengthFor(measure),
@@ -603,6 +660,26 @@ function hasPitchedNote(measures: VoiceElement[][]): boolean {
   return false;
 }
 
+/**
+ * Makes every voice id unique across the tune. Because OSMD numbers voices
+ * per instrument, two parts both have a voice 1, and the serializer would
+ * merge them into a single ABC voice. A colliding id gets the staff's
+ * 1-based number appended (1 becomes 1_2 on the second staff).
+ */
+function assignVoiceIds(accumulators: StaffAccumulator[]): void {
+  const used = new Set<string>();
+  accumulators.forEach((acc, staffIndex) => {
+    acc.voiceIds = acc.voices.map((voice) => {
+      let id = String(voice.VoiceId);
+      if (used.has(id)) id = `${voice.VoiceId}_${staffIndex + 1}`;
+      let suffix = 2;
+      while (used.has(id)) id = `${voice.VoiceId}_${staffIndex + 1}_${suffix++}`;
+      used.add(id);
+      return id;
+    });
+  });
+}
+
 /** Returns the indices of the voices that contain at least one pitched note. */
 function pitchedVoiceIndices(acc: StaffAccumulator): number[] {
   const keep: number[] = [];
@@ -615,6 +692,7 @@ function pitchedVoiceIndices(acc: StaffAccumulator): number[] {
 /** Keeps only the voices whose indices are listed in `keep`. */
 function filterVoices(acc: StaffAccumulator, keep: number[]): void {
   acc.voices = keep.map((i) => acc.voices[i]);
+  acc.voiceIds = keep.map((i) => acc.voiceIds[i]);
   acc.measuresByVoice = keep.map((i) => acc.measuresByVoice[i]);
   acc.pendingGraceNotes = keep.map((i) => acc.pendingGraceNotes[i]);
   acc.elementsByVoice = keep.map(() => []);
@@ -622,16 +700,17 @@ function filterVoices(acc: StaffAccumulator, keep: number[]): void {
 
 /**
  * Builds one voice's element list for the measures in [fromMeasure, toMeasure).
- * The staff's attribute elements go into voice 0 only, right after a leading
- * left-repeat bar, because the left repeat belongs to the boundary before the
- * measure while the attributes belong to the measure itself.
+ * Because MusicXML attaches clefs, keys and meters to the staff, every voice
+ * of the staff receives its own copy of the measure's attribute elements,
+ * right after a leading left-repeat bar: the left repeat belongs to the
+ * boundary before the measure, while the attributes belong to the measure.
  */
 function flattenMeasureRange(acc: StaffAccumulator, voiceIndex: number, fromMeasure: number, toMeasure: number): VoiceElement[] {
   const out: VoiceElement[] = [];
   const measures = acc.measuresByVoice[voiceIndex];
   for (let m = fromMeasure; m < toMeasure && m < measures.length; m++) {
     const list = measures[m];
-    const attributes = voiceIndex === 0 ? (acc.attributesByMeasure[m] ?? []) : [];
+    const attributes = (acc.attributesByMeasure[m] ?? []).map((element) => ({ ...element }));
     const startsWithLeftRepeat = list.length > 0 && isBarElement(list[0]) && (list[0] as BarElement).type === BarType.BarLeftRepeat;
     if (startsWithLeftRepeat) {
       out.push(list[0], ...attributes, ...list.slice(1));
@@ -664,34 +743,37 @@ function flattenStaves(sheet: MusicSheet): FlatStaffEntry[] {
   return result;
 }
 
-function findFirstClefAndKey(elements: VoiceElement[]): { clef?: ClefType; key?: KeySignature } {
+function findFirstAttributes(elements: VoiceElement[]): { clef?: ClefType; key?: KeySignature; meter?: Meter } {
   let clef: ClefType | undefined;
   let key: KeySignature | undefined;
+  let meter: Meter | undefined;
   for (const element of elements) {
     if (element.el_type === ElementType.Clef && clef === undefined) clef = element.type;
     if (element.el_type === ElementType.Key && key === undefined) {
       key = { root: element.root, acc: element.acc, mode: element.mode, accidentals: element.accidentals };
     }
-    if (clef !== undefined && key !== undefined) break;
+    if (element.el_type === ElementType.Meter && meter === undefined) meter = { type: element.type, value: element.value };
+    if (clef !== undefined && key !== undefined && meter !== undefined) break;
   }
-  return { clef, key };
+  return { clef, key, meter };
 }
 
 /**
  * Builds the staff of one system, holding the measures in
  * [fromMeasure, toMeasure). Because every system must start with the same
- * staff metadata, the clef and key come from the first ones found in the
- * whole of voice 0; changes in the middle of the tune remain elements.
+ * staff metadata, the clef, key and meter come from the first ones found in
+ * the whole of voice 0; changes in the middle of the tune remain elements.
  */
 function buildTuneStaffForRange(acc: StaffAccumulator, fromMeasure: number, toMeasure: number): Staff {
-  const { clef, key } = findFirstClefAndKey(acc.elementsByVoice[0] ?? []);
+  const { clef, key, meter } = findFirstAttributes(acc.elementsByVoice[0] ?? []);
   const clefProperties = { type: clef ?? ClefType.Treble };
   const staff: Staff = {
     clef: clefProperties,
     workingClef: clefProperties,
     key: key ?? { root: KeyRoot.C, acc: KeyAccidental.None, mode: Mode.Major, accidentals: [] },
+    meter,
     voices: acc.measuresByVoice.map((_, voiceIndex) => flattenMeasureRange(acc, voiceIndex, fromMeasure, toMeasure)),
-    voiceIds: acc.voices.map((v) => String(v.VoiceId)),
+    voiceIds: acc.voiceIds,
     title: acc.instrument.Name ? [acc.instrument.Name] : undefined,
   };
   return staff;
@@ -752,6 +834,7 @@ export function importFromMusicSheet(sheet: MusicSheet): Tune {
     });
   }
   accumulators.forEach(flattenAccumulator);
+  assignVoiceIds(accumulators);
 
   // Because the source's system breaks are recorded by splitting
   // tune.systems, a caller that concatenates the systems per voice (as

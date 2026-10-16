@@ -211,9 +211,8 @@ function beamItemsToElements(measures: BeamItem[][]): VoiceElement[] {
 
 /**
  * Reads the beam flags that abcjs assigns to the notes of an ABC string.
- * Because the abcls interpreter currently beams eighth notes across spaces
- * (a known interpreter bug, outside the scope of the import work), abcjs,
- * the renderer the output is meant for, is the reference here.
+ * Because the output is meant to be rendered by abcjs, abcjs is checked in
+ * addition to the abcls interpreter.
  */
 function abcjsBeamSignature(abc: string): string[] {
   const tune = abcjs.parseOnly(abc)[0] as unknown as {
@@ -251,12 +250,18 @@ function collectBeams(node: unknown, out: Beam[]): void {
 const beamMeasuresArb = fc.array(fc.array(beamItemArb, { minLength: 1, maxLength: 4 }), { minLength: 1, maxLength: 4 });
 
 describe("tuneToAbcText beaming properties", () => {
-  it("preserves the beam flags through a text round trip read by abcjs", () => {
+  it("preserves the beam flags through a text round trip read by abcjs and the abcls interpreter", () => {
     fc.assert(
       fc.property(beamMeasuresArb, (measures) => {
         const elements = beamItemsToElements(measures);
         const text = tuneToAbcText(makeTune(elements), new ABCContext(new AbcErrorReporter()));
         expect(abcjsBeamSignature(text), text).to.deep.equal(beamSignature(elements));
+        const reparsedElements: VoiceElement[] = [];
+        for (const system of interpretABC(text).systems) {
+          if (!("staff" in system)) continue;
+          for (const staff of system.staff) for (const voice of staff.voices) reparsedElements.push(...voice);
+        }
+        expect(beamSignature(reparsedElements), text).to.deep.equal(beamSignature(elements));
       }),
       { numRuns: 100 }
     );

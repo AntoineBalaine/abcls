@@ -26,6 +26,15 @@ function chordEighth(steps: string[], beam: string): string {
     .join("");
 }
 
+function tupletEighth(step: string, beam: string, type: string): string {
+  const notations = type ? `<notations><tuplet type="${type}"/></notations>` : "";
+  return `<note><pitch><step>${step}</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><beam number="1">${beam}</beam>${notations}</note>`;
+}
+
+function beamedRest(duration: number, beam: string): string {
+  return `<note><rest/><duration>${duration}</duration><voice>1</voice><type>eighth</type><beam number="1">${beam}</beam></note>`;
+}
+
 function quarter(step: string): string {
   return `<note><pitch><step>${step}</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type></note>`;
 }
@@ -83,12 +92,9 @@ describe("importFromMusicSheet beaming", () => {
   });
 
   it("keeps a tuplet marker attached to its beamed group", () => {
-    const tuplet = (step: string, beam: string, type: string) =>
-      `<note><pitch><step>${step}</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><beam number="1">${beam}</beam>${type ? `<notations><tuplet type="${type}"/></notations>` : ""}</note>`;
-    const xml = scoreXml([`${tuplet("C", "begin", "start")}${tuplet("D", "continue", "")}${tuplet("E", "end", "stop")}${quarter("C")}${quarter("C")}`]).replace(
-      "<divisions>2</divisions>",
-      "<divisions>6</divisions>"
-    );
+    const xml = scoreXml([
+      `${tupletEighth("C", "begin", "start")}${tupletEighth("D", "continue", "")}${tupletEighth("E", "end", "stop")}${quarter("C")}${quarter("C")}`,
+    ]).replace("<divisions>2</divisions>", "<divisions>6</divisions>");
     const fixed = xml.replace(/<duration>2<\/duration><voice>1<\/voice><type>quarter/g, "<duration>6</duration><voice>1</voice><type>quarter");
     const { body } = convert(fixed);
     // Because the existing tuplet serialization writes explicit rhythms, only the grouping is checked here.
@@ -109,6 +115,18 @@ describe("importFromMusicSheet beaming", () => {
       expect(n.startBeam).to.equal(undefined);
       expect(n.endBeam).to.equal(undefined);
     }
+  });
+
+  it("starts a new group after a rest that is part of the beam", () => {
+    const content = `${eighth("C", "begin")}${beamedRest(1, "continue")}${eighth("D", "continue")}${eighth("E", "end")}${quarter("F")}${quarter("G")}`;
+    const { body } = convert(scoreXml([content]));
+    expect(body).to.equal("c z de f2 g2 |");
+  });
+
+  it("starts a new group after a silent stretch inside the beam", () => {
+    const content = `${eighth("C", "begin")}<forward><duration>1</duration><voice>1</voice></forward>${eighth("D", "continue")}${eighth("E", "end")}${quarter("F")}${quarter("G")}`;
+    const { body } = convert(scoreXml([content]));
+    expect(body).to.equal("c z de f2 g2 |");
   });
 
   it("closes a group at a rest", () => {

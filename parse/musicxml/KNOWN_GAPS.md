@@ -91,3 +91,11 @@ The following content is imported, but written to ABC in a simplified form.
   without options each voice is written on a single line.
 - Every bar line is written as a plain `|`, so a left repeat currently
   prints as an extra `|`.
+- Clef changes in the middle of a tune are read from the end of the
+  previous measure, where OSMD stores them. A change to a clef that AbcLs
+  cannot represent (for instance a C clef on line 2) is skipped instead of
+  throwing, and clef changes in the middle of a measure are not read.
+- A measure is padded to the larger of OSMD's measure duration and the end
+  of its longest voice. Because OSMD derives the duration from the content,
+  a measure in which every voice stops early (for instance an OMR measure
+  that lost its final rest) is not padded up to the time signature.

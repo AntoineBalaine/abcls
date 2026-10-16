@@ -22,6 +22,10 @@ function measure(step: string, twoVoices: boolean, newSystem = false): string {
   return `${newSystem ? NEW_SYSTEM : ""}${wholeNote(step)}${second}`;
 }
 
+function slurredWhole(step: string, type: string): string {
+  return `<note><pitch><step>${step}</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type><notations><slur number="1" type="${type}"/></notations></note>`;
+}
+
 function importXml(xml: string): Tune {
   return importFromMusicSheet(parseMusicXmlToSheet(xml));
 }
@@ -91,9 +95,7 @@ describe("tuneToAbcText line breaks", () => {
   });
 
   it("keeps a slur that crosses a system boundary balanced", () => {
-    const slurred = (step: string, type: string) =>
-      `<note><pitch><step>${step}</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type><notations><slur number="1" type="${type}"/></notations></note>`;
-    const xml = scoreXml([slurred("C", "start"), `${NEW_SYSTEM}${slurred("D", "stop")}`]);
+    const xml = scoreXml([slurredWhole("C", "start"), `${NEW_SYSTEM}${slurredWhole("D", "stop")}`]);
     const lines = musicLines(tuneToAbcText(importXml(xml), new ABCContext(), { lineBreaks: SOURCE }));
     expect(lines).to.have.length(2);
     expect(lines[0]).to.contain("(");
