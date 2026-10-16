@@ -8,7 +8,7 @@
 
 import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
 import { SemanticData } from "../analyzers/semantic-analyzer";
-import { isComment, isInfo_line } from "../helpers";
+import { isComment, isInfo_line, isToken } from "../helpers";
 import { ABCContext } from "../parsers/Context";
 import { Token, TT } from "../parsers/scan";
 import {
@@ -25,6 +25,8 @@ import {
   Decorations,
   ClefProperties,
   KeyElement,
+  KeyInfo,
+  ClefElement,
   MeterElement,
   TextLine,
   TextFieldProperties,
@@ -1312,18 +1314,9 @@ export class TuneInterpreter implements Visitor<void> {
         // Unlike pushElement's lazy switch, this actively searches for the next slot.
         switchToVoice(this.state, id);
       } else if (isKeyInfo(semanticData)) {
-        const voice = getCurrentVoice(this.state);
-        if (voice) {
-          voice.currentKey = semanticData.data.keySignature;
-          if (semanticData.data.clef) {
-            voice.currentClef = semanticData.data.clef;
-          }
-        }
-        // Also update tune defaults for future voices
-        this.state.tuneDefaults.key = semanticData.data.keySignature;
-        if (semanticData.data.clef) {
-          this.state.tuneDefaults.clef = semanticData.data.clef;
-        }
+        const lastToken = expr.value[expr.value.length - 1];
+        const endChar = lastToken && isToken(lastToken) ? lastToken.position + lastToken.lexeme.length : expr.key.position + expr.key.lexeme.length;
+        this.applyKeyChange(semanticData.data, expr.key.position, endChar);
       } else if (isMeterInfo(semanticData)) {
         const voice = getCurrentVoice(this.state);
         if (voice) {
@@ -1830,7 +1823,48 @@ export class TuneInterpreter implements Visitor<void> {
     voiceState.pendingGraceNotes = graceNotes;
   }
 
-  // TODO: create a helper that can be shared with the info lines?
+  /**
+   * Applies a K: change found in the tune body, either as an inline field
+   * ([K:Bb]) or as a K: line. Because abcjs pushes a key element only when
+   * the field gives a key, and a clef element when it gives a clef, a field
+   * that only changes the clef ([K:clef=bass]) keeps the key in effect.
+   * The tune defaults are updated too, so that voices created later start
+   * from the new key and clef.
+   */
+  applyKeyChange(data: KeyInfo, startChar: number, endChar: number): void {
+    const voice = getCurrentVoice(this.state);
+    // Because abcjs writes the clef before the key signature, the clef
+    // element is pushed first.
+    if (data.clef) {
+      if (voice) voice.currentClef = data.clef;
+      this.state.tuneDefaults.clef = data.clef;
+      if (data.clef.type !== undefined) {
+        const clefElement: ClefElement = {
+          el_type: ElementType.Clef,
+          startChar,
+          endChar,
+          type: data.clef.type,
+          verticalPos: data.clef.verticalPos ?? 0,
+        };
+        this.pushElement(clefElement);
+      }
+    }
+    if (!data.keyOmitted) {
+      if (voice) voice.currentKey = data.keySignature;
+      this.state.tuneDefaults.key = data.keySignature;
+      const keyElement: KeyElement = {
+        el_type: ElementType.Key,
+        startChar,
+        endChar,
+        root: data.keySignature.root,
+        acc: data.keySignature.acc,
+        mode: data.keySignature.mode,
+        accidentals: data.keySignature.accidentals,
+      };
+      this.pushElement(keyElement);
+    }
+  }
+
   visitInlineFieldExpr(expr: Inline_field): void {
     // Inline fields are analyzed by SemanticAnalyzer and reuse Info_line analysis logic
     const semanticData = this.state.semanticData.get(expr.id);
@@ -1854,30 +1888,7 @@ export class TuneInterpreter implements Visitor<void> {
       }
       switchToVoice(this.state, id);
     } else if (isKeyInfo(semanticData)) {
-      const voice = getCurrentVoice(this.state);
-      if (voice) {
-        voice.currentKey = semanticData.data.keySignature;
-        if (semanticData.data.clef) {
-          voice.currentClef = semanticData.data.clef;
-        }
-      }
-      // Also update tune defaults for future voices
-      this.state.tuneDefaults.key = semanticData.data.keySignature;
-      if (semanticData.data.clef) {
-        this.state.tuneDefaults.clef = semanticData.data.clef;
-      }
-
-      // Create a key element in the voice for rendering
-      const keyElement: KeyElement = {
-        el_type: ElementType.Key,
-        startChar,
-        endChar,
-        root: semanticData.data.keySignature.root,
-        acc: semanticData.data.keySignature.acc,
-        mode: semanticData.data.keySignature.mode,
-        accidentals: semanticData.data.keySignature.accidentals,
-      };
-      this.pushElement(keyElement);
+      this.applyKeyChange(semanticData.data, startChar, endChar);
     } else if (isMeterInfo(semanticData)) {
       const voice = getCurrentVoice(this.state);
       if (voice) {

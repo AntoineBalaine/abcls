@@ -1072,7 +1072,7 @@ describe("scan2", () => {
       assert.equal(ctx.tokens.length, 4);
       assert.equal(ctx.tokens[0].type, TT.INLN_FLD_LFT_BRKT);
       assert.equal(ctx.tokens[1].type, TT.INF_HDR);
-      assert.equal(ctx.tokens[2].type, TT.NOTE_LETTER); // G is key root (note letter)
+      assert.equal(ctx.tokens[2].type, TT.KEY_SIGNATURE); // the key is a single token, as in a K: line
       assert.equal(ctx.tokens[2].lexeme, "G");
       assert.equal(ctx.tokens[3].type, TT.INLN_FLD_RGT_BRKT);
     });
@@ -1120,25 +1120,22 @@ describe("scan2", () => {
       assert.equal(result, true);
       assert.equal(ctx.tokens[0].type, TT.INLN_FLD_LFT_BRKT);
       assert.equal(ctx.tokens[1].type, TT.INF_HDR);
-      // F should be NOTE_LETTER, # should be ACCIDENTAL, m should be IDENTIFIER
-      const noteToken = ctx.tokens.find((t) => t.type === TT.NOTE_LETTER);
-      const accToken = ctx.tokens.find((t) => t.type === TT.ACCIDENTAL);
-      const modeToken = ctx.tokens.find((t) => t.type === TT.IDENTIFIER && t.lexeme === "m");
-      assert.ok(noteToken, "Should have NOTE_LETTER for F");
-      assert.equal(noteToken?.lexeme, "F");
-      assert.ok(accToken, "Should have ACCIDENTAL for #");
-      assert.equal(accToken?.lexeme, "#");
-      assert.ok(modeToken, "Should have IDENTIFIER for mode m");
+      // Because the root, accidental and mode form one key, they are a single KEY_SIGNATURE token
+      assert.equal(ctx.tokens[2].type, TT.KEY_SIGNATURE);
+      assert.equal(ctx.tokens[2].lexeme, "F#m");
+      assert.equal(ctx.tokens[3].type, TT.INLN_FLD_RGT_BRKT);
     });
 
     it("should tokenize inline key change with Bb", () => {
       const ctx = createCtx("[K:Bb]");
       const result = inline_field(ctx);
       assert.equal(result, true);
-      const noteToken = ctx.tokens.find((t) => t.type === TT.NOTE_LETTER);
-      const accToken = ctx.tokens.find((t) => t.type === TT.ACCIDENTAL);
-      assert.equal(noteToken?.lexeme, "B");
-      assert.equal(accToken?.lexeme, "b");
+      const keyToken = ctx.tokens.find((t) => t.type === TT.KEY_SIGNATURE);
+      assert.equal(keyToken?.lexeme, "Bb");
+      assert.equal(
+        ctx.tokens.some((t) => t.type === TT.NOTE_LETTER || t.type === TT.ACCIDENTAL),
+        false
+      );
     });
   });
 

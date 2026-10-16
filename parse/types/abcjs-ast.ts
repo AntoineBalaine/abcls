@@ -305,6 +305,11 @@ export interface KeySignature {
 export interface KeyInfo {
   keySignature: KeySignature;
   clef?: ClefProperties;
+  /**
+   * True when the K: field gives no key, only modifiers ([K:clef=bass]).
+   * keySignature is then a placeholder that must not replace the key in effect.
+   */
+  keyOmitted?: boolean;
 }
 
 export interface Meter {

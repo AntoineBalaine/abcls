@@ -138,8 +138,21 @@ export function analyzeKeyInfo(expr: Info_line, analyzer: SemanticAnalyzer): Inf
 
   let valueIndex = 0;
 
+  // Because a K: field may only change the clef ([K:clef=bass]), a first
+  // token that is the name of a modifier (followed by "=") means that no key
+  // was given; the key signature in keyInfo is then only a placeholder.
+  const firstItem = expr.value[0];
+  const secondItem = expr.value[1];
+  const startsWithModifier =
+    (isToken(firstItem) && (firstItem as Token).type !== TT.KEY_SIGNATURE && isToken(secondItem) && (secondItem as Token).type === TT.EQL) ||
+    firstItem instanceof KV;
+  if (startsWithModifier) {
+    keyInfo.keyOmitted = true;
+    valueIndex = 0;
+  }
+
   // 1. Parse key signature from first token in value array
-  const firstToken = expr.value[valueIndex];
+  const firstToken = startsWithModifier ? undefined : expr.value[valueIndex];
   if (isToken(firstToken)) {
     const token = firstToken as Token;
 

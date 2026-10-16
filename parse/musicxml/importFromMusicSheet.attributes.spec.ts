@@ -345,17 +345,8 @@ describe("tuneToAbcText clef and attribute properties", () => {
     );
   });
 
-  // Because fifths 0, 1, 2 and -1 give C, G, D and F, these keys have a
-  // tonic without accidental, which the inline K: scanning handles.
   it("preserves the sequence of meter and key changes of a voice", () => {
-    fc.assert(fc.property(genAttributeChanges([0, 1, 2, -1]), checkAttributeRoundTrip), { numRuns: 40 });
-  });
-
-  // Because the scanner tokenizes the value of an inline [K:Bb] as a note
-  // letter followed by an accidental, the interpreter receives key B without
-  // its flat. Fixing the inline K: scanning is deferred to a separate plan.
-  it.skip("preserves key changes whose tonic has an accidental", () => {
-    fc.assert(fc.property(genAttributeChanges([-2, -3, 3, 6]), checkAttributeRoundTrip), { numRuns: 40 });
+    fc.assert(fc.property(genAttributeChanges([0, 1, 2, 3, 6, -1, -2, -3, -6]), checkAttributeRoundTrip), { numRuns: 60 });
   });
 });
 

@@ -1,6 +1,7 @@
+import { Decorations } from "../types/abcjs-ast";
 import { scanDirective } from "./infoLines/scanDirective";
 import { absolutePitch, infoLineIdentifier, singleChar, specialLiteral, stringLiteral, unsignedNumber } from "./infoLines/scanInfoLine";
-import { Decorations } from "../types/abcjs-ast";
+import { keySignature } from "./infoLines/scanKeyInfoLine";
 import {
   Ctx,
   EOL,
@@ -498,6 +499,16 @@ export function inline_field(ctx: Ctx): boolean {
 
   advance(ctx); // consume the :
   ctx.push(TT.INF_HDR);
+
+  // Because the general content scanner tries pitches first, it would split
+  // a key such as "Bb" into a note letter and an accidental. A K: field
+  // therefore starts with the same key signature scanner as a K: info line,
+  // which produces a single KEY_SIGNATURE token; the modifiers that follow
+  // (clef=bass, ...) use the general scanner.
+  if (fieldType === "K") {
+    WS(ctx);
+    keySignature(ctx);
+  }
 
   // Tokenize content using appropriate scanners based on field type
   const scanContent = fieldType === "V" ? scanVoiceFieldContent : scanGeneralFieldContent;
