@@ -40,6 +40,15 @@ C z D z2 E
   ^   ^
 ```
 
+### selectAnnotations
+
+Selects all annotation nodes (quoted text such as `"^text"`) within the current scope.
+
+```
+"^allegro" C "_dolce" D
+ ^^^^^^^^^^     ^^^^^^^
+```
+
 ### selectNonChordNotes
 
 Selects notes that are not children of a chord. Given a mix of chords and standalone notes, this picks only the standalone ones.

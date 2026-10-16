@@ -28,7 +28,16 @@ export { fromAst } from "./csTree/fromAst";
 export { toAst } from "./csTree/toAst";
 
 // Selectors
-export { selectChords, selectNotes, selectNonChordNotes, selectChordNotes, selectRests, selectRhythm, selectRhythmParent } from "./selectors/typeSelectors";
+export {
+  selectChords,
+  selectNotes,
+  selectNonChordNotes,
+  selectChordNotes,
+  selectRests,
+  selectRhythm,
+  selectRhythmParent,
+  selectAnnotations,
+} from "./selectors/typeSelectors";
 export { selectTune } from "./selectors/structureSelectors";
 export { selectTop, selectBottom, selectNthFromTop, selectAllButTop, selectAllButBottom } from "./selectors/chordSelectors";
 export {

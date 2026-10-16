@@ -142,6 +142,11 @@
         "category": "ABC"
       },
       {
+        "command": "abc.selectAnnotations",
+        "title": "ABC: Select Annotations",
+        "category": "ABC"
+      },
+      {
         "command": "abc.selectTune",
         "title": "ABC: Select Tune",
         "category": "ABC"
@@ -486,6 +491,10 @@
         },
         {
           "command": "abc.selectRests",
+          "when": "editorLangId == abc"
+        },
+        {
+          "command": "abc.selectAnnotations",
           "when": "editorLangId == abc"
         },
         {
