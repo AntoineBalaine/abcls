@@ -110,9 +110,7 @@
     "report-dir": "../coverage"
   },
   "dependencies": {
-    "@astrojs/starlight": "0.41.10",
     "@typescript-eslint/parser": "^6.11.0",
-    "astro": "7.2.9",
     "fast-check": "^4.0.0",
     "jsdom": "^30.0.1",
     "lodash": "^4.17.21",
