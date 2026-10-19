@@ -62,8 +62,9 @@ describe("CSTree ContextInterpreter measure accidentals", () => {
     const input = "X:1\nK:C\n^F G =F|";
     const { snapshots } = parseAndInterpret(input);
 
-    const lastSnapshot = snapshots[snapshots.length - 1].snapshot;
-    expect(lastSnapshot.measureAccidentals?.get("F")).to.equal(AccidentalType.Natural);
+    // Because the barline pushes its own snapshot, we read the snapshot at the last note rather than the last one.
+    const snapshot = getSnapshotAtPosition(snapshots, encode(2, 6));
+    expect(snapshot.measureAccidentals?.get("F")).to.equal(AccidentalType.Natural);
   });
 
   it("should clear accidentals at barline", () => {
@@ -77,6 +78,24 @@ describe("CSTree ContextInterpreter measure accidentals", () => {
         expect(snapshot.measureAccidentals.has("F")).to.be.false;
       }
     }
+  });
+
+  it("should record the barline reset in a snapshot", () => {
+    const input = "X:1\nK:C\n^F G|A F|";
+    const { snapshots } = parseAndInterpret(input);
+
+    // Because no accidental appears in the second bar, only a snapshot pushed at the
+    // barline can tell that the ^F of the first bar no longer applies.
+    const snapshot = getSnapshotAtPosition(snapshots, encode(2, 6));
+    expect(snapshot.measureAccidentals?.has("F")).to.be.false;
+  });
+
+  it("should record the line-end reset in a snapshot", () => {
+    const input = "X:1\nK:C\n^F G\nA F|";
+    const { snapshots } = parseAndInterpret(input);
+
+    const snapshot = getSnapshotAtPosition(snapshots, encode(3, 1));
+    expect(snapshot.measureAccidentals?.has("F")).to.be.false;
   });
 
   it("should record accidentals inside chords", () => {
@@ -109,8 +128,9 @@ describe("CSTree ContextInterpreter measure accidentals", () => {
     const input = "X:1\nK:C\n^F G ^f|";
     const { snapshots } = parseAndInterpret(input);
 
-    const lastSnapshot = snapshots[snapshots.length - 1].snapshot;
-    expect(lastSnapshot.measureAccidentals?.get("F")).to.equal(AccidentalType.Sharp);
+    // Because the barline pushes its own snapshot, we read the snapshot at the last note rather than the last one.
+    const snapshot = getSnapshotAtPosition(snapshots, encode(2, 6));
+    expect(snapshot.measureAccidentals?.get("F")).to.equal(AccidentalType.Sharp);
   });
 
   it("should clear accidentals at system break", () => {

@@ -443,7 +443,12 @@ export class ContextInterpreter implements Visitor<void> {
       for (const element of system) {
         if (element instanceof Token) {
           if (element.type === TT.EOL) {
+            const hadAccidentals = this.getCurrentVoice().measureAccidentals.size > 0;
             this.clearAllVoicesAccidentals();
+            // Because the reset at the end of the line would otherwise leave no trace, we record it.
+            if (this.config.snapshotAccidentals && hadAccidentals) {
+              this.pushSnapshot(element);
+            }
           }
           continue;
         }
@@ -472,10 +477,23 @@ export class ContextInterpreter implements Visitor<void> {
       if (sem.data.clef) {
         this.state.tuneDefaults.clef = sem.data.clef;
       }
+      // Because a header K: is tune-wide, the voices declared before it (e.g. V:1 and V:2
+      // in the header) must also receive the key, otherwise they keep the default C major.
+      if (!this.state.inBody) {
+        for (const headerVoice of this.state.voices.values()) {
+          headerVoice.currentKey = sem.data.keySignature;
+        }
+      }
       return true;
     } else if (sem.type === "meter") {
       voice.currentMeter = sem.data;
       this.state.tuneDefaults.meter = sem.data;
+      // Because a header M: is tune-wide, the voices declared before it must also receive the meter.
+      if (!this.state.inBody) {
+        for (const headerVoice of this.state.voices.values()) {
+          headerVoice.currentMeter = sem.data;
+        }
+      }
       return true;
     } else if (sem.type === "note_length") {
       this.state.tuneDefaults.noteLength = sem.data;
@@ -532,9 +550,15 @@ export class ContextInterpreter implements Visitor<void> {
     }
   }
 
-  visitBarLineExpr(_expr: BarLine): void {
+  visitBarLineExpr(expr: BarLine): void {
     this.state.measureNumber++;
+    const hadAccidentals = this.getCurrentVoice().measureAccidentals.size > 0;
     this.clearCurrentVoiceAccidentals();
+    // Because snapshots are otherwise only pushed at notes that carry an accidental, the
+    // reset at the barline must be recorded, or the next measure would inherit the stale accidentals.
+    if (this.config.snapshotAccidentals && hadAccidentals) {
+      this.pushSnapshot(expr);
+    }
   }
 
   // ============================================================================

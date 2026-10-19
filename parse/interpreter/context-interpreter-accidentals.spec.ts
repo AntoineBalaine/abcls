@@ -65,9 +65,9 @@ describe("ContextInterpreter measure accidentals", () => {
     const input = "X:1\nK:C\n^F G =F|";
     const { snapshots } = parseAndInterpret(input);
 
-    // Find the last snapshot which should have F -> Natural
-    const lastSnapshot = snapshots[snapshots.length - 1].snapshot;
-    expect(lastSnapshot.measureAccidentals?.get("F")).to.equal(AccidentalType.Natural);
+    // Because the barline pushes its own snapshot, we read the snapshot at the =F rather than the last one.
+    const snapshot = getSnapshotAtPosition(snapshots, encode(2, 6));
+    expect(snapshot.measureAccidentals?.get("F")).to.equal(AccidentalType.Natural);
   });
 
   it("should clear accidentals at barline", () => {
@@ -85,6 +85,24 @@ describe("ContextInterpreter measure accidentals", () => {
         expect(snapshot.measureAccidentals.has("F")).to.be.false;
       }
     }
+  });
+
+  it("should record the barline reset in a snapshot", () => {
+    const input = "X:1\nK:C\n^F G|A F|";
+    const { snapshots } = parseAndInterpret(input);
+
+    // Because no accidental appears in the second bar, only a snapshot pushed at the
+    // barline can tell that the ^F of the first bar no longer applies.
+    const snapshot = getSnapshotAtPosition(snapshots, encode(2, 6));
+    expect(snapshot.measureAccidentals?.has("F")).to.be.false;
+  });
+
+  it("should record the line-end reset in a snapshot", () => {
+    const input = "X:1\nK:C\n^F G\nA F|";
+    const { snapshots } = parseAndInterpret(input);
+
+    const snapshot = getSnapshotAtPosition(snapshots, encode(3, 1));
+    expect(snapshot.measureAccidentals?.has("F")).to.be.false;
   });
 
   it("should record accidentals inside chords", () => {
@@ -119,8 +137,8 @@ describe("ContextInterpreter measure accidentals", () => {
     const { snapshots } = parseAndInterpret(input);
 
     // Both F and f should map to "F" (uppercase)
-    const lastSnapshot = snapshots[snapshots.length - 1].snapshot;
-    expect(lastSnapshot.measureAccidentals?.get("F")).to.equal(AccidentalType.Sharp);
+    const snapshot = getSnapshotAtPosition(snapshots, encode(2, 6));
+    expect(snapshot.measureAccidentals?.get("F")).to.equal(AccidentalType.Sharp);
   });
 
   it("should clear accidentals at system break", () => {

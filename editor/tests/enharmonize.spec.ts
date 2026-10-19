@@ -6,6 +6,7 @@ import { resolveMelodyPitch, PitchContext } from "abcls-parser/music-theory/pitc
 import { expect } from "chai";
 import * as fc from "fast-check";
 import { describe, it } from "mocha";
+import { interpretContext } from "../src/context/csContextInterpreter";
 import { fromAst } from "../src/csTree/fromAst";
 import { toAst } from "../src/csTree/toAst";
 import { CSNode } from "../src/csTree/types";
@@ -614,6 +615,22 @@ function runEnharmonizeToKey(input: string): string {
 }
 
 /**
+ * Runs enharmonizeToKey with snapshots from the CSTree interpreter, which is the one the
+ * language server uses, and returns the formatted result.
+ */
+function runEnharmonizeToKeyWithCsInterpreter(input: string): string {
+  const ctx = new ABCContext();
+  const ast = parse(Scanner(input, ctx), ctx);
+  const analyzer = new SemanticAnalyzer(ctx);
+  ast.accept(analyzer);
+  const snapshots = interpretContext(fromAst(ast, ctx), analyzer.data, { snapshotAccidentals: true });
+
+  const selection = createSelection(fromAst(ast, ctx));
+  enharmonizeToKey(selection, snapshots, ctx);
+  return formatSelection(selection);
+}
+
+/**
  * Gets the MIDI pitch from the first note in an ABC string, considering key signature.
  */
 function getFirstNoteMidi(source: string): number {
@@ -668,6 +685,40 @@ describe("enharmonizeToKey", () => {
       // When there's a =F earlier in the measure, the second =F should become F
       const result = runEnharmonizeToKey("X:1\nK:G\n=F =F|");
       expect(result).to.equal("X:1\nK:G\n=F F|");
+    });
+  });
+
+  describe("regressions", () => {
+    it("removes redundant sharps in voices declared before the header K:", () => {
+      const result = runEnharmonizeToKey("X:1\nV:1\nV:2\nL:1/8\nK:D\n[V:1] ^fef ^fe^f|\n[V:2] X|\n");
+      expect(result).to.equal("X:1\nV:1\nV:2\nL:1/8\nK:D\n[V:1] fef fef|\n[V:2] X|\n");
+    });
+
+    it("keeps a chromatic accidental that is repeated in the next bar", () => {
+      const result = runEnharmonizeToKey("X:1\nK:D\n^G2|^G2|\n");
+      expect(result).to.equal("X:1\nK:D\n^G2|^G2|\n");
+    });
+
+    it("keeps a chromatic accidental that is repeated on the next line", () => {
+      const result = runEnharmonizeToKey("X:1\nK:D\n^G2\n^G2|\n");
+      expect(result).to.equal("X:1\nK:D\n^G2\n^G2|\n");
+    });
+  });
+
+  describe("regressions (language server interpreter)", () => {
+    it("removes redundant sharps in voices declared before the header K:", () => {
+      const result = runEnharmonizeToKeyWithCsInterpreter("X:1\nV:1\nV:2\nL:1/8\nK:D\n[V:1] ^fef ^fe^f|\n[V:2] X|\n");
+      expect(result).to.equal("X:1\nV:1\nV:2\nL:1/8\nK:D\n[V:1] fef fef|\n[V:2] X|\n");
+    });
+
+    it("keeps a chromatic accidental that is repeated in the next bar", () => {
+      const result = runEnharmonizeToKeyWithCsInterpreter("X:1\nK:D\n^G2|^G2|\n");
+      expect(result).to.equal("X:1\nK:D\n^G2|^G2|\n");
+    });
+
+    it("keeps a chromatic accidental that is repeated on the next line", () => {
+      const result = runEnharmonizeToKeyWithCsInterpreter("X:1\nK:D\n^G2\n^G2|\n");
+      expect(result).to.equal("X:1\nK:D\n^G2\n^G2|\n");
     });
   });
 

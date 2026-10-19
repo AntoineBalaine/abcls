@@ -133,10 +133,23 @@ function handleContextDirective(state: CsContextState, sem: InfoLineUnion): bool
     if (sem.data.clef) {
       state.tuneDefaults.clef = sem.data.clef;
     }
+    // Because a header K: is tune-wide, the voices declared before it (e.g. V:1 and V:2
+    // in the header) must also receive the key, otherwise they keep the default C major.
+    if (!state.inBody) {
+      for (const headerVoice of state.voices.values()) {
+        headerVoice.currentKey = sem.data.keySignature;
+      }
+    }
     return true;
   } else if (sem.type === "meter") {
     voice.currentMeter = sem.data;
     state.tuneDefaults.meter = sem.data;
+    // Because a header M: is tune-wide, the voices declared before it must also receive the meter.
+    if (!state.inBody) {
+      for (const headerVoice of state.voices.values()) {
+        headerVoice.currentMeter = sem.data;
+      }
+    }
     return true;
   } else if (sem.type === "note_length") {
     state.tuneDefaults.noteLength = sem.data;
@@ -253,7 +266,12 @@ const contextVisitor: EditorVisitor = {
       if (isTokenNode(child)) {
         const data = getTokenData(child);
         if (data.tokenType === TT.EOL) {
+          const hadAccidentals = getCurrentVoice(state).measureAccidentals.size > 0;
           clearAllVoicesAccidentals(state);
+          // Because the reset at the end of the line would otherwise leave no trace, we record it.
+          if (state.config.snapshotAccidentals && hadAccidentals) {
+            pushSnapshot(state, child);
+          }
         }
       } else {
         visit(child, state);
@@ -282,9 +300,15 @@ const contextVisitor: EditorVisitor = {
     }
   },
 
-  [TAGS.BarLine]: (_node, state) => {
+  [TAGS.BarLine]: (node, state) => {
     state.measureNumber++;
+    const hadAccidentals = getCurrentVoice(state).measureAccidentals.size > 0;
     clearCurrentVoiceAccidentals(state);
+    // Because snapshots are otherwise only pushed at notes that carry an accidental, the
+    // reset at the barline must be recorded, or the next measure would inherit the stale accidentals.
+    if (state.config.snapshotAccidentals && hadAccidentals) {
+      pushSnapshot(state, node);
+    }
   },
 
   [TAGS.Note]: (node, state) => {
