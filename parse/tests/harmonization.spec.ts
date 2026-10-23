@@ -185,6 +185,25 @@ describe("harmonization", () => {
         expect(result.map((s) => s.interval)).to.deep.equal([0, 4, 6, 10]);
       });
 
+      it("Bb6 intervals = [0, 4, 7, 9] (major sixth in place of the seventh)", () => {
+        const chord = makeChord(KeyRoot.B, KeyAccidental.Flat, ChordQuality.Major, 6);
+        const result = getIntervals(chord);
+        expect(result.map((s) => s.interval)).to.deep.equal([0, 4, 7, 9]);
+        expect(result.map((s) => s.scaleStep)).to.deep.equal([0, 2, 4, 5]);
+      });
+
+      it("Cm6 intervals = [0, 3, 7, 9]", () => {
+        const chord = makeChord(KeyRoot.C, KeyAccidental.None, ChordQuality.Minor, 6);
+        const result = getIntervals(chord);
+        expect(result.map((s) => s.interval)).to.deep.equal([0, 3, 7, 9]);
+      });
+
+      it("C69 intervals = [0, 4, 7, 9]", () => {
+        const chord = makeChord(KeyRoot.C, KeyAccidental.None, ChordQuality.Major, 69);
+        const result = getIntervals(chord);
+        expect(result.map((s) => s.interval)).to.deep.equal([0, 4, 7, 9]);
+      });
+
       it("getIntervals returns funcs [8, 3, 5, 7] for 7th chords", () => {
         const chord = makeChord(KeyRoot.C, KeyAccidental.None, ChordQuality.Major, 7);
         const result = getIntervals(chord);

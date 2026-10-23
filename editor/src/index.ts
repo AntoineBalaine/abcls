@@ -145,3 +145,18 @@ export { buildMap, init, finalize, BarMap, BarEntry, BarMapState } from "./conte
 // Utils
 export { diffChars, Change } from "./utils/diffToPatches";
 export { computeNodeRange, rangesOverlap } from "./utils/rangeUtils";
+
+// Transform runner (shared by the language server and the CLI)
+export { lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "./runner/transformLookup";
+export { serializeCSTree } from "./runner/csTreeSerializer";
+export { GROUPED_CURSOR_TRANSFORMS, POSITION_BASED_TRANSFORMS, TRANSFORM_NODE_TAGS } from "./runner/transformConstants";
+export {
+  findNodesInRange,
+  findNotesAndChordsInRange,
+  resolveRanges,
+  resolveSelectionRanges,
+  resolveContiguousRanges,
+} from "./runner/selectionRangeResolver";
+export { runTransform, rangesOfVoices, TransformRequest, TransformError } from "./runner/runTransform";
+export { harmonizeVoices, HarmonizeVoicesOptions } from "./runner/harmonizeVoices";
+export { blockChords, BlockChordsOptions } from "./runner/blockChords";

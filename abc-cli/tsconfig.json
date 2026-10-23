@@ -10,9 +10,11 @@
     "baseUrl": ".",
     "paths": {
       "abcls-parser/*": ["../parse/dist/*"],
-      "abcls-midi": ["../midi/dist/src/index"]
+      "abcls-midi": ["../midi/dist/src/index"],
+      "abcls-editor": ["../editor/src/index"],
+      "abcls-cstree": ["../cstree/src/cstree"]
     }
   },
   "include": ["*.ts", "commands/**/*.ts", "utils/**/*.ts"],
-  "references": [{ "path": "../parse" }, { "path": "../midi" }]
+  "references": [{ "path": "../parse" }, { "path": "../midi" }, { "path": "../cstree" }, { "path": "../editor" }]
 }

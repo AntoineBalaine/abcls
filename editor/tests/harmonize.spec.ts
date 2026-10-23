@@ -716,5 +716,66 @@ describe("harmonize", () => {
       const result = harmonizeClose('X:1\nK:C\n"Fm7b5"_C|\n');
       expect(result).to.equal('X:1\nK:C\n"Fm7b5"[_E,F,_A,_C]|\n');
     });
+
+    it('"Bb6"D -> "Bb6"[F,GB,D] (the sixth chord holds a G, not an A natural)', () => {
+      const result = harmonizeClose('X:1\nK:Cm\n"Bb6"D|\n');
+      expect(result).to.equal('X:1\nK:Cm\n"Bb6"[F,G,B,D]|\n');
+    });
+
+    describe("chord symbols written in another voice", () => {
+      // Every note of the document is harmonized, so the helper takes the whole text.
+      function harmonizeAll(input: string): string {
+        const ctx = new ABCContext();
+        const ast = parse(Scanner(input, ctx), ctx);
+        const analyzer = new SemanticAnalyzer(ctx);
+        ast.accept(analyzer);
+        const snapshots = new ContextInterpreter().interpret(ast, analyzer.data, ctx, { snapshotAccidentals: true });
+        const { root } = toCSTreeWithContext(input);
+        const cursors = findByTag(root, TAGS.Note).map((n) => new Set([n.id]));
+        const sel: Selection = { root, cursors };
+        harmonizeVoicing(sel, "close", 4, null, ctx, snapshots, null);
+        return formatSelection(sel);
+      }
+
+      it("uses the chord of the same bar, not the last chord of the chord voice", () => {
+        const input = 'X:1\nV:1\nV:2\nK:Cm\n[V:1] "Fm" x8 | "Cm" x8 |\n[V:2] F8 | G8 |\n';
+        const result = harmonizeAll(input);
+        expect(result).to.contain("[V:2] [A,CEF]8 | [B,CEG]8 |");
+      });
+
+      it("follows a chord change in the middle of a bar", () => {
+        const input = 'X:1\nV:1\nV:2\nK:Cm\n[V:1] "Fm" x4 "Cm" x4 |\n[V:2] F4 G4 |\n';
+        const result = harmonizeAll(input);
+        expect(result).to.contain("[V:2] [A,CEF]4 [B,CEG]4 |");
+      });
+    });
+
+    it("does not harmonize a note that is already inside a chord", () => {
+      // Running the transform over a line twice must not nest chords.
+      const result = harmonizeClose('X:1\nK:C\n"Cm7"[C_EG_B]|\n');
+      expect(result).to.equal('X:1\nK:C\n"Cm7"[C_EG_B]|\n');
+    });
+
+    describe("rhythm and tie of the harmonized note", () => {
+      it("keeps a plain duration: \"Cm7\"_B3 -> \"Cm7\"[C_EG_B]3", () => {
+        const result = harmonizeClose('X:1\nK:C\n"Cm7"_B3|\n');
+        expect(result).to.equal('X:1\nK:C\n"Cm7"[C_EG_B]3|\n');
+      });
+
+      it("keeps a fractional duration: \"Cm7\"_B3/ -> \"Cm7\"[C_EG_B]3/", () => {
+        const result = harmonizeClose('X:1\nK:C\n"Cm7"_B3/|\n');
+        expect(result).to.equal('X:1\nK:C\n"Cm7"[C_EG_B]3/|\n');
+      });
+
+      it("keeps a broken rhythm marker: \"Cm7\"_B2> -> \"Cm7\"[C_EG_B]2>", () => {
+        const result = harmonizeClose('X:1\nK:C\n"Cm7"_B2>c|\n', 0);
+        expect(result).to.equal('X:1\nK:C\n"Cm7"[C_EG_B]2>c|\n');
+      });
+
+      it("keeps a tie: \"Cm7\"_B2- -> \"Cm7\"[C_EG_B]2-", () => {
+        const result = harmonizeClose('X:1\nK:C\n"Cm7"_B2-|\n');
+        expect(result).to.equal('X:1\nK:C\n"Cm7"[C_EG_B]2-|\n');
+      });
+    });
   });
 });

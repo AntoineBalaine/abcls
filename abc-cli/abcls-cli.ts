@@ -12,8 +12,10 @@ import { abc2xmlCommand } from "./commands/abc2xml";
 import { abcx2abcCommand } from "./commands/abcx2abc";
 import { checkCommand } from "./commands/check";
 import { formatCommand } from "./commands/format";
+import { harmonizeCommand } from "./commands/harmonize";
 import { midi2abcCommand } from "./commands/midi2abc";
 import { renderCommand } from "./commands/render";
+import { transformCommand } from "./commands/transform";
 import { xml2abcCommand } from "./commands/xml2abc";
 
 const program = new Command();
@@ -24,6 +26,8 @@ program.name("abcls").description("ABC notation language server and CLI tools").
 program.addCommand(formatCommand);
 program.addCommand(checkCommand);
 program.addCommand(renderCommand);
+program.addCommand(transformCommand);
+program.addCommand(harmonizeCommand);
 program.addCommand(abcx2abcCommand);
 program.addCommand(abc2midiCommand);
 program.addCommand(midi2abcCommand);

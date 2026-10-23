@@ -7,7 +7,7 @@
 
 import { CSNode, TAGS, Selection } from "abcls-editor";
 import { Range } from "vscode-languageserver";
-import { computeNodeRange } from "./selectionRangeResolver";
+import { computeNodeRange } from "abcls-editor";
 
 /**
  * Collects all node IDs that exist in the given tree.

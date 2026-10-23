@@ -1,5 +1,5 @@
 /**
- * Transform lookup module for the LSP server.
+ * Transform lookup module, shared by the LSP server and the CLI.
  *
  * Maps transform names to their implementation functions from the editor module.
  * Each transform operates on a Selection and returns a modified Selection.
@@ -44,7 +44,7 @@ import {
   explosion,
   dropVoicing,
   DropVoicing,
-} from "abcls-editor";
+} from "../index";
 import { ABCContext, IRational, Position } from "abcls-parser";
 import { ChordPosition } from "abcls-parser/interpreter/ChordPositionCollector";
 import { DocumentSnapshots } from "abcls-parser/interpreter/ContextInterpreter";

@@ -34,7 +34,8 @@ import { toAst } from "../csTree/toAst";
 import { createCSNode, CSNode, TAGS } from "../csTree/types";
 import { Selection } from "../selection";
 import { toPitchComponents, NoteLetter } from "./pitchHelpers";
-import { findChildByTag, findTieChild, getNodeLineAndChar } from "./treeUtils";
+import { buildChordTimeline, chordAtNode } from "./chordTimeline";
+import { findChildByTag, findRhythmChild, findTieChild, getNodeLineAndChar } from "./treeUtils";
 import { findNodesById } from "./types";
 
 const DIATONIC_LETTERS = "CDEFGAB";
@@ -512,10 +513,19 @@ export function harmonizeVoicing(
   // measure use the correct context.
   const localAccidentals = new Map<string, number>();
 
+  // Because the chord symbols may be written in another voice than the notes we harmonize,
+  // we place the symbols and the notes on a common time grid before the tree is modified.
+  const chordTimeline = buildChordTimeline(selection.root);
+
   for (const cursor of selection.cursors) {
     const nodes = findNodesById(selection.root, cursor);
     for (const csNode of nodes) {
       if (csNode.tag !== TAGS.Note) continue;
+
+      // Because a note inside a chord is already part of a voicing, harmonizing it again would nest chords.
+      // The guard lets us run the transform a second time (for example with another voicing) over the same lines.
+      const enclosing = getParent(csNode);
+      if (enclosing !== null && enclosing.tag === TAGS.Chord) continue;
 
       const { line, char } = getNodeLineAndChar(csNode);
       const pos = encode(line, char);
@@ -526,6 +536,12 @@ export function harmonizeVoicing(
       if (!contextSnapshot) continue;
 
       const snapshot = contextToHarmonizeSnapshot(contextSnapshot, localAccidentals);
+
+      // The chord that sounds at the position of the note takes precedence over the chord in effect in text order.
+      const timelineChord = chordAtNode(chordTimeline, csNode.id);
+      if (timelineChord !== null) {
+        snapshot.currentChord = timelineChord;
+      }
 
       const lead = extractLead(csNode, snapshot);
       if (!lead) continue;
@@ -630,6 +646,18 @@ export function harmonizeVoicing(
 
       const parent = getParent(csNode);
       if (parent) {
+        // Because the rhythm and the tie are children of the note, replacing the note would drop them.
+        // We move them onto the chord first, in the order the chord node expects (rhythm, then tie).
+        const rhythmNode = findRhythmChild(csNode);
+        const tieNode = findTieChild(csNode);
+        if (rhythmNode) {
+          remove(rhythmNode);
+          appendChild(chordCsNode, rhythmNode);
+        }
+        if (tieNode) {
+          remove(tieNode);
+          appendChild(chordCsNode, tieNode);
+        }
         replace(csNode, chordCsNode);
       }
 

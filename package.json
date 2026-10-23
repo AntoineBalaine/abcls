@@ -39,7 +39,7 @@
     "watch:cli": "npm run watch -w abcls-cli",
     "watch:vscode": "npm run watch -w vscode-extension",
     "package:vscode": "npm run package -w vscode-extension",
-    "test": "npm run test -w parse && npm run test -w abcls-midi  && npm run test -w cstree && npm run test -w editor && npm run test -w abcls-server && npm run test -w abcls-kak && npm run test -w abc-ls",
+    "test": "npm run test -w parse && npm run test -w abcls-midi  && npm run test -w cstree && npm run test -w editor && npm run test -w abcls-server && npm run test -w abcls-kak && npm run test -w abc-ls && npm run test -w abcls-cli",
     "lint": "npm run lint -w parse && npm run lint -w cstree && npm run lint -w editor && npm run lint -w abcls-midi && npm run lint -w abcls-server && npm run lint -w abcls-cli && npm run lint -w vscode-extension && npm run lint -w abcls-preview-server && npm run lint -w abcls-kak",
     "lint:fix": "npm run lint:fix -w parse && npm run lint:fix -w cstree && npm run lint:fix -w editor && npm run lint:fix -w abcls-midi && npm run lint:fix -w abcls-server && npm run lint:fix -w abcls-cli && npm run lint:fix -w vscode-extension && npm run lint:fix -w abcls-preview-server && npm run lint:fix -w abcls-kak",
     "format": "prettier --write \"**/*.{ts,js,json,md}\"",

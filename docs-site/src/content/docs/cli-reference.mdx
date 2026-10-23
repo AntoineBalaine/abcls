@@ -84,6 +84,68 @@ Options:
 
 - `-o, --output <file>` -- write output to a file instead of stdout
 
+## transform
+
+Runs one of the editor transforms (the same ones as the editor commands: `transpose`, `harmonizeVoicing`, `explode`, `addVoice`, `setRhythm`, and so on) on an ABC file, without a language server. See the [transforms guide](/abcls/user-guide/transforms/) for the list of transforms and what each one does.
+
+```bash
+abcls transform myfile.abc transpose 2
+abcls transform myfile.abc setRhythm 1/2 --lines 10-12
+abcls transform myfile.abc harmonizeVoicing close 4 null --voice 2 -w
+```
+
+The first argument after the file is the name of the transform. The arguments that follow are the arguments of that transform. A whole number is read as a number, `n/d` is read as a rational for `setRhythm` and `addToRhythm`, and the word `null` is read as no value. For `addVoice`, the second argument is a list such as `clef=bass,name=Bass`.
+
+Options:
+
+- `--voice <ids>` -- only transform the music of these voices (comma-separated ids)
+- `--lines <range>` -- only transform these lines, counted from 1 (for example `10` or `10-20`)
+- `-w, --write` -- write the result back to the file (otherwise prints to stdout)
+
+Without `--voice` and `--lines`, the transform applies to the whole file. The transforms that depend on the chord symbols read them by position in time, so a chord symbol written in one voice applies to the notes of every voice that sounds at the same time.
+
+## harmonize
+
+Writes harmony into new voices, using the chord symbols of the score. It has two modes, and exactly one of `--from` and `--chords-from` is required.
+
+Before running it, check that the voice you read from is written with inline voice markers at the start of its lines (`[V:1] ...`), and that the chord symbols are written in quotes in the music (`"Fm"`, `"Bb6"`).
+
+One block chord per chord symbol, which does not touch the melody:
+
+```bash
+abcls harmonize myfile.abc --chords-from 1 --into 3,4,5,6 --voicing spread -w
+```
+
+Because each chord symbol lasts until the next symbol or the end of the bar, a bar that holds `"Ab" x4 "Bb6" x4` gets two chords of half a bar each, and a bar with one symbol and a full-bar rest gets one chord. The top voice of each chord is the chord tone closest to the top voice of the previous chord, so the pad moves smoothly. The command needs between 4 and 6 new voices, and each chord is built with that many notes.
+
+Melody harmonization, with one chord under each melody note (a soli technique):
+
+```bash
+abcls harmonize myfile.abc --from 2 --into 3,4,5 -w
+```
+
+Because the highest part of each chord is the melody itself, it is not written again: with `--into 3,4,5`, the chords have four notes, and voices 3, 4 and 5 hold the three lower ones. The melody notes that are not tones of the current chord get a cluster voicing.
+
+Options:
+
+- `--from <voice>` -- the id of the voice that holds the melody to harmonize
+- `--chords-from <voice>` -- the id of the voice that holds the chord symbols, to write one block chord per symbol
+- `--into <ids>` -- the ids of the new voices, from the highest part to the lowest
+- `--voicing <type>` -- `close` (default), `cluster` or `spread`
+- `-w, --write` -- write the result back to the file (otherwise prints to stdout)
+
+What the command changes in the file:
+
+- It adds a `V:` line for each new voice in the header. The lowest voice gets a bass clef, and the others get a treble clef.
+- It adds the new staves at the end of the `%%score` line, if there is one: the upper voices share one staff, and the lowest voice has its own.
+- It writes the new voices after the other voices of each system.
+
+Limits to know about:
+
+- The chords are built as seventh chords, so a plain major chord such as `Ab` has a major seventh (A-flat, C, E-flat, G). A `6` chord such as `Bb6` has its sixth in place of the seventh.
+- The command refuses to write into a voice id that the score already uses, so to run it again on its own output, remove the new voices first or choose other ids.
+- With `spread`, the lowest voice can go very low, with many ledger lines under the bass clef, so check that the register suits your sound.
+
 ## lsp
 
 Starts the ABC language server. This is used by editor integrations (VS Code, Kakoune, Neovim, etc.) and is not typically invoked directly.

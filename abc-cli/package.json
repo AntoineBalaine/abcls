@@ -10,14 +10,17 @@
     "build": "tsc --build",
     "watch": "tsc --build --watch",
     "prepublish": "npm run build",
+    "test": "node esbuild.js && node dist/abcls.js --help > /dev/null && node dist/abcls.js transform tests/chords.abc transpose -- -2 | grep -q \"\\[V:1\\]\" && node dist/abcls.js harmonize tests/chords.abc --chords-from 1 --into 3,4,5,6 | grep -q \"^\\[V:6\\]\" && ! node dist/abcls.js transform tests/chords.abc transpose 2 --voice 9 2> /dev/null",
     "lint": "eslint . --ext ts",
     "lint:fix": "eslint . --ext ts --fix"
   },
   "dependencies": {
+    "abcls-editor": "*",
     "abcls-midi": "*",
     "abcls-parser": "*",
     "abcjs": "^6.5.2",
     "commander": "^12.0.0",
+    "jsdom": "^30.0.1",
     "svgdom": "^0.1.23"
   },
   "devDependencies": {

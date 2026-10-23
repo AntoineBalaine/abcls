@@ -1,8 +1,9 @@
-import { fromAst, createSelection, selectChords, selectNotes, selectTop, selectVoices, TAGS } from "abcls-editor";
+import { fromAst, createSelection, selectChords, selectNotes, selectTop, selectVoices, TAGS } from "../src/index";
 import { Scanner, parse, ABCContext, File_structure } from "abcls-parser";
 import { expect } from "chai";
 import { describe, it } from "mocha";
-import { resolveSelectionRanges, resolveContiguousRanges, findNodeById, findNodesInRange, computeNodeRange } from "./selectionRangeResolver";
+import { computeNodeRange } from "../src/utils/rangeUtils";
+import { resolveSelectionRanges, resolveContiguousRanges, findNodeById, findNodesInRange } from "../src/runner/selectionRangeResolver";
 
 function parseAbc(source: string): { ast: File_structure; ctx: ABCContext } {
   const ctx = new ABCContext();

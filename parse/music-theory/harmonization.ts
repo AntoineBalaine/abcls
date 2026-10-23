@@ -882,6 +882,16 @@ export function keyAccidentalToSemitones(acc: KeyAccidental | null): number {
 export function getIntervals(chord: ParsedChord): IntervalSpec[] {
   const specs = structuredClone(SEVENTH_CHORD_SPECS[chord.quality]);
 
+  // Because a sixth chord (C6, Cm6) and a 6/9 chord have a major sixth where a seventh chord has its seventh,
+  // we replace the seventh with the major sixth. The function stays 7 so the voicing algorithms keep their four slots.
+  if (chord.extension === 6 || chord.extension === 69) {
+    const seventh = specs.find((s) => s.func === 7);
+    if (seventh !== undefined) {
+      seventh.interval = 9;
+      seventh.scaleStep = 5;
+    }
+  }
+
   // Apply alterations by finding the entry with matching function and adjusting interval
   for (const alt of chord.alterations) {
     // Map alteration degrees to chord functions

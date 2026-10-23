@@ -10,6 +10,7 @@ const REPO_ROOT = path.resolve(CLI_DIR, "..");
 const external = [
   "abcjs",
   "commander",
+  "jsdom",
   "svgdom",
   "@svgdotjs/svg.js",
   "vscode-languageserver",

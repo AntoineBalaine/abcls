@@ -3,11 +3,11 @@ import { ContextInterpreter, DocumentSnapshots } from "abcls-parser/interpreter/
 import { File_structure } from "abcls-parser/types/Expr";
 import { expect } from "chai";
 import { describe, it } from "mocha";
-import { TAGS, Selection, fromAst, isTokenNode, getTokenData } from "../../editor";
+import { TAGS, Selection, fromAst, isTokenNode, getTokenData, serializeCSTree, lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "../../editor";
 import { toCSTreeWithContext, findByTag } from "../../editor/tests/helpers";
-import { serializeCSTree } from "./csTreeSerializer";
+
 import { collectSurvivingCursorIds } from "./cursorPreservation";
-import { lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "./transformLookup";
+
 
 /**
  * Test helper that mirrors production behavior (AbcDocument.getSnapshots).

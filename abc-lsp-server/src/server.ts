@@ -2,7 +2,7 @@
  * Copyright (c) Microsoft Corporation. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
-import { fromAst, createSelection, Selection, CSNode, TAGS, selectRange } from "abcls-editor";
+import { fromAst, createSelection, Selection, CSNode, TAGS, selectRange, GROUPED_CURSOR_TRANSFORMS, POSITION_BASED_TRANSFORMS, TRANSFORM_NODE_TAGS, serializeCSTree, findNodesInRange, resolveRanges, resolveSelectionRanges, lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "abcls-editor";
 import { File_structure, Scanner, parse, ABCContext, SemanticAnalyzer } from "abcls-parser";
 import { ChordPositionCollector } from "abcls-parser/interpreter/ChordPositionCollector";
 import {
@@ -46,17 +46,17 @@ import {
   ABCLS_FMT_OPTIONS,
   ABCLS_VOICES_OPTIONS,
 } from "./completions";
-import { GROUPED_CURSOR_TRANSFORMS, POSITION_BASED_TRANSFORMS, TRANSFORM_NODE_TAGS } from "./constants";
-import { serializeCSTree } from "./csTreeSerializer";
+
+
 import { collectSurvivingCursorIds, computeCursorRangesFromFreshTree } from "./cursorPreservation";
 import { computeFoldingRanges, DEFAULT_FOLDING_CONFIG } from "./foldingRangeProvider";
 import { PreviewManager } from "./PreviewManager";
-import { findNodesInRange, resolveRanges, resolveSelectionRanges } from "./selectionRangeResolver";
+
 import { lookupSelector } from "./selectorLookup";
 import { standardTokenScopes } from "./server_helpers";
 import { SocketHandler, computeSocketPath, validateImportMidiParams } from "./socketHandler";
 import { computeTextEditsFromDiff } from "./textEditFromDiff";
-import { lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "./transformLookup";
+
 
 // ============================================================================
 // CLI Argument Parsing
