@@ -6,6 +6,9 @@ import { parseChordSymbol } from "abcls-parser/music-theory/parseChordSymbol";
 import { scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
 import { getNodeRhythm } from "./rhythm";
 import { findChild } from "abcls-cstree";
+import { TT } from "abcls-parser";
+import { TUPLET_Q, getBrokenRhythmMultipliers } from "abcls-parser/interpreter/TuneInterpreter";
+import { findRhythmChild } from "./treeUtils";
 
 /**
  * A point in the time of a voice: the bar index (counted from the start of the tune body)
@@ -56,6 +59,11 @@ export interface VoiceClock {
   bar: number;
   offset: number;
   hasContent: boolean;
+  /** The factor that a broken rhythm (">" or "<") on the previous note applies to the next note. */
+  nextMultiplier: number;
+  /** The factor q/p of the tuplet in progress, and the number of notes it still applies to. */
+  tupletRatio: number;
+  tupletNotesLeft: number;
 }
 
 const TOLERANCE = 1e-9;
@@ -63,7 +71,7 @@ const TOLERANCE = 1e-9;
 export function getClock(state: TimelineWalkState): VoiceClock {
   let clock = state.clocks.get(state.currentVoiceId);
   if (clock === undefined) {
-    clock = { bar: 0, offset: 0, hasContent: false };
+    clock = { bar: 0, offset: 0, hasContent: false, nextMultiplier: 1, tupletRatio: 1, tupletNotesLeft: 0 };
     state.clocks.set(state.currentVoiceId, clock);
   }
   return clock;
@@ -91,6 +99,65 @@ export function parseAnnotationChord(node: CSNode): ParsedChord | null {
 }
 
 /**
+ * Reads the broken rhythm marker (">", ">>", "<", ...) of a note, rest or chord, or null when it has none.
+ */
+export function brokenRhythmLexeme(node: CSNode): string | null {
+  const rhythmNode = findRhythmChild(node);
+  if (rhythmNode === null) return null;
+  const broken = findChild(rhythmNode, (n) => isTokenNode(n) && getTokenData(n).tokenType === TT.RHY_BRKN);
+  if (broken === null || broken === undefined || !isTokenNode(broken)) return null;
+  return getTokenData(broken).lexeme;
+}
+
+/**
+ * Computes how long a note, a rest or a chord lasts, in units of the default note length, and updates the clock
+ * for the broken rhythm and the tuplet that it is part of. The rules are those of the interpreter:
+ * a broken rhythm lengthens one note of the pair and shortens the other, and a tuplet (p:q:r scales its next r notes by q/p.
+ */
+export function consumeDuration(node: CSNode, clock: VoiceClock): number {
+  const rhythm = getNodeRhythm(node);
+  let units = (rhythm.numerator / rhythm.denominator) * clock.nextMultiplier;
+  clock.nextMultiplier = 1;
+
+  const broken = brokenRhythmLexeme(node);
+  if (broken !== null) {
+    const [current, next] = getBrokenRhythmMultipliers(broken);
+    units *= current.numerator / current.denominator;
+    clock.nextMultiplier = next.numerator / next.denominator;
+  }
+
+  if (clock.tupletNotesLeft > 0) {
+    units *= clock.tupletRatio;
+    clock.tupletNotesLeft -= 1;
+  }
+  return units;
+}
+
+/**
+ * Reads the p, q and r values of a tuplet node, and starts the tuplet on the clock.
+ */
+export function startTuplet(node: CSNode, clock: VoiceClock): void {
+  let p: number | null = null;
+  let q: number | null = null;
+  let r: number | null = null;
+  let child = node.firstChild;
+  while (child !== null) {
+    if (isTokenNode(child)) {
+      const data = getTokenData(child);
+      const value = parseInt(data.lexeme, 10);
+      if (data.tokenType === TT.TUPLET_P) p = value;
+      if (data.tokenType === TT.TUPLET_Q && !Number.isNaN(value)) q = value;
+      if (data.tokenType === TT.TUPLET_R && !Number.isNaN(value)) r = value;
+    }
+    child = child.nextSibling;
+  }
+  if (p === null || Number.isNaN(p) || p <= 0) return;
+  const resolvedQ = q ?? TUPLET_Q[p] ?? 2;
+  clock.tupletRatio = resolvedQ / p;
+  clock.tupletNotesLeft = r ?? p;
+}
+
+/**
  * Walks a node and its descendants in document order, and fills the timeline.
  * Notes and chords are not entered, because their children are pitches and rhythms, which carry no timing of their own.
  * Grace groups are not entered either, because grace notes take no time.
@@ -114,6 +181,9 @@ export function walkForTimeline(node: CSNode, state: TimelineWalkState): void {
       clock.bar += 1;
       clock.offset = 0;
       clock.hasContent = false;
+      // As in the interpreter, a broken rhythm and a tuplet do not carry over a barline.
+      clock.nextMultiplier = 1;
+      clock.tupletNotesLeft = 0;
       return;
     }
     case TAGS.Annotation: {
@@ -129,8 +199,7 @@ export function walkForTimeline(node: CSNode, state: TimelineWalkState): void {
     case TAGS.Chord: {
       const clock = getClock(state);
       state.timeline.positions.set(node.id, { tune: state.tuneIndex, voiceId: state.currentVoiceId, bar: clock.bar, offset: clock.offset });
-      const rhythm = getNodeRhythm(node);
-      clock.offset += rhythm.numerator / rhythm.denominator;
+      clock.offset += consumeDuration(node, clock);
       clock.hasContent = true;
       return;
     }
@@ -141,6 +210,9 @@ export function walkForTimeline(node: CSNode, state: TimelineWalkState): void {
       clock.hasContent = true;
       return;
     }
+    case TAGS.Tuplet:
+      startTuplet(node, getClock(state));
+      return;
     case TAGS.Grace_group:
       return;
     default: {
@@ -203,4 +275,25 @@ export function chordAtNode(timeline: ChordTimeline, nodeId: number): ParsedChor
     }
   }
   return best === null ? null : best.chord;
+}
+
+/**
+ * Finds the node that follows a node in time, in the same tune and voice, or null when it is the last one.
+ * Because the voices of a score are written in alternating lines, the next note of a voice is not the next node of the tree.
+ */
+export function nextNodeInVoice(timeline: ChordTimeline, nodeId: number): number | null {
+  const position = timeline.positions.get(nodeId);
+  if (position === undefined) return null;
+
+  let bestId: number | null = null;
+  let best: TimePoint | null = null;
+  for (const [id, candidate] of timeline.positions) {
+    if (id === nodeId || candidate.tune !== position.tune || candidate.voiceId !== position.voiceId) continue;
+    if (isAtOrBefore(candidate, position)) continue;
+    if (best === null || isAtOrBefore(candidate, best)) {
+      best = candidate;
+      bestId = id;
+    }
+  }
+  return bestId;
 }

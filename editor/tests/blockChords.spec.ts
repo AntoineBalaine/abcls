@@ -37,6 +37,20 @@ describe("blockChords reading of the chord line", () => {
     expect(lines).to.include("[V:3] A8 |");
   });
 
+  it("places a chord change after a broken pair at the right beat", () => {
+    // B3>B lasts 4.5 + 0.5 = 5 units, so Ab lasts 5 units and Bb6 the remaining 3.
+    const source = 'X:1\nV:1\nK:Cm\n[V:1] "Ab" B3>B "Bb6" B3 |\n';
+    const lines = blockChords(source, { chordVoice: "1", into, voicing: "close" }).split("\n");
+    expect(lines.find((l) => l.startsWith("[V:3]"))).to.match(/^\[V:3\] \S+5 \S+3 \|$/);
+  });
+
+  it("places a chord change after a triplet at the right beat", () => {
+    // (3BBB lasts 2 units, so Ab lasts 2 units and Bb6 the remaining 6.
+    const source = 'X:1\nV:1\nK:Cm\n[V:1] "Ab" (3BBB "Bb6" B6 |\n';
+    const lines = blockChords(source, { chordVoice: "1", into, voicing: "close" }).split("\n");
+    expect(lines.find((l) => l.startsWith("[V:3]"))).to.match(/^\[V:3\] \S+2 \S+6 \|$/);
+  });
+
   it("refuses ids that are empty, repeated or malformed", () => {
     const source = 'X:1\nV:1\nK:C\n[V:1] "C" x8 |\n';
     expect(() => blockChords(source, { chordVoice: "1", into: ["3", "4", "5", ""], voicing: "close" })).to.throw(TransformError);

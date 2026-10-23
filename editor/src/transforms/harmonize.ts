@@ -34,7 +34,7 @@ import { toAst } from "../csTree/toAst";
 import { createCSNode, CSNode, TAGS } from "../csTree/types";
 import { Selection } from "../selection";
 import { toPitchComponents, NoteLetter } from "./pitchHelpers";
-import { buildChordTimeline, chordAtNode } from "./chordTimeline";
+import { buildChordTimeline, chordAtNode, ChordTimeline, nextNodeInVoice } from "./chordTimeline";
 import { findChildByTag, findRhythmChild, findTieChild, getNodeLineAndChar } from "./treeUtils";
 import { findNodesById } from "./types";
 
@@ -483,6 +483,55 @@ export function toCSChord(voicedChord: VoicedNote[], snapshot: HarmonizeSnapshot
 }
 
 /**
+ * The pitches that the harmonization pass has seen, which the tie repair needs once all the chords are built.
+ */
+export interface TieRepairState {
+  /** The sounding pitches (MIDI) of every note that the pass looked at, by the id of the original note. */
+  pitchesByNodeId: Map<number, number[]>;
+  /** The chords built from a tied note, by the id of the original note. */
+  tiedChords: Map<number, CSNode>;
+}
+
+function createTieToken(ctx: ABCContext): CSNode {
+  return createCSNode(TAGS.Token, ctx.generateId(), { lexeme: "-", tokenType: TT.TIE, line: 0, position: 0 });
+}
+
+/**
+ * A tie only joins two notes of the same pitch. Because a tied melody note becomes a whole chord, and the next chord
+ * may hold other pitches, a tie on the whole chord would join notes that differ. We therefore replace the tie of the chord
+ * by ties on the notes that the next chord of the same voice repeats at the same place, counted from the top.
+ * Because explode turns the n-th note from the top into the n-th part, a pitch that moves to another place in the next chord
+ * would give a tie between two different pitches in both parts, so such a note is not tied.
+ * When the next node of the voice was not looked at by the pass, we cannot know its pitches, so the tie is left as it is.
+ */
+export function repairChordTies(state: TieRepairState, timeline: ChordTimeline, ctx: ABCContext): void {
+  for (const [noteId, chordNode] of state.tiedChords) {
+    const nextId = nextNodeInVoice(timeline, noteId);
+    if (nextId === null) continue;
+    const nextPitches = state.pitchesByNodeId.get(nextId);
+    const pitches = state.pitchesByNodeId.get(noteId);
+    if (nextPitches === undefined || pitches === undefined) continue;
+
+    const chordTie = findTieChild(chordNode);
+    if (chordTie !== null) remove(chordTie);
+
+    let index = 0;
+    let child = chordNode.firstChild;
+    while (child !== null) {
+      if (child.tag === TAGS.Note) {
+        const fromTop = pitches.length - 1 - index;
+        const nextAtSamePlace = nextPitches[nextPitches.length - 1 - fromTop];
+        if (nextAtSamePlace === pitches[index] && findTieChild(child) === null) {
+          appendChild(child, createTieToken(ctx));
+        }
+        index += 1;
+      }
+      child = child.nextSibling;
+    }
+  }
+}
+
+/**
  * Harmonizes selected notes using chord-symbol-based voicing.
  *
  * This transform builds full voiced chords from lead notes using:
@@ -516,6 +565,7 @@ export function harmonizeVoicing(
   // Because the chord symbols may be written in another voice than the notes we harmonize,
   // we place the symbols and the notes on a common time grid before the tree is modified.
   const chordTimeline = buildChordTimeline(selection.root);
+  const tieState: TieRepairState = { pitchesByNodeId: new Map(), tiedChords: new Map() };
 
   for (const cursor of selection.cursors) {
     const nodes = findNodesById(selection.root, cursor);
@@ -545,6 +595,7 @@ export function harmonizeVoicing(
 
       const lead = extractLead(csNode, snapshot);
       if (!lead) continue;
+      tieState.pitchesByNodeId.set(csNode.id, [lead.midi]);
 
       // Resolve chord: either from current chord symbol or derive diatonically
       let chord: ParsedChord | null;
@@ -657,8 +708,10 @@ export function harmonizeVoicing(
         if (tieNode) {
           remove(tieNode);
           appendChild(chordCsNode, tieNode);
+          tieState.tiedChords.set(csNode.id, chordCsNode);
         }
         replace(csNode, chordCsNode);
+        tieState.pitchesByNodeId.set(csNode.id, voicedChord.map((note) => note.midi));
       }
 
       // Update local accidentals for subsequent notes in the same transform pass
@@ -668,5 +721,6 @@ export function harmonizeVoicing(
     }
   }
 
+  repairChordTies(tieState, chordTimeline, ctx);
   return selection;
 }

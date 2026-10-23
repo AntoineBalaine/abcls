@@ -42,6 +42,30 @@ describe("chordTimeline", () => {
     expect(chordRootsAtNotes(source)).to.deep.equal(["C", "F"]);
   });
 
+  it("counts a triplet as the time of two notes", () => {
+    // (3cde lasts 2 units, so the f that follows starts at offset 2, where the F chord starts.
+    const source = 'X:1\nV:1\nV:2\nK:C\n[V:1] "C" x2 "F" x6 |\n[V:2] (3cde f6 |\n';
+    expect(chordRootsAtNotes(source)).to.deep.equal(["C", "C", "C", "F"]);
+  });
+
+  it("applies a tuplet to r notes only, with explicit p:q:r", () => {
+    // (3:2:2 scales two notes by 2/3, so c and d last 4/3 units together and e starts before offset 2.
+    const source = 'X:1\nV:1\nV:2\nK:C\n[V:1] "C" x2 "F" x6 |\n[V:2] (3:2:2cd e f5 |\n';
+    expect(chordRootsAtNotes(source)).to.deep.equal(["C", "C", "C", "F"]);
+  });
+
+  it("lengthens the first note of a broken pair and shortens the second", () => {
+    // c3>d lasts 3 * 1.5 = 4.5 then 0.5, so d starts at 4.5, after the F chord at offset 4.
+    const source = 'X:1\nV:1\nV:2\nK:C\n[V:1] "C" x4 "F" x4 |\n[V:2] c3>d e3 |\n';
+    expect(chordRootsAtNotes(source)).to.deep.equal(["C", "F", "F"]);
+  });
+
+  it("shortens the first note of a reversed broken pair", () => {
+    // c4<d2 lasts 2 then 3 (d2 is 2 units long, so 2 * 1.5), so d starts at offset 2 under C, and e starts at 5 under F.
+    const source = 'X:1\nV:1\nV:2\nK:C\n[V:1] "C" x4 "F" x4 |\n[V:2] c4<d2 e3 |\n';
+    expect(chordRootsAtNotes(source)).to.deep.equal(["C", "C", "F"]);
+  });
+
   it("does not let a tune read the chords of the previous tune", () => {
     const source = 'X:1\nK:C\n"G" c8 |\n\nX:2\nK:C\nc8 |\n';
     expect(chordRootsAtNotes(source)).to.deep.equal(["G", null]);

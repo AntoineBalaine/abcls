@@ -135,7 +135,7 @@ import {
  * Maps p (number of notes) to q (time they fit into)
  * E.g., (3 means 3 notes in the time of 2
  */
-const TUPLET_Q: Record<number, number> = {
+export const TUPLET_Q: Record<number, number> = {
   2: 3, // (2 → 2 notes in time of 3
   3: 2, // (3 → 3 notes in time of 2
   4: 3, // (4 → 4 notes in time of 3
@@ -191,7 +191,7 @@ const DECORATION_MAP: Record<string, string> = {
  *   >> (n=2): [7/4, 1/4] = [1.75, 0.25]
  *   >>> (n=3): [15/8, 1/8] = [1.875, 0.125]
  */
-function getBrokenRhythmMultipliers(brokenLexeme: string): [IRational, IRational] {
+export function getBrokenRhythmMultipliers(brokenLexeme: string): [IRational, IRational] {
   const char = brokenLexeme[0];
   const count = brokenLexeme.length;
 

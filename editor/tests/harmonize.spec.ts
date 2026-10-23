@@ -743,6 +743,17 @@ describe("harmonize", () => {
         expect(result).to.contain("[V:2] [A,CEF]8 | [B,CEG]8 |");
       });
 
+      it("ties only the notes that the next chord repeats at the same place", () => {
+        // C (G B c e) to Am (G A c e): G, c and e are repeated at the same place from the top, B becomes A.
+        const input = 'X:1\nV:1\nV:2\nK:C\n[V:1] "C" x8 | "Am" x8 |\n[V:2] e8- | e8 |\n';
+        expect(harmonizeAll(input)).to.contain("[V:2] [G-Bc-e-]8 | [GAce]8 |");
+      });
+
+      it("ties every note of a chord that is repeated", () => {
+        const input = 'X:1\nV:1\nV:2\nK:C\n[V:1] "C" x8 |\n[V:2] e4- e4 |\n';
+        expect(harmonizeAll(input)).to.contain("[V:2] [G-B-c-e-]4 [GBce]4 |");
+      });
+
       it("follows a chord change in the middle of a bar", () => {
         const input = 'X:1\nV:1\nV:2\nK:Cm\n[V:1] "Fm" x4 "Cm" x4 |\n[V:2] F4 G4 |\n';
         const result = harmonizeAll(input);
@@ -770,6 +781,12 @@ describe("harmonize", () => {
       it("keeps a broken rhythm marker: \"Cm7\"_B2> -> \"Cm7\"[C_EG_B]2>", () => {
         const result = harmonizeClose('X:1\nK:C\n"Cm7"_B2>c|\n', 0);
         expect(result).to.equal('X:1\nK:C\n"Cm7"[C_EG_B]2>c|\n');
+      });
+
+      it("ties every note when the next chord is the same", () => {
+        const result = harmonizeClose('X:1\nK:C\n"C" e4- e4 |\n', 0);
+        // Only the first note is harmonized, so the tie goes to a note that the pass did not look at, and it stays on the chord.
+        expect(result).to.equal('X:1\nK:C\n"C" [GBce]4- e4 |\n');
       });
 
       it("keeps a tie: \"Cm7\"_B2- -> \"Cm7\"[C_EG_B]2-", () => {

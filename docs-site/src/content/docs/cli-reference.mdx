@@ -126,6 +126,8 @@ abcls harmonize myfile.abc --from 2 --into 3,4,5 -w
 
 Because the highest part of each chord is the melody itself, it is not written again: with `--into 3,4,5`, the chords have four notes, and voices 3, 4 and 5 hold the three lower ones. The melody notes that are not tones of the current chord get a cluster voicing.
 
+Because a tie only joins two notes of the same pitch, a tied melody note keeps its tie in a new voice only when that voice holds the same pitch in the next chord.
+
 Options:
 
 - `--from <voice>` -- the id of the voice that holds the melody to harmonize
@@ -144,6 +146,7 @@ Limits to know about:
 
 - The chords are built as seventh chords, so a plain major chord such as `Ab` has a major seventh (A-flat, C, E-flat, G). A `6` chord such as `Bb6` has its sixth in place of the seventh.
 - The command refuses to write into a voice id that the score already uses, so to run it again on its own output, remove the new voices first or choose other ids.
+- The time of each note is counted with its tuplet and its broken rhythm (`>`, `<`), but not through voice overlays (`&`) or `L:` and `M:` changes in the middle of the tune, so a chord change after one of those may land on the wrong note.
 - With `spread`, the lowest voice can go very low, with many ledger lines under the bass clef, so check that the register suits your sound.
 
 ## lsp

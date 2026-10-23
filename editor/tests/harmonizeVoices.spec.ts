@@ -55,6 +55,24 @@ describe("harmonizeVoices", () => {
     expect(() => harmonizeVoices(SCORE, { from: "2", into: ["1", "4", "5"], voicing: "close" })).to.throw(TransformError, "already exists");
   });
 
+  it("keeps a tie in a part only when the part repeats the pitch", () => {
+    // C to Am under a tied e: the parts holding c and G repeat their pitch, the part holding B moves to A.
+    const tied = 'X:1\nV:1\nV:2\nK:C\n[V:1] "C" x8 | "Am" x8 |\n[V:2] e8- | e8 |\n';
+    const parts = harmonizeVoices(tied, { from: "2", into: ["3", "4", "5"], voicing: "close" }).split("\n");
+    expect(parts).to.include("[V:3] c8- | c8 |");
+    expect(parts).to.include("[V:4] B8 | A8 |");
+    expect(parts).to.include("[V:5] G8- | G8 |");
+  });
+
+  it("drops a tie in a part whose pitch moves to another part", () => {
+    // Over C the E is in the second part from the top, over F it is in the third part, so no part may tie it.
+    const tied = 'X:1\nV:1\nV:2\nK:C\n[V:1] "C" x8 | "F" x8 |\n[V:2] c8- | c8 |\n';
+    const parts = harmonizeVoices(tied, { from: "2", into: ["3", "4", "5"], voicing: "close" }).split("\n");
+    for (const line of parts.filter((l) => /^\[V:[345]\]/.test(l))) {
+      expect(line).to.not.contain("-");
+    }
+  });
+
   it("asks for 3 to 5 new voices", () => {
     expect(() => harmonizeVoices(SCORE, { from: "2", into: ["3"], voicing: "close" })).to.throw(TransformError, "between 3 and 5");
   });

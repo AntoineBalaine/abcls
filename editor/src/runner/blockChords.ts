@@ -1,5 +1,6 @@
 import { ABCContext, Scanner, SemanticAnalyzer, buildChord, parse, voicedNoteOctave } from "abcls-parser";
 import { MeterType } from "abcls-parser/types/abcjs-ast";
+import { TUPLET_Q, getBrokenRhythmMultipliers } from "abcls-parser/interpreter/TuneInterpreter";
 import { parseChordSymbol } from "abcls-parser/music-theory/parseChordSymbol";
 import { scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
 import { ParsedChord } from "abcls-parser/music-theory/types";
@@ -38,12 +39,45 @@ export interface SeedState {
   previousLead: number;
   /** The parts of the seed line, in order. */
   parts: string[];
+  /** The length of the last note, rest or chord, which a broken rhythm marker that follows it changes. */
+  lastUnits: number;
+  /** The factor that a broken rhythm applies to the next note. */
+  nextMultiplier: number;
+  /** The factor q/p of the tuplet in progress, and the number of notes it still applies to. */
+  tupletRatio: number;
+  tupletNotesLeft: number;
 }
 
 // Because the chord line is read as text, the tokens that carry no time (comments, decorations, inline fields) are matched first.
 // A bracket chord such as [CEG]2 lasts one duration, so it is matched as a whole.
 const TOKEN =
-  /(?<ignored>%[^\n]*|![^!\n]*!|\[[A-Za-z]:[^\]\n]*\])|"(?<annotation>[^"]*)"|(?<barline>\|\]|\|\||\[\||\|:|:\||::|\|)|(?<group>\[[^\]\n]*\])(?<groupRhythm>\d*\/*\d*)|(?<note>[_^=]*[A-Ga-g][,']*)(?<noteRhythm>\d*\/*\d*)|(?<rest>[zxXZ])(?<restRhythm>\d*\/*\d*)|(?<other>.)/gs;
+  /(?<ignored>%[^\n]*|![^!\n]*!|\[[A-Za-z]:[^\]\n]*\])|\((?<tupletP>\d+)(?::(?<tupletQ>\d*))?(?::(?<tupletR>\d*))?|(?<broken>[<>]+)|"(?<annotation>[^"]*)"|(?<barline>\|\]|\|\||\[\||\|:|:\||::|\|)|(?<group>\[[^\]\n]*\])(?<groupRhythm>\d*\/*\d*)|(?<note>[_^=]*[A-Ga-g][,']*)(?<noteRhythm>\d*\/*\d*)|(?<rest>[zxXZ])(?<restRhythm>\d*\/*\d*)|(?<other>.)/gs;
+
+/**
+ * Adds a note, a rest or a chord to the current span, with the factors of the broken rhythm and of the tuplet it is part of.
+ * The rules are those of the interpreter, so the seed line lasts exactly as long as the chord line.
+ */
+export function addTimedElement(state: SeedState, baseUnits: number): void {
+  let units = baseUnits * state.nextMultiplier;
+  state.nextMultiplier = 1;
+  if (state.tupletNotesLeft > 0) {
+    units *= state.tupletRatio;
+    state.tupletNotesLeft -= 1;
+  }
+  state.spanUnits += units;
+  state.lastUnits = units;
+}
+
+/**
+ * Applies a broken rhythm marker to the element that precedes it, and keeps the factor for the element that follows it.
+ * Because the preceding element is still in the current span (a chord symbol between the two would end the span first),
+ * we correct the span by the difference.
+ */
+export function applyBrokenRhythm(state: SeedState, lexeme: string): void {
+  const [current, next] = getBrokenRhythmMultipliers(lexeme);
+  state.spanUnits += state.lastUnits * (current.numerator / current.denominator - 1);
+  state.nextMultiplier = next.numerator / next.denominator;
+}
 
 /**
  * Reads the length of a rhythm suffix such as "3", "/", "3/2" or "" as a number of default note lengths.
@@ -152,13 +186,26 @@ export function seedLine(body: string, state: SeedState): string {
     } else if (groups.barline !== undefined) {
       flushSpan(state);
       state.chord = null;
+      state.nextMultiplier = 1;
+      state.tupletNotesLeft = 0;
       state.parts.push(groups.barline);
+    } else if (groups.tupletP !== undefined) {
+      const p = parseInt(groups.tupletP, 10);
+      const q = groups.tupletQ ? parseInt(groups.tupletQ, 10) : TUPLET_Q[p] ?? 2;
+      state.tupletRatio = q / p;
+      state.tupletNotesLeft = groups.tupletR ? parseInt(groups.tupletR, 10) : p;
+    } else if (groups.broken !== undefined) {
+      applyBrokenRhythm(state, groups.broken);
     } else if (groups.group !== undefined) {
-      state.spanUnits += rhythmUnits(groups.groupRhythm);
+      addTimedElement(state, rhythmUnits(groups.groupRhythm));
     } else if (groups.note !== undefined) {
-      state.spanUnits += rhythmUnits(groups.noteRhythm);
+      addTimedElement(state, rhythmUnits(groups.noteRhythm));
     } else if (groups.rest !== undefined) {
-      state.spanUnits += groups.rest === "X" || groups.rest === "Z" ? state.barUnits * rhythmUnits(groups.restRhythm) : rhythmUnits(groups.restRhythm);
+      if (groups.rest === "X" || groups.rest === "Z") {
+        state.spanUnits += state.barUnits * rhythmUnits(groups.restRhythm);
+      } else {
+        addTimedElement(state, rhythmUnits(groups.restRhythm));
+      }
     }
   }
   flushSpan(state);
@@ -214,7 +261,7 @@ export function blockChords(source: string, options: BlockChordsOptions): string
   }
 
   const marker = `[V:${options.chordVoice}]`;
-  const state: SeedState = { barUnits: barLengthInUnits(source), chord: null, spanUnits: 0, previousLead: LEAD_START, parts: [] };
+  const state: SeedState = { barUnits: barLengthInUnits(source), chord: null, spanUnits: 0, previousLead: LEAD_START, parts: [], lastUnits: 0, nextMultiplier: 1, tupletRatio: 1, tupletNotesLeft: 0 };
   const withSeeds: string[] = [];
   const seedLines: number[] = [];
   for (const line of sourceLines) {
