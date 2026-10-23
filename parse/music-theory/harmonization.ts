@@ -953,11 +953,11 @@ export function buildChord(chord: ParsedChord, leadMidi: number): VoicedNote[] {
   const rootNaturalSemitone = NATURAL_SEMITONES[rootLetter];
   const rootSemitone = (rootNaturalSemitone + rootAccSemitones + 12) % 12;
 
-  // Compute base octave from leadMidi. We use (leadMidi - 1) to handle the octave
-  // boundary correctly: C notes should be grouped with the notes below them (B, Bb, etc.)
-  // so that a lead of C5 (72) builds the chord in the same octave as B4 (71).
-  const baseOctave = Math.floor((leadMidi - 1) / 12);
-  const rootMidi = baseOctave * 12 + rootSemitone;
+  // We place the root at the highest pitch at or below the lead. Because every chord tone then sits less than an octave
+  // above the root, the tone that has the pitch class of the lead is the lead itself (or an octave above it), and invert,
+  // which can only lower notes, brings it onto the lead. Placing the root an octave lower would leave that tone an octave
+  // below the lead, where invert cannot raise it: a lead C5 over a C chord would then be missing from the chord.
+  const rootMidi = leadMidi - ((((leadMidi - rootSemitone) % 12) + 12) % 12);
 
   // getIntervals now returns IntervalSpec[] with func, interval, and scaleStep
   const specs = getIntervals(chord);

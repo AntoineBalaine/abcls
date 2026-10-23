@@ -1356,7 +1356,7 @@ describe("harmonization", () => {
     describe("example-based tests", () => {
       it("[C4, E4, G4, B4] -> [G3, C4, E4, B4]", () => {
         const chord = makeChord(KeyRoot.C, KeyAccidental.None, ChordQuality.Major, 7);
-        const rootPos = buildChord(chord, 72);
+        const rootPos = buildChord(chord, 71);
         // rootPos: [C4(60), E4(64), G4(67), B4(71)]
 
         const dropped = drop2(rootPos);
@@ -1417,7 +1417,7 @@ describe("harmonization", () => {
     describe("example-based tests", () => {
       it("[C4, E4, G4, B4] -> [C3, G3, E4, B4]", () => {
         const chord = makeChord(KeyRoot.C, KeyAccidental.None, ChordQuality.Major, 7);
-        const rootPos = buildChord(chord, 72);
+        const rootPos = buildChord(chord, 71);
         // rootPos: [C4(60), E4(64), G4(67), B4(71)]
 
         const dropped = drop24(rootPos);
@@ -1456,7 +1456,7 @@ describe("harmonization", () => {
     describe("example-based tests", () => {
       it("[C4, E4, G4, B4] -> [E3, C4, G4, B4]", () => {
         const chord = makeChord(KeyRoot.C, KeyAccidental.None, ChordQuality.Major, 7);
-        const rootPos = buildChord(chord, 72);
+        const rootPos = buildChord(chord, 71);
         // rootPos: [C4(60), E4(64), G4(67), B4(71)]
 
         const dropped = drop3(rootPos);

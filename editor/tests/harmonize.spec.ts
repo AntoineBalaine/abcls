@@ -13,6 +13,8 @@ import { Selection } from "../src/selection";
 import {
   harmonize,
   harmonizeVoicing,
+  repairChordTies,
+  TieRepairState,
   pitchToDiatonic,
   diatonicToPitch,
   stepDiatonic,
@@ -20,6 +22,7 @@ import {
   formatNote,
   HarmonizeSnapshot,
 } from "../src/transforms/harmonize";
+import { buildChordTimeline } from "../src/transforms/chordTimeline";
 import { toCSTreeWithContext, formatSelection, findByTag, genAbcTune, genAbcWithChords } from "./helpers";
 
 function createPitch(ctx: ABCContext, letter: string, alteration?: string, octaveStr?: string): Pitch {
@@ -717,6 +720,11 @@ describe("harmonize", () => {
       expect(result).to.equal('X:1\nK:C\n"Fm7b5"[_E,F,_A,_C]|\n');
     });
 
+    it('"C"c -> "C"[EGBc] (a lead that is the root C stays on top of the chord)', () => {
+      const result = harmonizeClose('X:1\nK:C\n"C"c|\n');
+      expect(result).to.equal('X:1\nK:C\n"C"[EGBc]|\n');
+    });
+
     it('"Bb6"D -> "Bb6"[F,GB,D] (the sixth chord holds a G, not an A natural)', () => {
       const result = harmonizeClose('X:1\nK:Cm\n"Bb6"D|\n');
       expect(result).to.equal('X:1\nK:Cm\n"Bb6"[F,G,B,D]|\n');
@@ -765,6 +773,33 @@ describe("harmonize", () => {
       // Running the transform over a line twice must not nest chords.
       const result = harmonizeClose('X:1\nK:C\n"Cm7"[C_EG_B]|\n');
       expect(result).to.equal('X:1\nK:C\n"Cm7"[C_EG_B]|\n');
+    });
+
+    describe("repairChordTies", () => {
+      // The pitches are given by hand, so the test does not depend on a voicing.
+      function repair(source: string, firstPitches: number[], nextPitches: number[]): string {
+        const { root, ctx } = toCSTreeWithContext(source);
+        const timeline = buildChordTimeline(root);
+        const [first, next] = findByTag(root, TAGS.Chord);
+        const state: TieRepairState = {
+          pitchesByNodeId: new Map([
+            [first.id, firstPitches],
+            [next.id, nextPitches],
+          ]),
+          tiedChords: new Map([[first.id, first]]),
+        };
+        repairChordTies(state, timeline, ctx);
+        return formatSelection({ root, cursors: [] });
+      }
+
+      it("drops the tie of a pitch that moves to another place from the top", () => {
+        // E and G are in both chords, but one place lower from the top in the second chord, so no part may tie them.
+        expect(repair("X:1\nK:C\n[CEG]2- [EGc]2 |\n", [60, 64, 67], [64, 67, 72])).to.equal("X:1\nK:C\n[CEG]2 [EGc]2 |\n");
+      });
+
+      it("ties the pitches that stay at the same place from the top", () => {
+        expect(repair("X:1\nK:C\n[CEG]2- [DEG]2 |\n", [60, 64, 67], [62, 64, 67])).to.equal("X:1\nK:C\n[CE-G-]2 [DEG]2 |\n");
+      });
     });
 
     describe("rhythm and tie of the harmonized note", () => {
