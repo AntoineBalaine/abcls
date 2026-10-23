@@ -59,6 +59,55 @@ describe("blockChords reading of the chord line", () => {
   });
 });
 
+describe("blockChords choice of the top note", () => {
+  const six = ["3", "4", "5", "6", "7", "8"];
+
+  it("voices every chord with 6 spread voices, where a top note too low used to leave the bar empty", () => {
+    const source = 'X:1\nV:1\nK:Cm\n[V:1] "Fm" X | "Cm" X | "Bb6" X | "Ab" X |\n';
+    const lines = blockChords(source, { chordVoice: "1", into: six, voicing: "spread" }).split("\n");
+    for (const line of lines.filter((l) => /^\[V:[3-8]\]/.test(l))) {
+      expect(line).to.not.match(/z/);
+    }
+  });
+
+  it("prefers a guide tone on top when asked, with the nearest rule", () => {
+    // Over C, the chord tones nearest to the starting A4 are G4 and B4; B4 is the 7th, a guide tone.
+    const source = 'X:1\nV:1\nK:C\n[V:1] "C" X |\n';
+    const plain = blockChords(source, { chordVoice: "1", into: ["3", "4", "5", "6"], voicing: "close" }).split("\n");
+    const preferred = blockChords(source, { chordVoice: "1", into: ["3", "4", "5", "6"], voicing: "close", preferLead: ["guide-tones"] }).split("\n");
+    expect(plain).to.include("[V:3] G8 |");
+    expect(preferred).to.include("[V:3] B8 |");
+  });
+
+  it("prefers a tension on top when asked, with a voicing that accepts tensions", () => {
+    // Over Cmaj7 in C, the available tensions are D (9th) and A (13th); A4 is the nearest one to the starting A4.
+    const source = 'X:1\nV:1\nK:C\n[V:1] "Cmaj7" X |\n';
+    const lines = blockChords(source, { chordVoice: "1", into: ["3", "4", "5", "6"], voicing: "spread", preferLead: ["tensions"] }).split("\n");
+    expect(lines).to.include("[V:3] A8 |");
+  });
+
+  it("chooses the top note by voicing, and keeps every chord voiced", () => {
+    const source = 'X:1\nV:1\nK:Cm\n[V:1] "Fm" X | "Cm" X | "Bb6" X | "Ab" X |\n';
+    const lines = blockChords(source, { chordVoice: "1", into: six, voicing: "spread", topNote: "voicing" }).split("\n");
+    const top = lines.find((l) => l.startsWith("[V:3]"))!;
+    expect(top.match(/[A-Ga-g]/g)).to.have.length(4);
+    for (const line of lines.filter((l) => /^\[V:[4-8]\]/.test(l))) {
+      expect(line).to.not.match(/z/);
+    }
+  });
+
+  it("falls back to a close voicing with a warning when no top note can carry the voicing", () => {
+    // A power chord has no third, so it has no guide tone to build a spread voicing on.
+    const warnings: string[] = [];
+    const source = 'X:1\nV:1\nK:C\n[V:1] "C5" X |\n';
+    const lines = blockChords(source, { chordVoice: "1", into: ["3", "4", "5", "6"], voicing: "spread", warnings }).split("\n");
+    expect(warnings).to.deep.equal(['bar 1: no spread voicing fits "C5", so it gets a close voicing']);
+    for (const line of lines.filter((l) => /^\[V:[3-6]\]/.test(l))) {
+      expect(line).to.not.match(/z/);
+    }
+  });
+});
+
 describe("blockChords with several lines", () => {
   const MULTI = 'X:1\nV:1\nV:2\nK:Cm\n[V:1] "Fm" X |\n[V:2] F8 |\n[V:1] "Cm" X |\n[V:2] G8 |\n';
 

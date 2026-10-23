@@ -17,6 +17,9 @@ import {
   scoreVoiceLeading,
   scoreSpreadQuality,
   buildSpreadVoicing,
+  enumeratePlacements,
+  maxUpperGap,
+  MAX_UPPER_GAP,
   // Phase 2: Chord Tone Validation
   isChordTone,
   getAvailableTensions,
@@ -944,6 +947,57 @@ describe("harmonization", () => {
       });
     });
 
+    describe("gap between the upper voices", () => {
+      function buildBb6(): VoicedNote[] {
+        return [
+          { spelling: { letter: "B", alteration: -1 }, midi: 58, func: 8 },
+          { spelling: { letter: "D", alteration: 0 }, midi: 62, func: 3 },
+          { spelling: { letter: "F", alteration: 0 }, midi: 65, func: 5 },
+          { spelling: { letter: "G", alteration: 0 }, midi: 67, func: 7 },
+        ];
+      }
+
+      it("rules out more than an octave between the lead and the voice below it (Bb6 under G4)", () => {
+        // The lowest placement Bb1 D3 F3 G4 leaves 14 semitones between F3 and G4, so the bass moves up an octave.
+        const lead: VoicedNote = { spelling: { letter: "G", alteration: 0 }, midi: 67, func: 7 };
+        const result = buildSpreadVoicing(buildBb6(), new Map(), lead, 4, null);
+        expect(result!.map((n) => n.midi)).to.deep.equal([46, 62, 65, 67]);
+      });
+
+      it("rules out the lowest placement of Cmaj7 under B4, whose upper gap is 16 semitones", () => {
+        const lead: VoicedNote = { spelling: { letter: "B", alteration: 0 }, midi: 71, func: 7 };
+        const result = buildSpreadVoicing(buildCmaj7(), buildCmaj7Tensions(), lead, 4, null);
+        expect(result!.map((n) => n.midi)).to.deep.equal([48, 64, 67, 71]);
+      });
+
+      it("keeps the bass and the voice above it free of the rule", () => {
+        const lead: VoicedNote = { spelling: { letter: "G", alteration: 0 }, midi: 67, func: 7 };
+        const result = buildSpreadVoicing(buildBb6(), new Map(), lead, 4, null)!;
+        expect(result[1].midi - result[0].midi).to.be.greaterThan(MAX_UPPER_GAP);
+      });
+
+      it("never returns an upper gap above an octave when the lead is in the fifth octave or higher", () => {
+        fc.assert(
+          fc.property(fc.integer({ min: 72, max: 84 }), fc.constantFrom(4, 5, 6), (leadMidi, voiceCount) => {
+            const pitchClass = leadMidi % 12;
+            const tone = [...buildCmaj7(), ...buildCmaj7Tensions().values()].find((n) => n.midi % 12 === pitchClass);
+            if (tone === undefined) return;
+            const lead: VoicedNote = { spelling: tone.spelling, midi: leadMidi, func: tone.func };
+            const result = buildSpreadVoicing(buildCmaj7(), buildCmaj7Tensions(), lead, voiceCount as 4 | 5 | 6, null);
+            if (result === null) return;
+            expect(maxUpperGap(result)).to.be.at.most(MAX_UPPER_GAP);
+          })
+        );
+      });
+
+      it("lists every octave placement of the middle voices, each above the previous one and below the lead", () => {
+        const results: VoicedNote[][] = [];
+        const fifth: VoicedNote = { spelling: { letter: "F", alteration: 0 }, midi: 65, func: 5 };
+        enumeratePlacements([fifth], 0, 50, 67, [], results);
+        expect(results.map((r) => r.map((n) => n.midi))).to.deep.equal([[53], [65]]);
+      });
+    });
+
     describe("property-based tests", () => {
       it("result is always sorted by MIDI", () => {
         const rootPosChord = buildCmaj7();
@@ -1051,6 +1105,15 @@ describe("harmonization", () => {
         expect(tensions.has(9)).to.be.true;
         expect(tensions.has(11)).to.be.false;
         expect(tensions.has(13)).to.be.true;
+      });
+
+      it("C6 does not offer the 13th, because the sixth (A) is the 13th itself", () => {
+        const chord = makeChord(KeyRoot.C, KeyAccidental.None, ChordQuality.Major, 6);
+        const rootPosChord = buildChord(chord, 60);
+        const tensions = getAvailableTensions(rootPosChord, chord, C_MAJOR);
+
+        expect(tensions.has(9)).to.be.true;
+        expect(tensions.has(13)).to.be.false;
       });
 
       it("G7 returns 9 and 13 (11 is avoid because C is minor 2nd above B)", () => {

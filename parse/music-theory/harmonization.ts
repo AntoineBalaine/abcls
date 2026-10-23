@@ -740,6 +740,72 @@ export function placeArrangements(
 }
 
 /**
+ * The largest interval, in semitones, allowed between two adjacent voices above the bass of a spread voicing.
+ * Because the upper voices of a spread voicing must stay connected to the melody, no two of them may be more than
+ * an octave apart. The bass and the voice right above it are exempt, since a wide interval at the bottom is idiomatic.
+ */
+export const MAX_UPPER_GAP = 12;
+
+/**
+ * Returns the largest interval between two adjacent voices above the bass (the voicing is sorted low to high).
+ */
+export function maxUpperGap(voicing: VoicedNote[]): number {
+  let largest = 0;
+  for (let i = 2; i < voicing.length; i++) {
+    largest = Math.max(largest, voicing[i].midi - voicing[i - 1].midi);
+  }
+  return largest;
+}
+
+/**
+ * Lists every placement of the middle voices of an arrangement, in every octave, each voice strictly above the one
+ * below it and strictly below the lead. Because the middle voices may sit in more than one octave, a single placement
+ * (the lowest one) would leave a gap under the melody whenever the melody is high.
+ *
+ * @param arrangement The middle voices, from the lowest to the highest
+ * @param index The index of the voice to place next
+ * @param floorMidi The pitch of the voice below, which the next voice must be above
+ * @param ceilingMidi The pitch of the lead, which every middle voice must be below
+ * @param placed The voices placed so far
+ * @param results Receives every complete placement
+ */
+export function enumeratePlacements(
+  arrangement: VoicedNote[],
+  index: number,
+  floorMidi: number,
+  ceilingMidi: number,
+  placed: VoicedNote[],
+  results: VoicedNote[][]
+): void {
+  if (index === arrangement.length) {
+    results.push([...placed]);
+    return;
+  }
+  const note = arrangement[index];
+  let midi = note.midi;
+  while (midi <= floorMidi) midi += 12;
+  while (midi - 12 > floorMidi) midi -= 12;
+  for (; midi < ceilingMidi; midi += 12) {
+    placed.push({ spelling: note.spelling, midi, func: note.func });
+    enumeratePlacements(arrangement, index + 1, midi, ceilingMidi, placed, results);
+    placed.pop();
+  }
+}
+
+/**
+ * Scores a spread voicing: wider intervals at the bottom (spread quality), a wider span from bass to lead,
+ * and little movement from the previous chord when there is one.
+ */
+export function scoreSpreadVoicing(voicing: VoicedNote[], prevMidi: number[] | null): number {
+  let score = scoreSpreadQuality(voicing);
+  score += voicing[voicing.length - 1].midi - voicing[0].midi;
+  if (prevMidi !== null) {
+    score += scoreVoiceLeading(voicing, prevMidi);
+  }
+  return score;
+}
+
+/**
  * Builds a spread voicing for the given chord and lead note.
  * Returns the best voicing based on voice leading and spread quality scoring,
  * or null if no valid voicing exists.
@@ -796,13 +862,11 @@ export function buildSpreadVoicing(
     interval += 12;
   }
 
-  // Place bass respecting low interval limits
+  // The bass may sit in any octave from the lowest one that the low interval limits allow, up to the octave
+  // where the guide tone above it would reach the lead. Because the register of the voicing depends on the lead,
+  // we let the gap rule and the scoring choose the octave rather than fixing a range.
   const minBass = LOW_INTERVAL_LIMITS[interval] ?? 34;
-  const bassMidi = placeBassWithLIL(bassNote.midi, minBass);
-  const gtMidi = bassMidi + interval;
-
-  // GT must be below lead
-  if (gtMidi >= lead.midi) return null;
+  const lowestBass = placeBassWithLIL(bassNote.midi, minBass);
 
   // Get arrangements based on voice count
   let arrangements: VoicedNote[][] | null;
@@ -816,20 +880,40 @@ export function buildSpreadVoicing(
 
   if (arrangements === null || arrangements.length === 0) return null;
 
-  // Place each arrangement and collect valid voicings
-  const voicings = placeArrangements(arrangements, bassMidi, gtMidi, lead.midi, bassNote, gtNote, lead);
+  const candidates: VoicedNote[][] = [];
+  for (let bassMidi = lowestBass; bassMidi + interval < lead.midi; bassMidi += 12) {
+    const gtMidi = bassMidi + interval;
 
-  if (voicings.length === 0) return null;
+    for (const arrangement of arrangements) {
+      const middles: VoicedNote[][] = [];
+      enumeratePlacements(arrangement, 0, gtMidi, lead.midi, [], middles);
+      for (const middle of middles) {
+        const voicing: VoicedNote[] = [
+          { spelling: bassNote.spelling, midi: bassMidi, func: bassNote.func },
+          { spelling: gtNote.spelling, midi: gtMidi, func: gtNote.func },
+          ...middle,
+          { spelling: lead.spelling, midi: lead.midi, func: lead.func },
+        ];
+        voicing.sort((a, b) => a.midi - b.midi);
+        candidates.push(voicing);
+      }
+    }
+  }
 
-  // Score and pick best
+  if (candidates.length === 0) return null;
+
+  // A voicing with more than an octave between two upper voices is ruled out. When no candidate passes,
+  // we keep the ones with the smallest such gap, so the note still gets the best voicing available.
+  let pool = candidates.filter((voicing) => maxUpperGap(voicing) <= MAX_UPPER_GAP);
+  if (pool.length === 0) {
+    const smallestGap = Math.min(...candidates.map(maxUpperGap));
+    pool = candidates.filter((voicing) => maxUpperGap(voicing) === smallestGap);
+  }
+
   let bestVoicing: VoicedNote[] | null = null;
   let bestScore = -Infinity;
-
-  for (const voicing of voicings) {
-    let score = scoreSpreadQuality(voicing);
-    if (prevMidi !== null) {
-      score += scoreVoiceLeading(voicing, prevMidi);
-    }
+  for (const voicing of pool) {
+    const score = scoreSpreadVoicing(voicing, prevMidi);
     if (score > bestScore) {
       bestScore = score;
       bestVoicing = voicing;
@@ -1035,7 +1119,11 @@ export function getAvailableTensions(rootPosChord: VoicedNote[], chord: ParsedCh
 
   const available = new Map<9 | 11 | 13, VoicedNote>();
 
+  // Because the sixth of a 6 or 6/9 chord is the 13th itself, offering the 13th as a tension would double that chord tone.
+  const sixthIsChordTone = chord.extension === 6 || chord.extension === 69;
+
   for (const degree of [9, 11, 13] as const) {
+    if (degree === 13 && sixthIsChordTone) continue;
     const interval = tensionIntervals[degree];
     const tensionMidi = rootMidi + interval;
 

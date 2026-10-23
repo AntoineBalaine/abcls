@@ -160,3 +160,4 @@ export {
 export { runTransform, rangesOfVoices, TransformRequest, TransformError } from "./runner/runTransform";
 export { harmonizeVoices, HarmonizeVoicesOptions } from "./runner/harmonizeVoices";
 export { blockChords, BlockChordsOptions } from "./runner/blockChords";
+export { TopNoteRule, LeadKind } from "./runner/blockChords";

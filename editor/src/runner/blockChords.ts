@@ -1,12 +1,14 @@
-import { ABCContext, Scanner, SemanticAnalyzer, buildChord, parse, voicedNoteOctave } from "abcls-parser";
-import { MeterType } from "abcls-parser/types/abcjs-ast";
+import { ABCContext, Scanner, SemanticAnalyzer, VoicedNote, buildChord, getAvailableTensions, parse, scoreSpreadVoicing, scoreVoiceLeading, voicedNoteOctave } from "abcls-parser";
+import { DocumentSnapshots, encode, getSnapshotAtPosition } from "abcls-parser/interpreter/ContextInterpreter";
+import { KeySignature, MeterType } from "abcls-parser/types/abcjs-ast";
 import { TUPLET_Q, getBrokenRhythmMultipliers } from "abcls-parser/interpreter/TuneInterpreter";
 import { parseChordSymbol } from "abcls-parser/music-theory/parseChordSymbol";
 import { scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
 import { ParsedChord } from "abcls-parser/music-theory/types";
 import { interpretContext } from "../context/csContextInterpreter";
 import { fromAst } from "../csTree/fromAst";
-import { formatNote, VoicingType } from "../transforms/harmonize";
+import { formatNote, voiceChord, VoicingType } from "../transforms/harmonize";
+import { NoteLetter } from "../transforms/pitchHelpers";
 import { WORK_VOICE_ID, assertValidVoiceIds, assertVoicesAreFree, declareVoices, findVoiceLines, rangesOfLines, relabelParts } from "./harmonizeVoices";
 import { runTransform, TransformError } from "./runTransform";
 
@@ -17,6 +19,41 @@ export interface BlockChordsOptions {
   into: string[];
   /** The voicing of each chord. */
   voicing: VoicingType;
+  /** How the top note of each chord is chosen (default "nearest"). */
+  topNote?: TopNoteRule;
+  /** The kinds of chord functions that the top note should preferably be (default: none, every chord tone is equal). */
+  preferLead?: LeadKind[];
+  /** Receives a message for every chord that could not get the requested voicing and got a close voicing instead. */
+  warnings?: string[];
+}
+
+/**
+ * How the top note of each chord is chosen.
+ * - "nearest": the candidate closest to the previous top note, among the preferred kinds when one of them fits.
+ * - "voicing": the candidate whose voicing scores best, counting the voicing itself, the motion of the top note,
+ *   and a bonus for a preferred kind. It tries every candidate, so it costs more.
+ */
+export type TopNoteRule = "nearest" | "voicing";
+
+/**
+ * The kinds of chord functions that the top note may be asked to prefer: the guide tones (3rd and 7th, or the sixth of a
+ * 6 chord) and the tensions (9th, 11th, 13th).
+ */
+export type LeadKind = "guide-tones" | "tensions";
+
+/**
+ * The bonus that a preferred top note receives in the "voicing" rule, in the same unit as the voicing scores (semitones).
+ */
+export const PREFERRED_LEAD_BONUS = 24;
+
+/**
+ * A pitch that the top note of a chord may take, with its spelling and its function in the chord.
+ */
+export interface LeadCandidate {
+  midi: number;
+  letter: NoteLetter;
+  alteration: number;
+  func: number;
 }
 
 /**
@@ -46,6 +83,22 @@ export interface SeedState {
   /** The factor q/p of the tuplet in progress, and the number of notes it still applies to. */
   tupletRatio: number;
   tupletNotesLeft: number;
+  /** The text of the chord symbol of the current span, for the warnings. */
+  chordText: string;
+  /** The key signature of the current chord line, which gives the tensions of each chord. */
+  key: KeySignature | null;
+  voicing: VoicingType;
+  voiceCount: number;
+  topNote: TopNoteRule;
+  preferLead: Set<LeadKind>;
+  /** The pitches of the last chord that got the requested voicing, which the next chord is led from. */
+  previousVoicing: number[] | null;
+  warnings: string[];
+  /** The number of chords that got a close voicing because no top note could carry the requested voicing. */
+  fallbacks: number;
+  /** The number of the current bar of the chord voice, counted from 1, and whether it holds anything yet. */
+  barNumber: number;
+  barHasContent: boolean;
 }
 
 // Because the chord line is read as text, the tokens that carry no time (comments, decorations, inline fields) are matched first.
@@ -58,6 +111,7 @@ const TOKEN =
  * The rules are those of the interpreter, so the seed line lasts exactly as long as the chord line.
  */
 export function addTimedElement(state: SeedState, baseUnits: number): void {
+  state.barHasContent = true;
   let units = baseUnits * state.nextMultiplier;
   state.nextMultiplier = 1;
   if (state.tupletNotesLeft > 0) {
@@ -113,11 +167,18 @@ export function parseChordText(annotation: string): ParsedChord | null {
  * A tune without a meter is read as 4/4.
  */
 export function barLengthInUnits(source: string): number {
+  return barLengthOf(interpretSource(source));
+}
+
+export function interpretSource(source: string): DocumentSnapshots {
   const ctx = new ABCContext();
   const ast = parse(Scanner(source, ctx), ctx);
   const analyzer = new SemanticAnalyzer(ctx);
   ast.accept(analyzer);
-  const snapshots = interpretContext(fromAst(ast, ctx), analyzer.data, { snapshotAccidentals: false });
+  return interpretContext(fromAst(ast, ctx), analyzer.data, { snapshotAccidentals: false });
+}
+
+export function barLengthOf(snapshots: DocumentSnapshots): number {
   const first = snapshots.length > 0 ? snapshots[0].snapshot : null;
 
   let barLength = 1;
@@ -131,26 +192,111 @@ export function barLengthInUnits(source: string): number {
 }
 
 /**
- * Chooses the top voice of a chord: the chord tone, in the register of the top voice, that is the closest to the previous top voice.
- * The note is written with an explicit accidental, so its pitch does not depend on the key signature.
+ * Returns the key signature in effect at the start of a line, or the first key of the document before any snapshot.
  */
-export function chooseSeedNote(chord: ParsedChord, previousLead: number): { text: string; midi: number } {
-  let best: { midi: number; letter: string; alteration: number } | null = null;
-  for (const tone of buildChord(chord, LEAD_START)) {
-    for (const shift of [-12, 0, 12]) {
-      const midi = tone.midi + shift;
+export function keyAtLine(snapshots: DocumentSnapshots, line: number): KeySignature {
+  const snapshot = getSnapshotAtPosition(snapshots, encode(line, 0)) ?? (snapshots.length > 0 ? snapshots[0].snapshot : null);
+  if (snapshot === null) {
+    throw new TransformError("The file has no key signature that the harmonizer can read.");
+  }
+  return snapshot.key;
+}
+
+/**
+ * Lists the pitches that the top note of a chord may take: its chord tones and its available tensions, in the register
+ * of the top voice (E4 to G5).
+ */
+export function leadCandidates(chord: ParsedChord, key: KeySignature): LeadCandidate[] {
+  const rootPosChord = buildChord(chord, LEAD_START);
+  const tones: VoicedNote[] = [...rootPosChord, ...getAvailableTensions(rootPosChord, chord, key).values()];
+  const candidates: LeadCandidate[] = [];
+  for (const tone of tones) {
+    for (let midi = tone.midi - 24; midi <= tone.midi + 24; midi += 12) {
       if (midi < LEAD_LOW || midi > LEAD_HIGH) continue;
-      if (best === null || Math.abs(midi - previousLead) < Math.abs(best.midi - previousLead)) {
-        best = { midi, letter: tone.spelling.letter, alteration: tone.spelling.alteration };
-      }
+      candidates.push({ midi, letter: tone.spelling.letter as NoteLetter, alteration: tone.spelling.alteration, func: tone.func });
     }
   }
-  if (best === null) {
-    throw new TransformError("No chord tone fits the register of the top voice.");
+  return candidates.sort((a, b) => a.midi - b.midi);
+}
+
+export function isPreferredLead(candidate: LeadCandidate, preferLead: Set<LeadKind>): boolean {
+  const isGuideTone = candidate.func === 3 || candidate.func === 7;
+  const isTension = candidate.func === 9 || candidate.func === 11 || candidate.func === 13;
+  return (isGuideTone && preferLead.has("guide-tones")) || (isTension && preferLead.has("tensions"));
+}
+
+/**
+ * Scores a voicing for the choice of the top note: the spread score (which includes the voice leading) for a spread voicing,
+ * and the voice leading alone for the mechanical voicings.
+ */
+export function scoreVoicingForLead(voicing: VoicedNote[], state: SeedState): number {
+  if (state.voicing === "spread") return scoreSpreadVoicing(voicing, state.previousVoicing);
+  return state.previousVoicing === null ? 0 : scoreVoiceLeading(voicing, state.previousVoicing);
+}
+
+/**
+ * Writes a seed note with an explicit accidental, so its pitch does not depend on the key signature.
+ */
+export function seedText(candidate: LeadCandidate): string {
+  const accidental = candidate.alteration < 0 ? "_".repeat(-candidate.alteration) : candidate.alteration > 0 ? "^".repeat(candidate.alteration) : "=";
+  const octave = voicedNoteOctave({ spelling: { letter: candidate.letter, alteration: candidate.alteration }, midi: candidate.midi, func: 8 });
+  return formatNote(accidental, candidate.letter, octave);
+}
+
+/**
+ * Chooses the top note of a chord. Only the candidates that can carry the requested voicing are kept, so the choice never
+ * leaves a chord without a voicing. When none can, we take the chord tone closest to the previous top note,
+ * count the chord as a fallback (it gets a close voicing later) and record a warning.
+ */
+export function chooseSeedNote(chord: ParsedChord, state: SeedState): LeadCandidate {
+  const key = state.key!;
+  const candidates = leadCandidates(chord, key);
+  const viable: { candidate: LeadCandidate; voicing: VoicedNote[] }[] = [];
+  for (const candidate of candidates) {
+    const voicing = voiceChord(chord, candidate, state.voicing, state.voiceCount, key, state.previousVoicing);
+    if (voicing !== null) viable.push({ candidate, voicing });
   }
-  const accidental = best.alteration < 0 ? "_".repeat(-best.alteration) : best.alteration > 0 ? "^".repeat(best.alteration) : "=";
-  const octave = voicedNoteOctave({ spelling: { letter: best.letter as never, alteration: best.alteration }, midi: best.midi, func: 8 });
-  return { text: formatNote(accidental, best.letter, octave), midi: best.midi };
+
+  if (viable.length === 0) {
+    const chordTones = candidates.filter((c) => c.func === 8 || c.func === 3 || c.func === 5 || c.func === 7);
+    const fallback = nearestCandidate(chordTones, state.previousLead);
+    state.fallbacks += 1;
+    state.warnings.push(`bar ${state.barNumber}: no ${state.voicing} voicing fits "${state.chordText}", so it gets a close voicing`);
+    return fallback;
+  }
+
+  let chosen: { candidate: LeadCandidate; voicing: VoicedNote[] };
+  if (state.topNote === "voicing") {
+    chosen = viable[0];
+    let bestScore = -Infinity;
+    for (const option of viable) {
+      let score = scoreVoicingForLead(option.voicing, state) - Math.abs(option.candidate.midi - state.previousLead);
+      if (isPreferredLead(option.candidate, state.preferLead)) score += PREFERRED_LEAD_BONUS;
+      if (score > bestScore) {
+        bestScore = score;
+        chosen = option;
+      }
+    }
+  } else {
+    const preferred = viable.filter((option) => isPreferredLead(option.candidate, state.preferLead));
+    const pool = preferred.length > 0 ? preferred : viable;
+    const nearest = nearestCandidate(
+      pool.map((option) => option.candidate),
+      state.previousLead
+    );
+    chosen = pool.find((option) => option.candidate === nearest)!;
+  }
+
+  state.previousVoicing = chosen.voicing.map((note) => note.midi);
+  return chosen.candidate;
+}
+
+export function nearestCandidate(candidates: LeadCandidate[], previousLead: number): LeadCandidate {
+  let best = candidates[0];
+  for (const candidate of candidates) {
+    if (Math.abs(candidate.midi - previousLead) < Math.abs(best.midi - previousLead)) best = candidate;
+  }
+  return best;
 }
 
 /**
@@ -161,9 +307,9 @@ export function flushSpan(state: SeedState): void {
   if (state.chord === null) {
     state.parts.push(`z${unitsToRhythm(state.spanUnits)}`);
   } else {
-    const seed = chooseSeedNote(state.chord, state.previousLead);
+    const seed = chooseSeedNote(state.chord, state);
     state.previousLead = seed.midi;
-    state.parts.push(`${seed.text}${unitsToRhythm(state.spanUnits)}`);
+    state.parts.push(`${seedText(seed)}${unitsToRhythm(state.spanUnits)}`);
   }
   state.spanUnits = 0;
 }
@@ -182,12 +328,15 @@ export function seedLine(body: string, state: SeedState): string {
       if (chord !== null) {
         flushSpan(state);
         state.chord = chord;
+        state.chordText = groups.annotation;
       }
     } else if (groups.barline !== undefined) {
       flushSpan(state);
       state.chord = null;
       state.nextMultiplier = 1;
       state.tupletNotesLeft = 0;
+      if (state.barHasContent) state.barNumber += 1;
+      state.barHasContent = false;
       state.parts.push(groups.barline);
     } else if (groups.tupletP !== undefined) {
       const p = parseInt(groups.tupletP, 10);
@@ -202,6 +351,7 @@ export function seedLine(body: string, state: SeedState): string {
       addTimedElement(state, rhythmUnits(groups.noteRhythm));
     } else if (groups.rest !== undefined) {
       if (groups.rest === "X" || groups.rest === "Z") {
+        state.barHasContent = true;
         state.spanUnits += state.barUnits * rhythmUnits(groups.restRhythm);
       } else {
         addTimedElement(state, rhythmUnits(groups.restRhythm));
@@ -261,12 +411,36 @@ export function blockChords(source: string, options: BlockChordsOptions): string
   }
 
   const marker = `[V:${options.chordVoice}]`;
-  const state: SeedState = { barUnits: barLengthInUnits(source), chord: null, spanUnits: 0, previousLead: LEAD_START, parts: [], lastUnits: 0, nextMultiplier: 1, tupletRatio: 1, tupletNotesLeft: 0 };
+  const snapshots = interpretSource(source);
+  const state: SeedState = {
+    barUnits: barLengthOf(snapshots),
+    chord: null,
+    spanUnits: 0,
+    previousLead: LEAD_START,
+    parts: [],
+    lastUnits: 0,
+    nextMultiplier: 1,
+    tupletRatio: 1,
+    tupletNotesLeft: 0,
+    chordText: "",
+    key: null,
+    voicing: options.voicing,
+    voiceCount: partCount,
+    topNote: options.topNote ?? "nearest",
+    preferLead: new Set(options.preferLead ?? []),
+    previousVoicing: null,
+    warnings: options.warnings ?? [],
+    fallbacks: 0,
+    barNumber: 1,
+    barHasContent: false,
+  };
   const withSeeds: string[] = [];
   const seedLines: number[] = [];
-  for (const line of sourceLines) {
+  for (let index = 0; index < sourceLines.length; index++) {
+    const line = sourceLines[index];
     withSeeds.push(line);
     if (line.startsWith(marker)) {
+      state.key = keyAtLine(snapshots, index);
       seedLines.push(withSeeds.length);
       withSeeds.push(`[V:${WORK_VOICE_ID}] ${seedLine(line.slice(marker.length), state)}`);
     }
@@ -275,6 +449,10 @@ export function blockChords(source: string, options: BlockChordsOptions): string
   let text = withSeeds.join("\n");
   const ranges = rangesOfLines(seedLines);
   text = runTransform({ source: text, transform: "harmonizeVoicing", args: [options.voicing, partCount, null], ranges });
+  // The chords that no top note could carry in the requested voicing get a close voicing, which every chord tone can carry.
+  if (state.fallbacks > 0) {
+    text = runTransform({ source: text, transform: "harmonizeVoicing", args: ["close", partCount, null], ranges });
+  }
   text = runTransform({ source: text, transform: "explode", args: [partCount], ranges });
 
   const parts = relabelParts(text.split("\n"), partCount, options.into, 0);

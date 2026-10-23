@@ -95,6 +95,10 @@ export {
   scoreSpreadQuality,
   placeArrangements,
   buildSpreadVoicing,
+  enumeratePlacements,
+  maxUpperGap,
+  scoreSpreadVoicing,
+  MAX_UPPER_GAP,
   // Phase 2: Chord Tone Validation
   isChordTone,
   getAvailableTensions,

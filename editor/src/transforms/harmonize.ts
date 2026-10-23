@@ -483,6 +483,108 @@ export function toCSChord(voicedChord: VoicedNote[], snapshot: HarmonizeSnapshot
 }
 
 /**
+ * Builds the voicing of a chord under a lead note, with the given voicing type and voice count.
+ * Returns null when the lead cannot carry that voicing (for example a lead that is not a chord tone in a 4-voice close voicing,
+ * or a spread voicing that finds no placement). This is the voicing step of harmonizeVoicing, exported so that a caller
+ * can test candidate leads before writing any note.
+ *
+ * @param chord The chord to voice
+ * @param lead The lead note, which stays on top
+ * @param voicing The voicing type
+ * @param voiceCount The number of voices (4, 5 or 6)
+ * @param key The key signature, which gives the tensions of the chord scale
+ * @param prevMidi The pitches of the previous chord of the same voice, for the voice leading of the spread voicing
+ */
+export function voiceChord(
+  chord: ParsedChord,
+  lead: { letter: NoteLetter; midi: number; alteration: number },
+  voicing: VoicingType,
+  voiceCount: number,
+  key: KeySignature,
+  prevMidi: number[] | null
+): VoicedNote[] | null {
+  // Build root position chord with lead on top
+  const rootPosChord = buildChord(chord, lead.midi);
+  let tensions: Map<9 | 11 | 13, VoicedNote> | null = null;
+  let leadTension: VoicedNote | null = null;
+  let voicedChord: VoicedNote[];
+
+  if (voicing === "cluster") {
+    // Cluster voicing: build from chord scale
+    if (!isChordScaleTone(lead.midi, rootPosChord, chord, key)) return null;
+    tensions = getAvailableTensions(rootPosChord, chord, key);
+    const chordScale = buildChordScale(rootPosChord, tensions);
+    voicedChord = buildClusterVoicing(chordScale, lead.midi, voiceCount);
+  } else if (voicing === "spread") {
+    // Spread voicing: uses decision tree placement algorithm
+    if (!isChordScaleTone(lead.midi, rootPosChord, chord, key)) return null;
+    tensions = getAvailableTensions(rootPosChord, chord, key);
+
+    const leadNote = extractLeadAsVoicedNote(lead, rootPosChord, tensions);
+    if (!leadNote) return null;
+
+    const spreadResult = buildSpreadVoicing(rootPosChord, tensions, leadNote, voiceCount as 4 | 5 | 6, prevMidi);
+    if (!spreadResult) return null;
+    voicedChord = spreadResult;
+  } else {
+    // Mechanical close-position voicing
+    if (voiceCount === 6) {
+      if (!isChordScaleTone(lead.midi, rootPosChord, chord, key)) return null;
+      tensions = getAvailableTensions(rootPosChord, chord, key);
+      leadTension = findTensionByPitchClass(tensions, lead.midi);
+      voicedChord = invert(rootPosChord, lead.midi);
+      if (leadTension) {
+        voicedChord.push({ ...leadTension, midi: lead.midi });
+      }
+    } else if (voiceCount === 5) {
+      if (!isChordScaleTone(lead.midi, rootPosChord, chord, key)) return null;
+      tensions = getAvailableTensions(rootPosChord, chord, key);
+      leadTension = findTensionByPitchClass(tensions, lead.midi);
+
+      if (leadTension) {
+        const substitutedFunc = FUNC_FOR_TENSION[leadTension.func as 9 | 11 | 13];
+        const filteredChord = rootPosChord.filter((n) => n.func !== substitutedFunc);
+        voicedChord = invert(filteredChord, lead.midi);
+        voicedChord.push({ ...leadTension, midi: lead.midi });
+      } else {
+        voicedChord = invert(rootPosChord, lead.midi);
+      }
+    } else {
+      // voiceCount === 4
+      if (!isChordTone(lead.midi, rootPosChord)) return null;
+      voicedChord = invert(rootPosChord, lead.midi);
+    }
+
+    // Handle 5-voice doubling: double the lead an octave below
+    if (voiceCount === 5) {
+      const leadNote = voicedChord[voicedChord.length - 1];
+      voicedChord = [{ ...leadNote, midi: leadNote.midi - 12 }, ...voicedChord];
+    }
+
+    // Handle 6-voice doubling and tension substitution
+    if (voiceCount === 6) {
+      if (voicedChord.length === 5) {
+        // Lead was a tension
+        const leadNote = voicedChord[voicedChord.length - 1];
+        voicedChord = [{ ...leadNote, midi: leadNote.midi - 12 }, ...voicedChord];
+        voicedChord.sort((a, b) => a.midi - b.midi);
+        tensions!.delete(leadTension!.func as 9 | 11 | 13);
+        voicedChord = substituteTensions(voicedChord, tensions!);
+      } else {
+        // Lead was a chord tone
+        const leadNote = voicedChord[voicedChord.length - 1];
+        const v2 = voicedChord[voicedChord.length - 2];
+        voicedChord = [{ ...v2, midi: v2.midi - 12 }, { ...leadNote, midi: leadNote.midi - 12 }, ...voicedChord];
+        voicedChord.sort((a, b) => a.midi - b.midi);
+        voicedChord = substituteTensions(voicedChord, tensions!);
+      }
+    }
+  }
+
+  return voicedChord;
+}
+
+/**
  * The pitches that the harmonization pass has seen, which the tie repair needs once all the chords are built.
  */
 export interface TieRepairState {
@@ -566,6 +668,9 @@ export function harmonizeVoicing(
   // we place the symbols and the notes on a common time grid before the tree is modified.
   const chordTimeline = buildChordTimeline(selection.root);
   const tieState: TieRepairState = { pitchesByNodeId: new Map(), tiedChords: new Map() };
+  // Because the chords are built during this pass, the chords of the document before the pass do not include them.
+  // We remember the last voicing built in each voice, so the next chord of that voice can be led smoothly from it.
+  const previousVoicings = new Map<string, number[]>();
 
   for (const cursor of selection.cursors) {
     const nodes = findNodesById(selection.root, cursor);
@@ -607,90 +712,16 @@ export function harmonizeVoicing(
         chord = deriveDiatonicChord(rootLetter, snapshot.key);
       }
 
-      // Build root position chord with lead on top
-      const rootPosChord = buildChord(chord, lead.midi);
-      let tensions: Map<9 | 11 | 13, VoicedNote> | null = null;
-      let leadTension: VoicedNote | null = null;
-      let voicedChord: VoicedNote[];
-
-      if (voicing === "cluster") {
-        // Cluster voicing: build from chord scale
-        if (!isChordScaleTone(lead.midi, rootPosChord, chord, snapshot.key)) continue;
-        tensions = getAvailableTensions(rootPosChord, chord, snapshot.key);
-        const chordScale = buildChordScale(rootPosChord, tensions);
-        voicedChord = buildClusterVoicing(chordScale, lead.midi, voiceCount);
-      } else if (voicing === "spread") {
-        // Spread voicing: uses decision tree placement algorithm
-        if (!isChordScaleTone(lead.midi, rootPosChord, chord, snapshot.key)) continue;
-        tensions = getAvailableTensions(rootPosChord, chord, snapshot.key);
-
-        const leadNote = extractLeadAsVoicedNote(lead, rootPosChord, tensions);
-        if (!leadNote) continue;
-
-        // Find previous chord for voice leading
-        let prevMidi: number[] | null = null;
-        if (chordPositions !== null) {
-          const prevChord = findPreviousChordInVoice(chordPositions, contextSnapshot.voiceId, pos);
-          prevMidi = prevChord?.midiPitches ?? null;
-        }
-
-        const spreadResult = buildSpreadVoicing(rootPosChord, tensions, leadNote, voiceCount as 4 | 5 | 6, prevMidi);
-        if (!spreadResult) continue;
-        voicedChord = spreadResult;
-      } else {
-        // Mechanical close-position voicing
-        if (voiceCount === 6) {
-          if (!isChordScaleTone(lead.midi, rootPosChord, chord, snapshot.key)) continue;
-          tensions = getAvailableTensions(rootPosChord, chord, snapshot.key);
-          leadTension = findTensionByPitchClass(tensions, lead.midi);
-          voicedChord = invert(rootPosChord, lead.midi);
-          if (leadTension) {
-            voicedChord.push({ ...leadTension, midi: lead.midi });
-          }
-        } else if (voiceCount === 5) {
-          if (!isChordScaleTone(lead.midi, rootPosChord, chord, snapshot.key)) continue;
-          tensions = getAvailableTensions(rootPosChord, chord, snapshot.key);
-          leadTension = findTensionByPitchClass(tensions, lead.midi);
-
-          if (leadTension) {
-            const substitutedFunc = FUNC_FOR_TENSION[leadTension.func as 9 | 11 | 13];
-            const filteredChord = rootPosChord.filter((n) => n.func !== substitutedFunc);
-            voicedChord = invert(filteredChord, lead.midi);
-            voicedChord.push({ ...leadTension, midi: lead.midi });
-          } else {
-            voicedChord = invert(rootPosChord, lead.midi);
-          }
-        } else {
-          // voiceCount === 4
-          if (!isChordTone(lead.midi, rootPosChord)) continue;
-          voicedChord = invert(rootPosChord, lead.midi);
-        }
-
-        // Handle 5-voice doubling: double the lead an octave below
-        if (voiceCount === 5) {
-          const leadNote = voicedChord[voicedChord.length - 1];
-          voicedChord = [{ ...leadNote, midi: leadNote.midi - 12 }, ...voicedChord];
-        }
-
-        // Handle 6-voice doubling and tension substitution
-        if (voiceCount === 6) {
-          if (voicedChord.length === 5) {
-            // Lead was a tension
-            const leadNote = voicedChord[voicedChord.length - 1];
-            voicedChord = [{ ...leadNote, midi: leadNote.midi - 12 }, ...voicedChord];
-            voicedChord.sort((a, b) => a.midi - b.midi);
-            tensions!.delete(leadTension!.func as 9 | 11 | 13);
-            voicedChord = substituteTensions(voicedChord, tensions!);
-          } else {
-            // Lead was a chord tone
-            const leadNote = voicedChord[voicedChord.length - 1];
-            const v2 = voicedChord[voicedChord.length - 2];
-            voicedChord = [{ ...v2, midi: v2.midi - 12 }, { ...leadNote, midi: leadNote.midi - 12 }, ...voicedChord];
-            voicedChord.sort((a, b) => a.midi - b.midi);
-            voicedChord = substituteTensions(voicedChord, tensions!);
-          }
-        }
+      // Find previous chord for voice leading: the last one built in this pass, else the last one already in the document.
+      // Only the spread voicing uses it, and callers may leave out the chord positions.
+      let prevMidi: number[] | null = previousVoicings.get(contextSnapshot.voiceId) ?? null;
+      if (prevMidi === null && voicing === "spread" && chordPositions) {
+        const prevChord = findPreviousChordInVoice(chordPositions, contextSnapshot.voiceId, pos);
+        prevMidi = prevChord?.midiPitches ?? null;
       }
+
+      const voicedChord = voiceChord(chord, lead, voicing, voiceCount, snapshot.key, prevMidi);
+      if (voicedChord === null) continue;
 
       // Convert to CSNode and replace the original note
       const { csNode: chordCsNode, newAccidentals } = toCSChord(voicedChord, snapshot, ctx);
@@ -712,6 +743,7 @@ export function harmonizeVoicing(
         }
         replace(csNode, chordCsNode);
         tieState.pitchesByNodeId.set(csNode.id, voicedChord.map((note) => note.midi));
+        previousVoicings.set(contextSnapshot.voiceId, voicedChord.map((note) => note.midi));
       }
 
       // Update local accidentals for subsequent notes in the same transform pass
