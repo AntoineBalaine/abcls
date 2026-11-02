@@ -407,6 +407,37 @@ describe("transpose", () => {
   });
 
   describe("context-aware (with snapshots)", () => {
+    describe("accidentals carried over from the source bar", () => {
+      const transposeAll = (abc: string, semitones: number): string => {
+        const { root, ctx, snapshots } = toCSTreeWithSnapshots(abc);
+        const notes = findByTag(root, TAGS.Note);
+        transpose({ root, cursors: [new Set(notes.map((n) => n.id))] }, semitones, ctx, snapshots);
+        return notes.map((n) => getNoteAccidental(n) + getNoteLetter(n)).join(" ");
+      };
+
+      it("does not let the flat of the source _E decide the spelling of a transposed E-flat in the same bar", () => {
+        // Because the source _E sets E-flat for the bar, the output note e (E-flat after F-2) used to be
+        // written without its flat, which made it sound like E natural.
+        expect(transposeAll("X:1\nK:F\n_E f|\n", -2)).to.equal("_D _e");
+      });
+
+      it("writes the accidental again in the next bar when the source bar had no accidental", () => {
+        // Because the source bars hold no accidental, the interpreter records no reset at the bar line,
+        // and the _E written in the first bar used to stay in force, so the second bar lost its flat.
+        expect(transposeAll("X:1\nK:F\nG F|G F|\n", -2)).to.equal("F _E F _E");
+      });
+
+      it("does not carry a bar accidental to the same letter in another octave", () => {
+        // Because the output _D is D4, the D5 that follows is D natural and needs no accidental of its own.
+        expect(transposeAll("X:1\nK:C\n_E e|\n", -2)).to.equal("_D d");
+      });
+
+      it("keeps the pitch of a later note that relied on a source accidental the output no longer writes", () => {
+        // Because ^F carries to the second F in the source, both notes sound F-sharp, and both must sound E after -1.
+        expect(transposeAll("X:1\nK:C\n^F F|\n", -1)).to.equal("F F");
+      });
+    });
+
     describe("example-based", () => {
       // E1: Diatonic transposition in C major
       it("transposes C up 2 semitones to D in C major (no accidental)", () => {

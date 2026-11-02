@@ -52,7 +52,9 @@ import { DocumentSnapshots } from "abcls-parser/interpreter/ContextInterpreter";
 export type TransformFn = (selection: Selection, ctx: ABCContext, ...args: unknown[]) => Selection;
 
 const TRANSFORM_MAP: Record<string, TransformFn> = {
-  transpose: (sel, ctx, ...args) => transpose(sel, args[1] as number, ctx, args[0] as DocumentSnapshots),
+  // The optional third argument asks the transform to change the K: fields too, so the key signatures follow the notes,
+  // and the optional fourth asks it to transpose the chord symbols.
+  transpose: (sel, ctx, ...args) => transpose(sel, args[1] as number, ctx, args[0] as DocumentSnapshots, args[2] === true, args[3] === true),
   enharmonize: (sel, ctx) => enharmonize(sel, ctx),
   // For enharmonizeToKey, args are: [snapshots] (context-aware transform)
   enharmonizeToKey: (sel, ctx, ...args) => enharmonizeToKey(sel, args[0] as DocumentSnapshots, ctx),
