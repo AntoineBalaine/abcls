@@ -5,6 +5,9 @@
 import { getXNumber } from "abcls-midi";
 import { Scanner, parse, ABCContext, AbcFormatter, Tune } from "abcls-parser";
 import { Command } from "commander";
+import { mkdirSync, writeFileSync } from "fs";
+import { join } from "path";
+import { paginateSvgs } from "../svg-pagination";
 import { renderAbcToSvg, SvgRenderError } from "../svg-renderer";
 import { readAbcFile, parseTuneNumbers } from "../utils/shared";
 
@@ -12,9 +15,14 @@ export const renderCommand = new Command("render")
   .description("Render an ABC file to SVG")
   .argument("<file>", "ABC file to render")
   .option("-t, --tune <numbers...>", "Render only the specified tunes by X:number (supports comma-separated, dash-separated or repeated flags)")
+  .option("--pages <dir>", "Write A4 pages as SVG files (page-001.svg, ...) into this directory instead of printing the SVG of the tunes")
   .option("--ignore-parse-errors", "Continue rendering even if the ABC file has parsing errors")
   .option("--ignore-missing-tunes", "Continue rendering even if some requested tunes are not found")
-  .action(async (file: string, options: { tune?: string | string[]; ignoreParseErrors?: boolean; ignoreMissingTunes?: boolean }) => {
+  .addHelpText(
+    "after",
+    "\nTo make a PDF, give the pages to an external tool:\n  abcls render score.abc --pages pages && rsvg-convert -f pdf -o score.pdf pages/page-*.svg"
+  )
+  .action(async (file: string, options: { tune?: string | string[]; pages?: string; ignoreParseErrors?: boolean; ignoreMissingTunes?: boolean }) => {
     // Read the ABC file
     const content = readAbcFile(file);
 
@@ -87,13 +95,23 @@ export const renderCommand = new Command("render")
       }
 
       // Render the content (either filtered or original)
-      const result = await renderAbcToSvg(contentToRender);
+      const result = await renderAbcToSvg(contentToRender, { oneSvgPerLine: options.pages !== undefined });
 
       // Output warnings to stderr
       if (result.metadata.warnings) {
         result.metadata.warnings.forEach((warning: string) => {
           console.error(`Warning: ${warning}`);
         });
+      }
+
+      if (options.pages !== undefined) {
+        const pages = paginateSvgs(result.tunes);
+        mkdirSync(options.pages, { recursive: true });
+        pages.forEach((page, index) => {
+          writeFileSync(join(options.pages as string, `page-${String(index + 1).padStart(3, "0")}.svg`), page);
+        });
+        console.error(`Wrote ${pages.length} page(s) to ${options.pages}`);
+        return;
       }
 
       // Because we want all tunes rendered as a single output,
