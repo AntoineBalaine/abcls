@@ -1,4 +1,6 @@
 import { execFileSync, spawnSync } from "child_process";
+import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { expect } from "chai";
 import { clipRangesToLines, coerceArgs, parseLineRange } from "../commands/transform";
@@ -10,6 +12,13 @@ import { clipRangesToLines, coerceArgs, parseLineRange } from "../commands/trans
 const CLI = path.join(__dirname, "..", "dist", "abcls.js");
 const CHORDS = path.join(__dirname, "chords.abc");
 const LINES = path.join(__dirname, "lines.abc");
+const TWO_TUNES = path.join(__dirname, "two-tunes.abc");
+const JAZZ_CHORDS = path.join(__dirname, "jazz-chords.abc");
+
+/** Counts the SVG documents in a render output. */
+function svgCount(output: string): number {
+  return (output.match(/<svg /g) ?? []).length;
+}
 
 /** Runs the CLI and returns its standard output. Throws when the command fails. */
 function runCli(args: string[]): string {
@@ -92,6 +101,41 @@ describe("abcls CLI", () => {
 
     it("transposes a whole file", () => {
       expect(runCli(["transform", CHORDS, "transpose", "--", "-2"])).to.include("[V:1]");
+    });
+
+    it("transposes the key signatures too with --keys", () => {
+      expect(runCli(["transform", CHORDS, "transpose", "--keys", "--", "-2"])).to.match(/^K:/m);
+    });
+
+    it("appends the transposed copy as a new tune with --as-new-tune", () => {
+      expect(runCli(["transform", CHORDS, "transpose", "--keys", "--chords", "--as-new-tune", "Bb clarinet", "--", "-2"])).to.match(/^X:2/m);
+    });
+
+    it("exports an iReal Pro link", () => {
+      expect(runCli(["abc2ireal", CHORDS])).to.match(/^irealb:\/\//m);
+    });
+
+    it("renders every tune of the file", () => {
+      expect(svgCount(runCli(["render", TWO_TUNES]))).to.equal(2);
+    });
+
+    it("renders only the tune that -t gives", () => {
+      expect(svgCount(runCli(["render", TWO_TUNES, "-t", "2"]))).to.equal(1);
+    });
+
+    it("writes one SVG file per page with --pages", () => {
+      const pagesDir = fs.mkdtempSync(path.join(os.tmpdir(), "abcls-pages-"));
+      try {
+        spawnSync("node", [CLI, "render", TWO_TUNES, "--pages", pagesDir], { encoding: "utf8" });
+        expect(fs.existsSync(path.join(pagesDir, "page-002.svg"))).to.equal(true);
+        expect(fs.existsSync(path.join(pagesDir, "page-003.svg"))).to.equal(false);
+      } finally {
+        fs.rmSync(pagesDir, { recursive: true, force: true });
+      }
+    });
+
+    it("draws the major seventh triangle of a chord symbol as a raised glyph", () => {
+      expect(runCli(["render", JAZZ_CHORDS])).to.match(/<tspan font-family="[^"]*" font-size="[0-9.]*" dy="-[0-9.]*">▵<\/tspan>/);
     });
 
     it("harmonizes the chord symbols of voice 1 into four new voices", () => {
