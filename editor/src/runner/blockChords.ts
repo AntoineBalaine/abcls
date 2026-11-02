@@ -1,16 +1,36 @@
-import { ABCContext, Scanner, SemanticAnalyzer, VoicedNote, buildChord, getAvailableTensions, parse, scoreSpreadVoicing, scoreVoiceLeading, voicedNoteOctave } from "abcls-parser";
+import {
+  ABCContext,
+  Scanner,
+  SemanticAnalyzer,
+  VoicedNote,
+  buildChord,
+  getAvailableTensions,
+  parse,
+  scoreSpreadVoicing,
+  scoreVoiceLeading,
+  voicedNoteOctave,
+} from "abcls-parser";
 import { DocumentSnapshots, encode, getSnapshotAtPosition } from "abcls-parser/interpreter/ContextInterpreter";
-import { KeySignature, MeterType } from "abcls-parser/types/abcjs-ast";
 import { TUPLET_Q, getBrokenRhythmMultipliers } from "abcls-parser/interpreter/TuneInterpreter";
 import { parseChordSymbol } from "abcls-parser/music-theory/parseChordSymbol";
 import { scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
 import { ParsedChord } from "abcls-parser/music-theory/types";
+import { KeySignature, MeterType } from "abcls-parser/types/abcjs-ast";
 import { interpretContext } from "../context/csContextInterpreter";
 import { fromAst } from "../csTree/fromAst";
 import { formatNote, voiceChord, VoicingType } from "../transforms/harmonize";
 import { NoteLetter } from "../transforms/pitchHelpers";
-import { WORK_VOICE_ID, assertValidVoiceIds, assertVoicesAreFree, declareVoices, findVoiceLines, rangesOfLines, relabelParts } from "./harmonizeVoices";
-import { runTransform, TransformError } from "./runTransform";
+import {
+  WORK_VOICE_ID,
+  declareVoices,
+  findVoiceLines,
+  rangesOfLines,
+  relabelParts,
+  runTransformChain,
+  takenVoiceProblem,
+  voiceIdsProblem,
+} from "./harmonizeVoices";
+import { fail, RunnerResult } from "./runTransform";
 
 export interface BlockChordsOptions {
   /** The id of the voice that carries the chord symbols. */
@@ -101,10 +121,13 @@ export interface SeedState {
   barHasContent: boolean;
 }
 
-// Because the chord line is read as text, the tokens that carry no time (comments, decorations, inline fields) are matched first.
+// Because the chord line is read as text, the tokens that carry no time are matched first: comments, decorations
+// (!trill! and +trill+), inline fields and grace groups ({g}, whose notes take no time).
+// Because a repeat ending such as [1 or :|2 would otherwise read as the start of a bracket chord or as stray text, the endings
+// are matched with the bar lines, and the seed line keeps them.
 // A bracket chord such as [CEG]2 lasts one duration, so it is matched as a whole.
 const TOKEN =
-  /(?<ignored>%[^\n]*|![^!\n]*!|\[[A-Za-z]:[^\]\n]*\])|\((?<tupletP>\d+)(?::(?<tupletQ>\d*))?(?::(?<tupletR>\d*))?|(?<broken>[<>]+)|"(?<annotation>[^"]*)"|(?<barline>\|\]|\|\||\[\||\|:|:\||::|\|)|(?<group>\[[^\]\n]*\])(?<groupRhythm>\d*\/*\d*)|(?<note>[_^=]*[A-Ga-g][,']*)(?<noteRhythm>\d*\/*\d*)|(?<rest>[zxXZ])(?<restRhythm>\d*\/*\d*)|(?<other>.)/gs;
+  /(?<ignored>%[^\n]*|![^!\n]*!|\+[^+\n]*\+|\{[^}\n]*\}|\[[A-Za-z]:[^\]\n]*\])|\((?<tupletP>\d+)(?::(?<tupletQ>\d*))?(?::(?<tupletR>\d*))?|(?<broken>[<>]+)|"(?<annotation>[^"]*)"|(?<barline>(?:\|\]|\|\||\[\||\|:|:\||::|\|)(?:\d[\d,-]*)?|\[\d[\d,-]*)|(?<group>\[[^\]\n]*\])(?<groupRhythm>\d*\/*\d*)|(?<note>[_^=]*[A-Ga-g][,']*)(?<noteRhythm>\d*\/*\d*)|(?<rest>[zxXZ])(?<restRhythm>\d*\/*\d*)|(?<other>.)/gs;
 
 /**
  * Adds a note, a rest or a chord to the current span, with the factors of the broken rhythm and of the tuplet it is part of.
@@ -192,14 +215,12 @@ export function barLengthOf(snapshots: DocumentSnapshots): number {
 }
 
 /**
- * Returns the key signature in effect at the start of a line, or the first key of the document before any snapshot.
+ * Returns the key signature in effect at the start of a line, or the first key of the document before any snapshot,
+ * or null when the document has no snapshot at all.
  */
-export function keyAtLine(snapshots: DocumentSnapshots, line: number): KeySignature {
+export function keyAtLine(snapshots: DocumentSnapshots, line: number): KeySignature | null {
   const snapshot = getSnapshotAtPosition(snapshots, encode(line, 0)) ?? (snapshots.length > 0 ? snapshots[0].snapshot : null);
-  if (snapshot === null) {
-    throw new TransformError("The file has no key signature that the harmonizer can read.");
-  }
-  return snapshot.key;
+  return snapshot === null ? null : snapshot.key;
 }
 
 /**
@@ -340,7 +361,7 @@ export function seedLine(body: string, state: SeedState): string {
       state.parts.push(groups.barline);
     } else if (groups.tupletP !== undefined) {
       const p = parseInt(groups.tupletP, 10);
-      const q = groups.tupletQ ? parseInt(groups.tupletQ, 10) : TUPLET_Q[p] ?? 2;
+      const q = groups.tupletQ ? parseInt(groups.tupletQ, 10) : (TUPLET_Q[p] ?? 2);
       state.tupletRatio = q / p;
       state.tupletNotesLeft = groups.tupletR ? parseInt(groups.tupletR, 10) : p;
     } else if (groups.broken !== undefined) {
@@ -364,28 +385,32 @@ export function seedLine(body: string, state: SeedState): string {
 }
 
 /**
+ * Returns whether a line belongs to one of the new voices.
+ */
+export function isNewVoiceLine(line: string, into: string[]): boolean {
+  return into.some((id) => line.startsWith(`[V:${id}]`));
+}
+
+/**
  * Moves each block of new voices after the other voices of its system, so that the new voices
  * are written below the melody instead of between the chord voice and the melody.
  * A system starts at a line of the chord voice, so the next line of the chord voice ends the system.
  */
 export function placeBlocksAfterSystems(lines: string[], into: string[], chordVoice: string): string[] {
-  const isNew = (line: string) => into.some((id) => line.startsWith(`[V:${id}]`));
-  const isChordLine = (line: string) => line.startsWith(`[V:${chordVoice}]`);
-  const isVoiceLine = (line: string) => line.startsWith("[V:");
   const result: string[] = [];
   let index = 0;
   while (index < lines.length) {
-    if (!isNew(lines[index])) {
+    if (!isNewVoiceLine(lines[index], into)) {
       result.push(lines[index]);
       index += 1;
       continue;
     }
     const block: string[] = [];
-    while (index < lines.length && isNew(lines[index])) {
+    while (index < lines.length && isNewVoiceLine(lines[index], into)) {
       block.push(lines[index]);
       index += 1;
     }
-    while (index < lines.length && isVoiceLine(lines[index]) && !isNew(lines[index]) && !isChordLine(lines[index])) {
+    while (index < lines.length && lines[index].startsWith("[V:") && !isNewVoiceLine(lines[index], into) && !lines[index].startsWith(`[V:${chordVoice}]`)) {
       result.push(lines[index]);
       index += 1;
     }
@@ -401,13 +426,13 @@ export function placeBlocksAfterSystems(lines: string[], into: string[], chordVo
  * The steps are: write a line of seed notes (one per symbol), build a chord under each seed note,
  * split the chords into one line per part, and keep every part as a new voice.
  */
-export function blockChords(source: string, options: BlockChordsOptions): string {
+export function blockChords(source: string, options: BlockChordsOptions): RunnerResult<string> {
   const partCount = options.into.length;
-  assertValidVoiceIds(options.into, 4, 6);
-  assertVoicesAreFree(source, options.into);
+  const problem = voiceIdsProblem(options.into, 4, 6) ?? takenVoiceProblem(source, options.into);
+  if (problem !== null) return fail(problem);
   const sourceLines = source.split("\n");
   if (findVoiceLines(sourceLines, options.chordVoice).length === 0) {
-    throw new TransformError(`No line starts with the inline voice marker "[V:${options.chordVoice}]".`);
+    return fail(`No line starts with the inline voice marker "[V:${options.chordVoice}]".`);
   }
 
   const marker = `[V:${options.chordVoice}]`;
@@ -441,20 +466,20 @@ export function blockChords(source: string, options: BlockChordsOptions): string
     withSeeds.push(line);
     if (line.startsWith(marker)) {
       state.key = keyAtLine(snapshots, index);
+      if (state.key === null) return fail("The file has no key signature that the harmonizer can read.");
       seedLines.push(withSeeds.length);
       withSeeds.push(`[V:${WORK_VOICE_ID}] ${seedLine(line.slice(marker.length), state)}`);
     }
   }
 
-  let text = withSeeds.join("\n");
-  const ranges = rangesOfLines(seedLines);
-  text = runTransform({ source: text, transform: "harmonizeVoicing", args: [options.voicing, partCount, null], ranges });
+  const steps: Array<{ transform: string; args: unknown[] }> = [{ transform: "harmonizeVoicing", args: [options.voicing, partCount, null] }];
   // The chords that no top note could carry in the requested voicing get a close voicing, which every chord tone can carry.
-  if (state.fallbacks > 0) {
-    text = runTransform({ source: text, transform: "harmonizeVoicing", args: ["close", partCount, null], ranges });
-  }
-  text = runTransform({ source: text, transform: "explode", args: [partCount], ranges });
+  if (state.fallbacks > 0) steps.push({ transform: "harmonizeVoicing", args: ["close", partCount, null] });
+  steps.push({ transform: "explode", args: [partCount] });
+  const exploded = runTransformChain(withSeeds.join("\n"), steps, rangesOfLines(seedLines));
+  if (!exploded.ok) return exploded;
 
-  const parts = relabelParts(text.split("\n"), partCount, options.into, 0);
-  return declareVoices(placeBlocksAfterSystems(parts, options.into, options.chordVoice).join("\n"), options.into);
+  const parts = relabelParts(exploded.value.split("\n"), partCount, options.into, 0);
+  if (!parts.ok) return parts;
+  return declareVoices(placeBlocksAfterSystems(parts.value, options.into, options.chordVoice).join("\n"), options.into);
 }

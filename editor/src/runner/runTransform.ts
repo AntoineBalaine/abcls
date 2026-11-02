@@ -1,8 +1,8 @@
 import { ABCContext, Range, Scanner, SemanticAnalyzer, parse } from "abcls-parser";
 import { ChordPositionCollector } from "abcls-parser/interpreter/ChordPositionCollector";
+import { interpretContext } from "../context/csContextInterpreter";
 import { fromAst } from "../csTree/fromAst";
 import { TAGS } from "../csTree/types";
-import { interpretContext } from "../context/csContextInterpreter";
 import { Selection, createSelection } from "../selection";
 import { selectVoices } from "../selectors/voiceSelector";
 import { serializeCSTree } from "./csTreeSerializer";
@@ -26,7 +26,19 @@ export interface TransformRequest {
   ranges: Range[] | null;
 }
 
-export class TransformError extends Error {}
+/**
+ * The result of a runner function: the value, or the message that tells why it could not be produced.
+ * Because the editor module never throws, the callers (the command line) read the message and report it.
+ */
+export type RunnerResult<T> = { ok: true; value: T } | { ok: false; error: string };
+
+export function succeed<T>(value: T): RunnerResult<T> {
+  return { ok: true, value };
+}
+
+export function fail<T>(error: string): RunnerResult<T> {
+  return { ok: false, error };
+}
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -42,17 +54,17 @@ function parseSource(source: string): { ast: ReturnType<typeof parse>; ctx: ABCC
  * Returns the line ranges that hold the music of the given voices.
  * Because the voice selector works on the tree, the ranges come from the same selection engine as the editor commands.
  */
-export function rangesOfVoices(source: string, voiceIds: string): Range[] {
+export function rangesOfVoices(source: string, voiceIds: string): RunnerResult<Range[]> {
   // Because the voice selector returns the whole selection when a voice does not exist, a typo would transform every voice.
   for (const id of voiceIds.split(",").map((part) => part.trim())) {
     const declared = new RegExp(`(^|\\n)(\\[V:${escapeRegExp(id)}[\\s\\]]|V:${escapeRegExp(id)}(\\s|$))`).test(source);
     if (!declared) {
-      throw new TransformError(`Voice "${id}" not found in the file.`);
+      return fail(`Voice "${id}" not found in the file.`);
     }
   }
   const { ast, ctx } = parseSource(source);
   const root = fromAst(ast, ctx);
-  return resolveContiguousRanges(selectVoices(createSelection(root), voiceIds));
+  return succeed(resolveContiguousRanges(selectVoices(createSelection(root), voiceIds)));
 }
 
 /**
@@ -60,22 +72,20 @@ export function rangesOfVoices(source: string, voiceIds: string): Range[] {
  * This is the logic that the language server runs for the "abc.applyTransform" request,
  * extracted so the command line can run it without a server.
  */
-export function runTransform(request: TransformRequest): string {
+export function runTransform(request: TransformRequest): RunnerResult<string> {
   const transformFn = lookupTransform(request.transform);
   if (transformFn === null) {
-    throw new TransformError(`Unknown transform: "${request.transform}"`);
+    return fail(`Unknown transform: "${request.transform}"`);
   }
   if (POSITION_BASED_TRANSFORMS.has(request.transform)) {
-    throw new TransformError(`The transform "${request.transform}" works on cursor positions, which the command line does not have.`);
+    return fail(`The transform "${request.transform}" works on cursor positions, which the command line does not have.`);
   }
 
   const { ast, ctx } = parseSource(request.source);
   const root = fromAst(ast, ctx);
 
   const tags = TRANSFORM_NODE_TAGS[request.transform] ?? [TAGS.Note, TAGS.Chord];
-  const ranges: Range[] = request.ranges ?? [
-    { start: { line: 0, character: 0 }, end: { line: Number.MAX_SAFE_INTEGER, character: 0 } },
-  ];
+  const ranges: Range[] = request.ranges ?? [{ start: { line: 0, character: 0 }, end: { line: Number.MAX_SAFE_INTEGER, character: 0 } }];
 
   // Grouped transforms (such as legato) need to see the sequence of nodes, so they get a single cursor.
   const cursors: Set<number>[] = [];
@@ -91,7 +101,7 @@ export function runTransform(request: TransformRequest): string {
   }
   if (grouped.size > 0) cursors.push(grouped);
   if (cursors.length === 0) {
-    return request.source;
+    return succeed(request.source);
   }
 
   const selection: Selection = { root, cursors };
@@ -115,5 +125,5 @@ export function runTransform(request: TransformRequest): string {
   }
 
   const result = transformFn(selection, ctx, ...transformArgs);
-  return serializeCSTree(result.root, ctx);
+  return succeed(serializeCSTree(result.root, ctx));
 }

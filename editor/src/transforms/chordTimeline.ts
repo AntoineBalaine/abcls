@@ -1,13 +1,13 @@
-import { getTokenData, isTokenNode } from "../csTree/types";
-import { CSNode, TAGS } from "../csTree/types";
-import { extractVoiceId, isVoiceMarker } from "../selectors/voiceSelector";
-import { ParsedChord } from "abcls-parser/music-theory/types";
-import { parseChordSymbol } from "abcls-parser/music-theory/parseChordSymbol";
-import { scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
-import { getNodeRhythm } from "./rhythm";
 import { findChild } from "abcls-cstree";
 import { TT } from "abcls-parser";
 import { TUPLET_Q, getBrokenRhythmMultipliers } from "abcls-parser/interpreter/TuneInterpreter";
+import { parseChordSymbol } from "abcls-parser/music-theory/parseChordSymbol";
+import { scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
+import { ParsedChord } from "abcls-parser/music-theory/types";
+import { getTokenData, isTokenNode } from "../csTree/types";
+import { CSNode, TAGS } from "../csTree/types";
+import { extractVoiceId, isVoiceMarker } from "../selectors/voiceSelector";
+import { getNodeRhythm } from "./rhythm";
 import { findRhythmChild } from "./treeUtils";
 
 /**
@@ -134,6 +134,20 @@ export function consumeDuration(node: CSNode, clock: VoiceClock): number {
 }
 
 /**
+ * Reads the number of bars of a multi-measure rest (the 4 of Z4), which is 1 when no number is written.
+ */
+export function multiMeasureRestCount(node: CSNode): number {
+  for (let child = node.firstChild; child !== null; child = child.nextSibling) {
+    // Because the length token follows the rest token (Z or X), it is the token whose text is a number.
+    if (isTokenNode(child) && /^\d+$/.test(getTokenData(child).lexeme)) {
+      const count = parseInt(getTokenData(child).lexeme, 10);
+      if (count > 0) return count;
+    }
+  }
+  return 1;
+}
+
+/**
  * Reads the p, q and r values of a tuplet node, and starts the tuplet on the clock.
  */
 export function startTuplet(node: CSNode, clock: VoiceClock): void {
@@ -204,9 +218,12 @@ export function walkForTimeline(node: CSNode, state: TimelineWalkState): void {
       return;
     }
     case TAGS.MultiMeasureRest: {
-      // A multi-measure rest fills the bar it stands in, and the barline that follows closes it.
+      // A multi-measure rest such as Z4 fills four bars: the bars before its last one are skipped here,
+      // and the barline that follows closes the last one.
       const clock = getClock(state);
       state.timeline.positions.set(node.id, { tune: state.tuneIndex, voiceId: state.currentVoiceId, bar: clock.bar, offset: clock.offset });
+      clock.bar += multiMeasureRestCount(node) - 1;
+      clock.offset = 0;
       clock.hasContent = true;
       return;
     }

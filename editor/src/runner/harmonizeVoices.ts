@@ -1,6 +1,6 @@
 import { Range } from "abcls-parser";
 import { VoicingType } from "../transforms/harmonize";
-import { runTransform, TransformError } from "./runTransform";
+import { fail, runTransform, RunnerResult, succeed } from "./runTransform";
 
 export interface HarmonizeVoicesOptions {
   /** The id of the voice that carries the melody to harmonize. */
@@ -55,7 +55,7 @@ export function copyVoiceLines(lines: string[], from: string): { lines: string[]
  * We drop the parts before `firstKept` (the melody harmonization drops the highest part, because it repeats the melody),
  * and we relabel the parts we keep with the new voice ids.
  */
-export function relabelParts(lines: string[], partCount: number, into: string[], firstKept: number = 1): string[] {
+export function relabelParts(lines: string[], partCount: number, into: string[], firstKept: number = 1): RunnerResult<string[]> {
   const marker = `[V:${WORK_VOICE_ID}]`;
   const result: string[] = [];
   let index = 0;
@@ -69,72 +69,93 @@ export function relabelParts(lines: string[], partCount: number, into: string[],
     for (let part = firstKept; part < partCount; part++) {
       const partLine = lines[index + 1 + part];
       if (partLine === undefined || !partLine.startsWith(marker)) {
-        throw new TransformError("The explode did not produce one line per part.");
+        return fail("The explode did not produce one line per part.");
       }
       result.push(`[V:${into[part - firstKept]}]${partLine.slice(marker.length)}`);
     }
     index += 1 + partCount;
   }
-  return result;
+  return succeed(result);
 }
 
 /**
  * Checks the list of new voice ids: it must hold between `min` and `max` ids, and every id must be a non-empty word
  * without spaces or brackets, and appear only once.
+ *
+ * @returns The message of the first problem, or null when the ids are valid
  */
-export function assertValidVoiceIds(into: string[], min: number, max: number): void {
+export function voiceIdsProblem(into: string[], min: number, max: number): string | null {
   if (into.length < min || into.length > max) {
-    throw new TransformError(`--into must name between ${min} and ${max} voices (got ${into.length}).`);
+    return `--into must name between ${min} and ${max} voices (got ${into.length}).`;
   }
   const seen = new Set<string>();
   for (const id of into) {
     if (!/^[A-Za-z0-9_]+$/.test(id)) {
-      throw new TransformError(`"${id}" is not a valid voice id: use letters, digits or underscores.`);
+      return `"${id}" is not a valid voice id: use letters, digits or underscores.`;
     }
     if (seen.has(id)) {
-      throw new TransformError(`The voice id "${id}" appears twice in --into.`);
+      return `The voice id "${id}" appears twice in --into.`;
     }
     seen.add(id);
   }
+  return null;
 }
 
 /**
  * Because a voice id that is already used would receive a second set of lines and a second declaration,
  * we refuse to write into an id that the score already has, in the header or in the music.
  */
-export function assertVoicesAreFree(source: string, into: string[]): void {
+export function takenVoiceProblem(source: string, into: string[]): string | null {
   const lines = source.split("\n");
   for (const id of into) {
     const declared = lines.some((line) => line.startsWith(`V:${id} `) || line === `V:${id}` || line.startsWith(`[V:${id}]`));
     if (declared) {
-      throw new TransformError(`The voice "${id}" already exists in the score. Choose other ids for --into, or remove that voice first.`);
+      return `The voice "${id}" already exists in the score. Choose other ids for --into, or remove that voice first.`;
     }
   }
+  return null;
 }
 
 /**
  * Adds the new voices to the header, and the new staves to the %%score line when there is one.
  * The upper parts share a treble staff, and the lowest part gets a bass staff of its own.
  */
-export function declareVoices(source: string, into: string[]): string {
+export function declareVoices(source: string, into: string[]): RunnerResult<string> {
   let text = source;
   for (let index = 0; index < into.length; index++) {
     const isLowest = index === into.length - 1 && into.length > 1;
-    text = runTransform({
+    const added = runTransform({
       source: text,
       transform: "addVoice",
       args: [into[index], { clef: isLowest ? "bass" : "treble" }],
       ranges: null,
     });
+    if (!added.ok) return added;
+    text = added.value;
   }
 
   const upper = into.length > 1 ? into.slice(0, -1) : into;
   const staves = [`( ${upper.join(" ")} )`];
   if (into.length > 1) staves.push(`( ${into[into.length - 1]} )`);
-  return text
-    .split("\n")
-    .map((line) => (line.startsWith("%%score") ? `${line.trimEnd()} ${staves.join(" ")}` : line))
-    .join("\n");
+  return succeed(
+    text
+      .split("\n")
+      .map((line) => (line.startsWith("%%score") ? `${line.trimEnd()} ${staves.join(" ")}` : line))
+      .join("\n")
+  );
+}
+
+/**
+ * Runs the transforms of a list one after the other on a text, and stops at the first one that fails.
+ */
+export function runTransformChain(source: string, steps: Array<{ transform: string; args: unknown[] }>, ranges: Range[]): RunnerResult<string> {
+  let text = source;
+  for (const step of steps) {
+    const result = runTransform({ source: text, transform: step.transform, args: step.args, ranges });
+    if (!result.ok) return result;
+    text = result.value;
+  }
+  return succeed(text);
 }
 
 /**
@@ -144,24 +165,31 @@ export function declareVoices(source: string, into: string[]): string {
  * The steps are: copy the melody lines into a work voice, build a chord under each melody note,
  * split the chords into one line per part, then keep the lower parts as the new voices.
  */
-export function harmonizeVoices(source: string, options: HarmonizeVoicesOptions): string {
-  assertValidVoiceIds(options.into, 3, 5);
-  assertVoicesAreFree(source, options.into);
+export function harmonizeVoices(source: string, options: HarmonizeVoicesOptions): RunnerResult<string> {
+  const problem = voiceIdsProblem(options.into, 3, 5) ?? takenVoiceProblem(source, options.into);
+  if (problem !== null) return fail(problem);
   const partCount = options.into.length + 1;
   const sourceLines = source.split("\n");
   if (findVoiceLines(sourceLines, options.from).length === 0) {
-    throw new TransformError(`No line starts with the inline voice marker "[V:${options.from}]".`);
+    return fail(`No line starts with the inline voice marker "[V:${options.from}]".`);
   }
 
   const copied = copyVoiceLines(sourceLines, options.from);
-  let text = copied.lines.join("\n");
   const workRanges = rangesOfLines(copied.workLines);
 
   // First pass: the voicing that was asked for. Second pass: a cluster voicing for the leads it skipped.
-  text = runTransform({ source: text, transform: "harmonizeVoicing", args: [options.voicing, partCount, null], ranges: workRanges });
-  text = runTransform({ source: text, transform: "harmonizeVoicing", args: ["cluster", partCount, null], ranges: workRanges });
-  text = runTransform({ source: text, transform: "explode", args: [partCount], ranges: workRanges });
+  const exploded = runTransformChain(
+    copied.lines.join("\n"),
+    [
+      { transform: "harmonizeVoicing", args: [options.voicing, partCount, null] },
+      { transform: "harmonizeVoicing", args: ["cluster", partCount, null] },
+      { transform: "explode", args: [partCount] },
+    ],
+    workRanges
+  );
+  if (!exploded.ok) return exploded;
 
-  text = relabelParts(text.split("\n"), partCount, options.into).join("\n");
-  return declareVoices(text, options.into);
+  const parts = relabelParts(exploded.value.split("\n"), partCount, options.into);
+  if (!parts.ok) return parts;
+  return declareVoices(parts.value.join("\n"), options.into);
 }

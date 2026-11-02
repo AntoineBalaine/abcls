@@ -2,8 +2,8 @@
  * Transform command: Run an editor transform on an ABC file, without a language server
  */
 
+import { rangesOfVoices, runTransform } from "abcls-editor";
 import { createRational, Range } from "abcls-parser";
-import { rangesOfVoices, runTransform, TransformError } from "abcls-editor";
 import { Command } from "commander";
 import { readAbcFile, writeFile } from "../utils/shared";
 
@@ -53,14 +53,37 @@ export function coerceArgs(transform: string, rawArgs: string[]): unknown[] {
 export function parseLineRange(text: string): Range {
   const match = /^(\d+)(?:-(\d+))?$/.exec(text);
   if (match === null) {
-    throw new TransformError(`Invalid line range "${text}": we expect "10" or "10-20".`);
+    throw new Error(`Invalid line range "${text}": we expect "10" or "10-20".`);
   }
   const first = parseInt(match[1], 10) - 1;
   const last = (match[2] ? parseInt(match[2], 10) : parseInt(match[1], 10)) - 1;
   if (first < 0 || last < first) {
-    throw new TransformError(`Invalid line range "${text}": lines count from 1, and the end cannot come before the start.`);
+    throw new Error(`Invalid line range "${text}": lines count from 1, and the end cannot come before the start.`);
   }
   return { start: { line: first, character: 0 }, end: { line: last, character: Number.MAX_SAFE_INTEGER } };
+}
+
+/**
+ * Returns whether the position a comes before the position b.
+ */
+function isBefore(a: Range["start"], b: Range["start"]): boolean {
+  return a.line < b.line || (a.line === b.line && a.character < b.character);
+}
+
+/**
+ * Keeps the part of each range that lies inside the line range.
+ * Because a voice range may span many lines, keeping every range that only touches the line range would transform
+ * the lines of the voice outside it, so each range is cut down to the lines that were asked for.
+ */
+export function clipRangesToLines(ranges: Range[], lineRange: Range): Range[] {
+  const clipped: Range[] = [];
+  for (const range of ranges) {
+    const start = isBefore(range.start, lineRange.start) ? lineRange.start : range.start;
+    const end = isBefore(lineRange.end, range.end) ? lineRange.end : range.end;
+    if (isBefore(end, start)) continue;
+    clipped.push({ start: { ...start }, end: { ...end } });
+  }
+  return clipped;
 }
 
 export const transformCommand = new Command("transform")
@@ -71,21 +94,25 @@ export const transformCommand = new Command("transform")
   .option("--voice <ids>", "Only transform the music of these voices (comma-separated ids)")
   .option("--lines <range>", "Only transform these lines (1-indexed, e.g. 10-20)")
   .option("-w, --write", "Write the result back to the file")
-  .addHelpText("after", "\nBecause a negative number looks like an option, write it after \"--\": abcls transform file.abc transpose -- -2")
+  .addHelpText("after", '\nBecause a negative number looks like an option, write it after "--": abcls transform file.abc transpose -- -2')
   .action((file: string, name: string, args: string[], options: { voice?: string; lines?: string; write?: boolean }) => {
     const source = readAbcFile(file);
 
     try {
       let ranges: Range[] | null = null;
       if (options.voice !== undefined) {
-        ranges = rangesOfVoices(source, options.voice);
+        const voiceRanges = rangesOfVoices(source, options.voice);
+        if (!voiceRanges.ok) throw new Error(voiceRanges.error);
+        ranges = voiceRanges.value;
       }
       if (options.lines !== undefined) {
         const lineRange = parseLineRange(options.lines);
-        ranges = ranges === null ? [lineRange] : ranges.filter((r) => r.end.line >= lineRange.start.line && r.start.line <= lineRange.end.line);
+        ranges = ranges === null ? [lineRange] : clipRangesToLines(ranges, lineRange);
       }
 
-      const result = runTransform({ source, transform: name, args: coerceArgs(name, args), ranges });
+      const transformed = runTransform({ source, transform: name, args: coerceArgs(name, args), ranges });
+      if (!transformed.ok) throw new Error(transformed.error);
+      const result = transformed.value;
 
       if (options.write) {
         writeFile(file, result);

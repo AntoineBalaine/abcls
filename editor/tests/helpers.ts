@@ -1,9 +1,11 @@
 import { Scanner, Token, parse, ABCContext, AbcFormatter, Expr, Inline_field, Info_line, IRational, createRational } from "abcls-parser";
+import { expect } from "chai";
 import * as fc from "fast-check";
 import * as ParserGen from "../../parse/tests/prs_pbt.generators.spec";
 import { fromAst, childrenVisitor } from "../src/csTree/fromAst";
 import { toAst } from "../src/csTree/toAst";
 import { CSNode } from "../src/csTree/types";
+import { RunnerResult } from "../src/runner/runTransform";
 import { createSelection, Selection } from "../src/selection";
 
 export function toCSTree(source: string): CSNode {
@@ -149,3 +151,19 @@ export const genRational: fc.Arbitrary<IRational> = fc
   .map(([n, d]) => createRational(n, d));
 
 export const genSemitones: fc.Arbitrary<number> = fc.integer({ min: -24, max: 24 });
+
+/**
+ * Returns the value of a runner result in a test, and fails the test with the result's message when it failed.
+ */
+export function resultValue<T>(result: RunnerResult<T>): T {
+  if (!result.ok) expect.fail(result.error);
+  return result.value;
+}
+
+/**
+ * Returns the message of a runner result that must have failed, and fails the test when it succeeded.
+ */
+export function resultError<T>(result: RunnerResult<T>): string {
+  if (result.ok) expect.fail("expected the runner to fail");
+  return result.error;
+}

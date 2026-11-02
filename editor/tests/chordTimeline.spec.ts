@@ -17,6 +17,11 @@ function chordRootsAtNotes(source: string): (string | null)[] {
 }
 
 describe("chordTimeline", () => {
+  it("counts a multi-measure rest as the number of bars it says", () => {
+    const source = 'X:1\nM:4/4\nL:1/4\nV:1\nV:2\nK:C\n[V:1] "C"x4|Z2|"G"x4|\n[V:2] e4|e4|e4|d4|\n';
+    expect(chordRootsAtNotes(source)).to.deep.equal(["C", "C", "C", "G"]);
+  });
+
   it("gives a note the chord of its own bar, whatever the order of the voices", () => {
     const source = 'X:1\nV:1\nV:2\nK:C\n[V:1] "C" x8 | "F" x8 |\n[V:2] c8 | f8 |\n';
     expect(chordRootsAtNotes(source)).to.deep.equal(["C", "F"]);
