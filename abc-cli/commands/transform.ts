@@ -69,6 +69,65 @@ export function parseLineRange(text: string): Range {
   return { start, end };
 }
 
+/** A tune of a file, with the line where it starts. */
+interface TuneBlock {
+  startLine: number;
+  number: number;
+  text: string;
+}
+
+/**
+ * Splits a file into its header (everything before the first X: line) and its tunes.
+ * Because a tune runs from its X: line to the next one, we split at the lines that start with "X:".
+ */
+export function splitTunes(source: string): { header: string; tunes: TuneBlock[] } {
+  const lines = source.split("\n");
+  const starts: number[] = [];
+  lines.forEach((line, index) => {
+    if (/^X:/.test(line)) starts.push(index);
+  });
+  const header = lines.slice(0, starts.length > 0 ? starts[0] : lines.length).join("\n");
+  const tunes = starts.map((start, i) => {
+    const end = i + 1 < starts.length ? starts[i + 1] : lines.length;
+    return { startLine: start, number: parseInt(lines[start].slice(2), 10), text: lines.slice(start, end).join("\n") };
+  });
+  return { header, tunes };
+}
+
+/** The copy of a tune that --as-new-tune transforms, and the line of the file where the original starts. */
+export interface TuneCopy {
+  text: string;
+  lineOffset: number;
+}
+
+/**
+ * Builds the copy of a tune that --as-new-tune transforms.
+ * The copy gets the next free X: number, and its title gets the label in parentheses, so it is easy to tell apart.
+ * Because the transform must see the copy as it will be written, the copy is renumbered and retitled before it is transformed.
+ */
+export function copyTune(source: string, label: string, tuneNumber: string | undefined): TuneCopy {
+  const { tunes } = splitTunes(source);
+  if (tunes.length === 0) {
+    throw new Error("The file has no tune (no X: line) to copy.");
+  }
+  const original = tuneNumber === undefined ? tunes[0] : tunes.find((tune) => tune.number === parseInt(tuneNumber, 10));
+  if (original === undefined) {
+    throw new Error(`Tune ${tuneNumber} not found in the file.`);
+  }
+
+  const nextNumber = Math.max(...tunes.map((tune) => (Number.isFinite(tune.number) ? tune.number : 0))) + 1;
+  let copy = original.text.replace(/\s+$/, "").replace(/^X:.*$/m, `X:${nextNumber}`);
+  copy = copy.replace(/^T:(.*?)\s*$/m, (_match, title: string) => `T:${title.trim()} (${label})`);
+  return { text: copy, lineOffset: original.startLine };
+}
+
+/**
+ * Appends a transformed copy of a tune to the file, after a blank line.
+ */
+export function appendTune(source: string, tuneText: string): string {
+  return `${source.replace(/\s+$/, "")}\n\n${tuneText.replace(/\s+$/, "")}\n`;
+}
+
 /**
  * Returns whether the position a comes before the position b.
  */
@@ -92,6 +151,33 @@ export function clipRangesToLines(ranges: Range[], lineRange: Range): Range[] {
   return clipped;
 }
 
+/**
+ * Computes the ranges that --voice and --lines select in a text.
+ * Because the copy of --as-new-tune starts at line 0 while --lines counts the lines of the file, the line range is
+ * shifted by `lineOffset`, the line where the copied tune starts in the file.
+ *
+ * @returns The ranges, or null when neither option is given (the whole text is selected)
+ */
+export function selectedRanges(text: string, voice: string | undefined, lines: string | undefined, lineOffset: number): Range[] | null {
+  let ranges: Range[] | null = null;
+  if (voice !== undefined) {
+    const voiceRanges = rangesOfVoices(text, voice);
+    if (!voiceRanges.ok) throw new Error(voiceRanges.error);
+    ranges = voiceRanges.value;
+  }
+  if (lines !== undefined) {
+    const lineRange = parseLineRange(lines);
+    // The columns are kept, except when the range starts before the copied tune: it then starts at the top of the tune.
+    const startLine = lineRange.start.line - lineOffset;
+    const shifted: Range = {
+      start: startLine < 0 ? { line: 0, character: 0 } : { line: startLine, character: lineRange.start.character },
+      end: { line: lineRange.end.line - lineOffset, character: lineRange.end.character },
+    };
+    ranges = ranges === null ? [shifted] : clipRangesToLines(ranges, shifted);
+  }
+  return ranges;
+}
+
 export const transformCommand = new Command("transform")
   .description("Run an editor transform (harmonizeVoicing, explode, addVoice, transpose, ...) on an ABC file")
   .argument("<file>", "ABC file to transform")
@@ -99,36 +185,49 @@ export const transformCommand = new Command("transform")
   .argument("[args...]", "Arguments of the transform, e.g. close 4 null for harmonizeVoicing")
   .option("--voice <ids>", "Only transform the music of these voices (comma-separated ids)")
   .option("--lines <range>", "Only transform these lines, or this text range (1-indexed, e.g. 10-20 or 10:5-12:20)")
+  .option("--keys", "With transpose, also transpose the key signatures (the K: fields) so they follow the notes")
+  .option("--chords", "With transpose, also transpose the chord symbols")
+  .option("--as-new-tune <label>", 'Apply the transform to a copy of the tune, and append that copy to the file as a new tune titled "<title> (<label>)"')
+  .option("--tune <number>", "With --as-new-tune, the X: number of the tune to copy (default: the first tune)")
   .option("-w, --write", "Write the result back to the file")
   .addHelpText("after", '\nBecause a negative number looks like an option, write it after "--": abcls transform file.abc transpose -- -2')
-  .action((file: string, name: string, args: string[], options: { voice?: string; lines?: string; write?: boolean }) => {
-    const source = readAbcFile(file);
+  .action(
+    (
+      file: string,
+      name: string,
+      args: string[],
+      options: { voice?: string; lines?: string; write?: boolean; keys?: boolean; chords?: boolean; asNewTune?: string; tune?: string }
+    ) => {
+      const source = readAbcFile(file);
 
-    try {
-      let ranges: Range[] | null = null;
-      if (options.voice !== undefined) {
-        const voiceRanges = rangesOfVoices(source, options.voice);
-        if (!voiceRanges.ok) throw new Error(voiceRanges.error);
-        ranges = voiceRanges.value;
-      }
-      if (options.lines !== undefined) {
-        const lineRange = parseLineRange(options.lines);
-        ranges = ranges === null ? [lineRange] : clipRangesToLines(ranges, lineRange);
-      }
+      try {
+        const transformArgs = coerceArgs(name, args);
+        if (options.keys || options.chords) {
+          if (name !== "transpose") {
+            throw new Error('The --keys and --chords flags only apply to the "transpose" transform.');
+          }
+          // Because the transform reads its options by position, the keys flag always comes before the chords flag.
+          transformArgs.push(options.keys === true, options.chords === true);
+        }
 
-      const transformed = runTransform({ source, transform: name, args: coerceArgs(name, args), ranges });
-      if (!transformed.ok) throw new Error(transformed.error);
-      const result = transformed.value;
+        // Because --as-new-tune transforms a copy of one tune, the ranges are computed on that copy rather than on the file.
+        const copy = options.asNewTune !== undefined ? copyTune(source, options.asNewTune, options.tune) : null;
+        const target = copy === null ? source : copy.text;
+        const ranges = selectedRanges(target, options.voice, options.lines, copy === null ? 0 : copy.lineOffset);
+        const transformed = runTransform({ source: target, transform: name, args: transformArgs, ranges });
+        if (!transformed.ok) throw new Error(transformed.error);
+        const result = copy === null ? transformed.value : appendTune(source, transformed.value);
 
-      if (options.write) {
-        writeFile(file, result);
-        console.log(`Transformed ${file}`);
-      } else {
-        process.stdout.write(result);
+        if (options.write) {
+          writeFile(file, result);
+          console.log(`Transformed ${file}`);
+        } else {
+          process.stdout.write(result);
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`Transform failed: ${message}`);
+        process.exit(1);
       }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`Transform failed: ${message}`);
-      process.exit(1);
     }
-  });
+  );
