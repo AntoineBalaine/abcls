@@ -22,6 +22,47 @@ function BASS_SLASH() {
 }
 
 describe("scanChordSymbol", () => {
+  describe("jazz symbols", () => {
+    it('scans "F▵", the major seventh triangle, as a quality', () => {
+      expect(scanChordSymbol("F▵")).to.deep.equal({ tokens: [ROOT("F"), QUALITY("▵")], consumed: 2 });
+    });
+
+    it('scans "FΔ7" and "F△7" like "F▵7"', () => {
+      expect(scanChordSymbol("FΔ7")!.tokens).to.deep.equal([ROOT("F"), QUALITY("Δ"), EXTENSION("7")]);
+      expect(scanChordSymbol("F△7")!.tokens).to.deep.equal([ROOT("F"), QUALITY("△"), EXTENSION("7")]);
+    });
+
+    it('scans "A⁷" with a superscript seven as the extension 7, and counts the source characters', () => {
+      expect(scanChordSymbol("A⁷")).to.deep.equal({ tokens: [ROOT("A"), EXTENSION("7")], consumed: 2 });
+    });
+
+    it('scans "C#⁷#11" with a superscript extension followed by an alteration', () => {
+      expect(scanChordSymbol("C#⁷#11")).to.deep.equal({ tokens: [ROOT("C"), ACCIDENTAL("#"), EXTENSION("7"), ALTERATION("#11")], consumed: 6 });
+    });
+
+    it("scans every superscript digit as the plain digit of the same value", () => {
+      const superscripts = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+      for (let value = 0; value <= 9; value++) {
+        expect(scanChordSymbol(`C${superscripts[value]}`)).to.deep.equal({ tokens: [ROOT("C"), EXTENSION(String(value))], consumed: 2 });
+      }
+    });
+
+    it('scans multi-digit superscripts such as "C¹¹" and "C¹³" as one extension', () => {
+      expect(scanChordSymbol("C¹¹")).to.deep.equal({ tokens: [ROOT("C"), EXTENSION("11")], consumed: 3 });
+      expect(scanChordSymbol("C¹³")!.tokens).to.deep.equal([ROOT("C"), EXTENSION("13")]);
+    });
+
+    it('scans a superscript degree in an alteration, as in "C⁷b⁹" and "C⁷#⁵"', () => {
+      expect(scanChordSymbol("C⁷b⁹")).to.deep.equal({ tokens: [ROOT("C"), EXTENSION("7"), ALTERATION("b9")], consumed: 4 });
+      expect(scanChordSymbol("C⁷#⁵")!.tokens).to.deep.equal([ROOT("C"), EXTENSION("7"), ALTERATION("#5")]);
+    });
+
+    it('scans "Db▵#5" and "F▵/E" with their alteration and bass', () => {
+      expect(scanChordSymbol("Db▵#5")!.consumed).to.equal(5);
+      expect(scanChordSymbol("F▵/E")!.consumed).to.equal(4);
+    });
+  });
+
   describe("combined quality symbols", () => {
     // Each of these names one quality rather than two, so it has to be
     // matched whole; matching only its first character leaves the "^" for

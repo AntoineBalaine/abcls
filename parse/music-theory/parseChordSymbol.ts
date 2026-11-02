@@ -8,6 +8,9 @@ function parseQuality(lexeme: string): ChordQuality {
   switch (lexeme) {
     case "maj":
     case "M":
+    case "▵":
+    case "△":
+    case "Δ":
       return ChordQuality.Major;
     case "min":
     case "m":
@@ -104,6 +107,12 @@ export function parseChordSymbol(tokens: ChordToken[]): ParsedChord | null {
     result.quality = parseQuality(tokens[index].lexeme);
     qualityExplicit = true;
     index += 1;
+  }
+
+  // Because the triangle already names the major seventh chord, it implies the extension 7 when none follows.
+  const impliesSeventh = qualityExplicit && ["▵", "△", "Δ"].includes(tokens[index - 1].lexeme);
+  if (impliesSeventh && !(index < tokens.length && tokens[index].type === ChordTT.EXTENSION)) {
+    result.extension = 7;
   }
 
   // 4. Extension (optional)

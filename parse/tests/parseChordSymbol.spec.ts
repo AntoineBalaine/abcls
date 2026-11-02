@@ -11,6 +11,50 @@ function parse(input: string) {
 }
 
 describe("parseChordSymbol", () => {
+  describe("jazz symbols", () => {
+    it('parses "F▵" as the major seventh chord, because the triangle implies the seventh', () => {
+      const result = parse("F▵");
+      expect(result!.quality).to.equal(ChordQuality.Major);
+      expect(result!.qualityExplicit).to.be.true;
+      expect(result!.extension).to.equal(7);
+    });
+
+    it('parses "F▵9" with its own extension, without forcing the seventh', () => {
+      expect(parse("F▵9")!.extension).to.equal(9);
+    });
+
+    it('parses "A⁷" as the dominant seventh chord', () => {
+      const result = parse("A⁷");
+      expect(result!.quality).to.equal(ChordQuality.Dominant);
+      expect(result!.extension).to.equal(7);
+    });
+
+    it('parses "C⁹", "C¹¹" and "C¹³" as dominant chords with that extension', () => {
+      for (const [text, extension] of [["C⁹", 9], ["C¹¹", 11], ["C¹³", 13]] as const) {
+        const result = parse(text);
+        expect(result!.quality).to.equal(ChordQuality.Dominant);
+        expect(result!.extension).to.equal(extension);
+      }
+    });
+
+    it('parses "C⁷b⁹" with a superscript alteration', () => {
+      expect(parse("C⁷b⁹")!.alterations).to.deep.equal([{ type: "flat", degree: 9 }]);
+    });
+
+    it('parses "B⁷#5" with its alteration', () => {
+      const result = parse("B⁷#5");
+      expect(result!.extension).to.equal(7);
+      expect(result!.alterations).to.deep.equal([{ type: "sharp", degree: 5 }]);
+    });
+
+    it('parses "Db▵#5/Ab" with root, accidental, alteration and bass', () => {
+      const result = parse("Db▵#5/Ab");
+      expect(result!.rootAccidental).to.equal(KeyAccidental.Flat);
+      expect(result!.extension).to.equal(7);
+      expect(result!.bass).to.deep.equal({ root: KeyRoot.A, accidental: KeyAccidental.Flat });
+    });
+  });
+
   describe("basic chords", () => {
     it('parses "C"', () => {
       const result = parse("C");

@@ -11,6 +11,13 @@ interface ChordScanCtx {
   tokens: ChordToken[];
 }
 
+const SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+
+/** Replaces each superscript digit of a text by the plain digit of the same value. */
+function toPlainDigits(text: string): string {
+  return text.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, (digit) => String(SUPERSCRIPT_DIGITS.indexOf(digit)));
+}
+
 function createChordScanCtx(source: string): ChordScanCtx {
   return { source, current: 0, tokens: [] };
 }
@@ -47,7 +54,8 @@ function scanQuality(ctx: ChordScanCtx): boolean {
 
   // Order matters: longest match first
   // sus4 and sus2 must come before sus
-  const qualities = ["maj", "min", "dim", "aug", "sus4", "sus2", "sus", "add", "alt", "-^", "o^", "M", "m", "+", "-", "°", "ø", "Ø"];
+  // The triangles ("▵", "△" and the Greek capital delta) are the jazz symbol of the major seventh chord.
+  const qualities = ["maj", "min", "dim", "aug", "sus4", "sus2", "sus", "add", "alt", "-^", "o^", "M", "m", "+", "-", "°", "ø", "Ø", "▵", "△", "Δ"];
   for (const q of qualities) {
     if (remaining.startsWith(q)) {
       pushToken(ctx, ChordTT.QUALITY, q);
@@ -62,9 +70,11 @@ function scanExtension(ctx: ChordScanCtx): boolean {
   if (ctx.current >= ctx.source.length) return false;
   const remaining = ctx.source.substring(ctx.current);
 
-  const match = /^[0-9]+/.exec(remaining);
+  // Because lead sheets often write the seventh as a superscript ("A⁷"), we accept the superscript digits
+  // and keep the token lexeme in plain digits, which is what the parser reads.
+  const match = /^[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]+/.exec(remaining);
   if (match) {
-    pushToken(ctx, ChordTT.EXTENSION, match[0]);
+    pushToken(ctx, ChordTT.EXTENSION, toPlainDigits(match[0]));
     ctx.current += match[0].length;
     return true;
   }
@@ -75,9 +85,10 @@ function scanAlteration(ctx: ChordScanCtx): boolean {
   if (ctx.current >= ctx.source.length) return false;
   const remaining = ctx.source.substring(ctx.current);
 
-  const match = /^[#b][0-9]+/.exec(remaining);
+  // Because the degree of an alteration may also be a superscript ("C⁷b⁹"), we normalise its digits to plain ones.
+  const match = /^[#b][0-9⁰¹²³⁴⁵⁶⁷⁸⁹]+/.exec(remaining);
   if (match) {
-    pushToken(ctx, ChordTT.ALTERATION, match[0]);
+    pushToken(ctx, ChordTT.ALTERATION, toPlainDigits(match[0]));
     ctx.current += match[0].length;
     return true;
   }
