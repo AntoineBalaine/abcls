@@ -7,6 +7,7 @@
 
 import * as path from "path";
 import { Command } from "commander";
+import { abc2irealCommand } from "./commands/abc2ireal";
 import { abc2midiCommand } from "./commands/abc2midi";
 import { abc2xmlCommand } from "./commands/abc2xml";
 import { abcx2abcCommand } from "./commands/abcx2abc";
@@ -29,6 +30,7 @@ program.addCommand(renderCommand);
 program.addCommand(transformCommand);
 program.addCommand(harmonizeCommand);
 program.addCommand(abcx2abcCommand);
+program.addCommand(abc2irealCommand);
 program.addCommand(abc2midiCommand);
 program.addCommand(midi2abcCommand);
 program.addCommand(abc2xmlCommand);

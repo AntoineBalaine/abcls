@@ -28,7 +28,7 @@ import { ChordQuality, ParsedChord } from "../music-theory/types";
 import { ABCContext } from "../parsers/Context";
 import { Token, TT } from "../parsers/scan";
 import { ParserErrorType } from "../types/types";
-import { irealChordTextRoundTrips, parsedChordToIrealText } from "./chordShorthand";
+import { impliedQuality, irealChordTextRoundTrips, parsedChordToIrealText } from "./chordShorthand";
 import { Annotation, Bar, Bass, Cell, IrealChart, Repeat, Section, TimeSignature } from "./gridAst";
 
 /**
@@ -107,9 +107,9 @@ function chordText(chord: ParsedChord | undefined, ctx: ABCContext): string {
     report(ctx, "A chord cell carries no chord");
     return "";
   }
-  // The dialect writes a quality symbol or nothing, and nothing means a
-  // dominant, so an unspoken quality of any other kind cannot be said.
-  if (!chord.qualityExplicit && chord.quality !== ChordQuality.Dominant) {
+  // The dialect writes a quality symbol or nothing, and nothing means the quality the extension implies,
+  // so an unspoken quality that the extension does not imply cannot be said.
+  if (!chord.qualityExplicit && chord.quality !== impliedQuality(chord.extension)) {
     report(ctx, `A chord of quality '${chord.quality}' marked as not explicit has no iReal Pro spelling`);
   }
   const text = parsedChordToIrealText(chord);

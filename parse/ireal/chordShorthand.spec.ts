@@ -148,8 +148,10 @@ describe("iReal chord shorthand", () => {
           const normalized: ParsedChord =
             c.quality === ChordQuality.Suspended2 || c.quality === ChordQuality.Suspended4
               ? { ...c, extension: null }
-              : c.quality === ChordQuality.Dominant && c.extension === 5
-                ? { ...c, extension: 7 }
+              : c.quality === ChordQuality.Dominant && (c.extension === null || ![7, 9, 11, 13].includes(c.extension))
+                ? // Because bare text reads as the quality its extension implies, a dominant is only
+                  // representable with a seventh or a higher extension.
+                  { ...c, extension: 7 }
                 : c;
           const text = parsedChordToIrealText(normalized);
           const reparsed = irealTextToParsedChord(text);
@@ -157,6 +159,19 @@ describe("iReal chord shorthand", () => {
           expect(reparsed).to.deep.equal(expected);
         })
       );
+    });
+  });
+
+  describe("quality implied by the extension", () => {
+    it("reads a bare root as a major triad", () => {
+      expect(irealTextToParsedChord("G")!.quality).to.equal(ChordQuality.Major);
+    });
+
+    it("reads a sixth as a major sixth chord, a seventh as a dominant, and a fifth as a power chord", () => {
+      expect(irealTextToParsedChord("C6")!.quality).to.equal(ChordQuality.Major);
+      expect(irealTextToParsedChord("C7")!.quality).to.equal(ChordQuality.Dominant);
+      expect(irealTextToParsedChord("C13")!.quality).to.equal(ChordQuality.Dominant);
+      expect(irealTextToParsedChord("C5")!.quality).to.equal(ChordQuality.Power);
     });
   });
 

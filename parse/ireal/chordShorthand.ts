@@ -137,8 +137,21 @@ const QUALITY_COMBINATIONS: Array<[ChordQuality, ChordQuality, ChordQuality]> = 
   [ChordQuality.Diminished, ChordQuality.Major, ChordQuality.DiminishedMajor7],
 ];
 
-function combineQualities(qualities: ChordQuality[]): ChordQuality | null {
-  if (qualities.length === 0) return ChordQuality.Dominant;
+/**
+ * The quality that a chord has when no symbol names one, read from its extension.
+ *
+ * Because a chord sheet writes `C` for the major triad, `C6` for the major sixth and `C7` for the dominant seventh,
+ * the extension decides: none or a sixth is major, a fifth is a power chord, and a seventh or a higher extension
+ * is dominant. This is the same inference the ABC chord parser makes.
+ */
+export function impliedQuality(extension: number | null): ChordQuality {
+  if (extension === 5) return ChordQuality.Power;
+  if (extension === 7 || extension === 9 || extension === 11 || extension === 13) return ChordQuality.Dominant;
+  return ChordQuality.Major;
+}
+
+function combineQualities(qualities: ChordQuality[], extension: number | null): ChordQuality | null {
+  if (qualities.length === 0) return impliedQuality(extension);
   if (qualities.length === 1) return qualities[0];
   if (qualities.length > 2) return null;
   const [first, second] = qualities;
@@ -243,7 +256,7 @@ export function irealTextToParsedChord(text: string): ParsedChord | null {
     return null;
   }
 
-  const quality = combineQualities(qualities);
+  const quality = combineQualities(qualities, extension);
   if (quality === null) return null;
 
   return {

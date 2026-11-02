@@ -17,7 +17,10 @@
 import { ABCContext } from "../parsers/Context";
 import { parseAbcx } from "../parsers/parse_abcx";
 import { ScannerAbcx } from "../parsers/scan_abcx_tunebody";
-import { File_structure, Tune } from "../types/Expr";
+import { File_structure, Info_line, Tune } from "../types/Expr";
+import { Scanner } from "../parsers/scan";
+import { parse } from "../parsers/parse";
+import { abcTuneToIrealChart, AbcToIrealOptions } from "./abcToIrealChart";
 import { abcxTuneToIrealChart, abcxTuneToSongFields } from "./abcxToIrealChart";
 import { buildPlaylistLink, IrealSongFields, withChordDataMarker } from "./fields";
 import { writeGrid } from "./gridWriter";
@@ -39,6 +42,53 @@ export function exportAbcxToIrealLink(abcxSource: string, ctx: ABCContext = new 
 
   if (songs.length === 0) {
     throw new Error("No tunes found in ABCx source; nothing to export");
+  }
+
+  return buildPlaylistLink({ songs });
+}
+
+/** The X: number of a tune, or null when the header has none. */
+function tuneNumber(tune: Tune): number | null {
+  for (const line of tune.tune_header.info_lines) {
+    if (line instanceof Info_line && line.key.lexeme === "X:") {
+      const number = parseInt(line.value.map((token) => token.lexeme).join(""), 10);
+      return Number.isFinite(number) ? number : null;
+    }
+  }
+  return null;
+}
+
+export interface AbcToIrealLinkOptions extends AbcToIrealOptions {
+  /** Only export the tunes with these X: numbers. Defaults to every tune. */
+  tunes?: number[];
+  /** The iReal Pro style of the songs, used when a tune carries no `%%irealstyle` directive. */
+  style?: string;
+}
+
+/**
+ * Turns the chord symbols of an ABC score into an `irealb://` link.
+ *
+ * The chords are read from one voice of each tune (see `abcToIrealChart.ts`), and the key is the key written in the
+ * header, so a tune is exported in the key it is written in.
+ */
+export function exportAbcToIrealLink(abcSource: string, options: AbcToIrealLinkOptions = {}, ctx: ABCContext = new ABCContext()): string {
+  const fileStructure: File_structure = parse(Scanner(abcSource, ctx), ctx);
+
+  const songs: IrealSongFields[] = [];
+  for (const item of fileStructure.contents) {
+    if (!(item instanceof Tune)) continue;
+    const number = tuneNumber(item);
+    if (options.tunes !== undefined && (number === null || !options.tunes.includes(number))) continue;
+
+    const chart = abcTuneToIrealChart(item, ctx, options);
+    const grid = writeGrid(chart, ctx);
+    const fields = abcxTuneToSongFields(item, withChordDataMarker(scramble(grid)), ctx);
+    if (fields.style === "" && options.style !== undefined) fields.style = options.style;
+    songs.push(fields);
+  }
+
+  if (songs.length === 0) {
+    throw new Error("No tune to export: the file has no tune, or none of them matches the requested X: numbers");
   }
 
   return buildPlaylistLink({ songs });
