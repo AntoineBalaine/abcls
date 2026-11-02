@@ -258,6 +258,16 @@ function getEnharmonicOptions(midiPitch: number): Array<{
  * @param ctx The pitch context containing key, measure accidentals, and transpose
  * @returns The sounding MIDI pitch number
  */
+/**
+ * Builds the key under which a bar accidental is stored.
+ *
+ * Because ABC applies an accidental only to notes of the same pitch in the bar, an accidental on E4 must not affect E5.
+ * Therefore the key carries both the letter and the octave, for example "E4".
+ */
+export function measureAccidentalKey(letter: string, octave: number): string {
+  return `${letter.toUpperCase()}${octave}`;
+}
+
 export function resolveMelodyPitch(noteLetter: string, noteOctave: number, explicitAccidental: string | null, ctx: PitchContext): number {
   const pitchClass = noteLetter.toUpperCase();
   const baseMidi = noteLetterToMidi(pitchClass, noteOctave);
@@ -267,9 +277,9 @@ export function resolveMelodyPitch(noteLetter: string, noteOctave: number, expli
   if (explicitAccidental !== null) {
     // Explicit accidental takes precedence
     writtenPitch = baseMidi + accidentalToSemitones(explicitAccidental);
-  } else if (ctx.measureAccidentals?.has(pitchClass)) {
-    // Measure accidental (from earlier in the measure)
-    const measureAcc = ctx.measureAccidentals.get(pitchClass)!;
+  } else if (ctx.measureAccidentals?.has(measureAccidentalKey(pitchClass, noteOctave))) {
+    // Measure accidental (from earlier in the measure, on the same letter and octave)
+    const measureAcc = ctx.measureAccidentals.get(measureAccidentalKey(pitchClass, noteOctave))!;
     writtenPitch = baseMidi + accidentalTypeToSemitones(measureAcc);
   } else {
     // Key signature accidental
@@ -319,8 +329,8 @@ export function pitchToNoteName(midiPitch: number, ctx: PitchContext): { noteLet
 
     // Determine what accidental is already in effect for this pitch class
     let effectiveAccidental: AccidentalType | null = null;
-    if (ctx.measureAccidentals?.has(pitchClass)) {
-      effectiveAccidental = ctx.measureAccidentals.get(pitchClass)!;
+    if (ctx.measureAccidentals?.has(measureAccidentalKey(pitchClass, opt.octave))) {
+      effectiveAccidental = ctx.measureAccidentals.get(measureAccidentalKey(pitchClass, opt.octave))!;
     } else {
       effectiveAccidental = getKeyAccidentalForPitch(pitchClass, ctx.key);
     }

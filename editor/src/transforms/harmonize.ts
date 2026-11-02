@@ -16,7 +16,6 @@ import {
   deriveDiatonicChord,
   getKeyAccidentalFor,
   FUNC_FOR_TENSION,
-  LETTERS,
   noteLetterToMidi,
   semitonesToAccidentalString,
   accidentalToSemitones,
@@ -28,6 +27,7 @@ import {
   voicedNoteOctave,
 } from "abcls-parser";
 import { DocumentSnapshots, ContextSnapshot, getSnapshotAtPosition, encode } from "abcls-parser/interpreter/ContextInterpreter";
+import { measureAccidentalKey } from "abcls-parser/music-theory/pitchUtils";
 import { KeySignature } from "abcls-parser/types/abcjs-ast";
 import { fromAst } from "../csTree/fromAst";
 import { toAst } from "../csTree/toAst";
@@ -280,7 +280,7 @@ export type VoicingType = "close" | "cluster" | "spread";
 export interface HarmonizeSnapshot {
   key: KeySignature;
   currentChord: ParsedChord | null;
-  measureAccidentals: Map<string, number>; // letter -> semitones
+  measureAccidentals: Map<string, number>; // letter and octave (see measureAccidentalKey) -> semitones
 }
 
 /**
@@ -324,8 +324,8 @@ export function extractLead(node: CSNode, snapshot: HarmonizeSnapshot): { letter
   let alteration = 0;
   if (explicitAccidental) {
     alteration = accidentalToSemitones(explicitAccidental);
-  } else if (snapshot.measureAccidentals.has(letter)) {
-    alteration = snapshot.measureAccidentals.get(letter)!;
+  } else if (snapshot.measureAccidentals.has(measureAccidentalKey(letter, octave))) {
+    alteration = snapshot.measureAccidentals.get(measureAccidentalKey(letter, octave))!;
   } else {
     alteration = getKeyAccidentalFor(letter, snapshot.key);
   }
@@ -373,20 +373,6 @@ export function extractLeadAsVoicedNote(
 }
 
 /**
- * Builds a map from letter to current alteration (combining key signature and measure accidentals).
- */
-function buildCurrentPitchMap(snapshot: HarmonizeSnapshot): Map<string, number> {
-  const result = new Map<string, number>();
-  for (const letter of LETTERS) {
-    result.set(letter, getKeyAccidentalFor(letter, snapshot.key));
-  }
-  for (const [letter, alt] of snapshot.measureAccidentals) {
-    result.set(letter, alt);
-  }
-  return result;
-}
-
-/**
  * Formats a note as an ABC string with accidental, letter, and octave markers.
  */
 export function formatNote(accidental: string, letter: string, octave: number): string {
@@ -419,22 +405,27 @@ function findTensionByPitchClass(tensions: Map<9 | 11 | 13, VoicedNote>, midi: n
  * Converts a voiced chord to a Chord AST node.
  * Returns the Chord AST and a list of spellings that need explicit accidentals.
  */
-export function toChordAst(voicedChord: VoicedNote[], snapshot: HarmonizeSnapshot, ctx: ABCContext): { chordAst: Chord; newAccidentals: Spelling[] } {
-  const currentPitchMap = buildCurrentPitchMap(snapshot);
+export function toChordAst(
+  voicedChord: VoicedNote[],
+  snapshot: HarmonizeSnapshot,
+  ctx: ABCContext
+): { chordAst: Chord; newAccidentals: Array<Spelling & { octave: number }> } {
   const notes: Note[] = [];
-  const newAccidentals: Spelling[] = [];
+  const newAccidentals: Array<Spelling & { octave: number }> = [];
 
   for (const note of voicedChord) {
     // Calculate octave based on the letter's natural pitch, not just MIDI.
     // This handles enharmonic spellings correctly (e.g., Cb5 = MIDI 71 should be lowercase _c).
     const octave = voicedNoteOctave(note);
-    const contextAlteration = currentPitchMap.get(note.spelling.letter) ?? 0;
+    // Because a bar accidental applies only to its own octave, we look it up by letter and octave before the key signature.
+    const contextAlteration =
+      snapshot.measureAccidentals.get(measureAccidentalKey(note.spelling.letter, octave)) ?? getKeyAccidentalFor(note.spelling.letter, snapshot.key);
 
     let accidentalToken: Token | undefined;
     if (note.spelling.alteration !== contextAlteration) {
       const accString = semitonesToAccidentalString(note.spelling.alteration);
       accidentalToken = new Token(TT.ACCIDENTAL, accString, ctx.generateId());
-      newAccidentals.push(note.spelling);
+      newAccidentals.push({ ...note.spelling, octave });
     }
 
     // Create note letter token
@@ -476,7 +467,11 @@ export function toChordAst(voicedChord: VoicedNote[], snapshot: HarmonizeSnapsho
 /**
  * Converts a voiced chord to a CSNode.
  */
-export function toCSChord(voicedChord: VoicedNote[], snapshot: HarmonizeSnapshot, ctx: ABCContext): { csNode: CSNode; newAccidentals: Spelling[] } {
+export function toCSChord(
+  voicedChord: VoicedNote[],
+  snapshot: HarmonizeSnapshot,
+  ctx: ABCContext
+): { csNode: CSNode; newAccidentals: Array<Spelling & { octave: number }> } {
   const { chordAst, newAccidentals } = toChordAst(voicedChord, snapshot, ctx);
   const csNode = fromAst(chordAst, ctx);
   return { csNode, newAccidentals };
@@ -748,7 +743,7 @@ export function harmonizeVoicing(
 
       // Update local accidentals for subsequent notes in the same transform pass
       for (const spelling of newAccidentals) {
-        localAccidentals.set(spelling.letter, spelling.alteration);
+        localAccidentals.set(measureAccidentalKey(spelling.letter, spelling.octave), spelling.alteration);
       }
     }
   }

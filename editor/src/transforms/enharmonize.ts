@@ -6,6 +6,7 @@ import {
   getEnharmonicSpellings,
   chooseBestChromatic,
   resolveMelodyPitch,
+  measureAccidentalKey,
   PitchContext,
   noteLetterToMidi,
   accidentalToSemitones,
@@ -15,9 +16,9 @@ import { toAst } from "../csTree/toAst";
 import { CSNode, TAGS, isTokenNode, getTokenData } from "../csTree/types";
 import { Selection } from "../selection";
 import { selectNotes, selectNotesOrChords } from "../selectors/typeSelectors";
-import { insertSnapshotSorted } from "./parallel";
-import { spellingToPitch, convertMeasureAccidentalsToSemitones, toPitchComponents, NoteLetter } from "./pitchHelpers";
-import { findChildByTag, getNodeLineAndChar } from "./treeUtils";
+import { insertSnapshotSorted, insertBarResetSnapshot } from "./parallel";
+import { spellingToPitch, convertMeasureAccidentalsToSemitones, toPitchComponents, noteSpellingsForMidi, spellingOctave, NoteLetter } from "./pitchHelpers";
+import { findChildByTag, getNodeLineAndChar, findNextBarResetPos } from "./treeUtils";
 import { findNodesById } from "./types";
 
 const FLAT_SPELLING: { letter: string; accidental: string | null }[] = [
@@ -186,7 +187,7 @@ export function enharmonizeToKey(selection: Selection, snapshots: DocumentSnapsh
         // later notes in the chord can detect carry-over conflicts. Without
         // this, a natural sign like =A in [^A=A] would be incorrectly removed
         // as "redundant" because the pre-chord snapshot doesn't include the ^A.
-        const priorChordAccidentals = new Map<NoteLetter, number>();
+        const priorChordAccidentals = new Map<string, number>();
 
         let current = node.firstChild;
         while (current !== null) {
@@ -197,7 +198,7 @@ export function enharmonizeToKey(selection: Selection, snapshots: DocumentSnapsh
             const postComponents = toPitchComponents(current);
             if (postComponents !== null) {
               if (postComponents.explicitAccidental !== null) {
-                priorChordAccidentals.set(postComponents.letter, accidentalToSemitones(postComponents.explicitAccidental));
+                priorChordAccidentals.set(measureAccidentalKey(postComponents.letter, postComponents.octave), accidentalToSemitones(postComponents.explicitAccidental));
               }
             }
           }
@@ -221,7 +222,7 @@ export function enharmonizeToKey(selection: Selection, snapshots: DocumentSnapsh
  * snapshot (which is recorded at the note's exact position) while still capturing
  * carry-over accidentals from earlier notes in the same chord.
  */
-function computeMidi(noteNode: CSNode, snapshots: DocumentSnapshots): number | null {
+export function computeMidi(noteNode: CSNode, snapshots: DocumentSnapshots): number | null {
   const pitchComponents = toPitchComponents(noteNode);
   if (pitchComponents === null) return null;
 
@@ -245,7 +246,7 @@ function enharmonizeNoteToKey(
   chordPos: number | null,
   snapshots: DocumentSnapshots,
   midiMap: Map<number, number>,
-  priorChordAccidentals: Map<NoteLetter, number> | null,
+  priorChordAccidentals: Map<string, number> | null,
   ctx: ABCContext
 ): void {
   // Extract pitch components (letter, octave, accidental)
@@ -283,14 +284,13 @@ function enharmonizeNoteToKey(
   // in the same chord. The pre-chord snapshot does not include within-chord
   // accidentals, so without this overlay, accidentals like =A in [^A=A] would
   // be incorrectly deemed redundant.
-  const measureAccidentalsSemitones = convertMeasureAccidentalsToSemitones(snapshot.measureAccidentals);
-  const merged = mergeAccidentals(snapshot.key, measureAccidentalsSemitones);
-
+  const measureAccidentalsSemitones = convertMeasureAccidentalsToSemitones(snapshot.measureAccidentals) ?? new Map<string, number>();
   if (priorChordAccidentals !== null) {
-    for (const [chordLetter, semitones] of priorChordAccidentals) {
-      merged[chordLetter] = semitones;
+    for (const [accidentalKey, semitones] of priorChordAccidentals) {
+      measureAccidentalsSemitones.set(accidentalKey, semitones);
     }
   }
+  const merged = noteSpellingsForMidi(snapshot.key, measureAccidentalsSemitones, midi);
 
   const targetPitchClass = ((midi % 12) + 12) % 12;
   const referenceSpelling = findDiatonicSpelling(merged, targetPitchClass);
@@ -320,11 +320,11 @@ function enharmonizeNoteToKey(
     const newLetter = newComponents?.letter ?? null;
     const newAccidental = newComponents?.explicitAccidental ?? null;
 
-    const letterChanged = newLetter !== letter;
+    const letterChanged = newLetter !== letter || newComponents?.octave !== octave;
     const accidentalRemoved = newAccidental === null;
 
     if (letterChanged || accidentalRemoved) {
-      removeMeasureAccidentalFromSubsequentSnapshots(snapshots, notePos, letter);
+      removeMeasureAccidentalFromSubsequentSnapshots(snapshots, notePos, measureAccidentalKey(letter, octave));
     }
   }
 }
@@ -372,20 +372,23 @@ function respellChromatic(
   if (!needsRespell) return;
 
   const needsExplicit = (merged[best.letter] ?? 0) !== best.alteration;
+  // Because the replacement tokens carry no source position, we read the note position before replacing.
+  const { line: noteLine, char: noteChar } = getNodeLineAndChar(noteNode);
+  const resetPos = findNextBarResetPos(noteNode);
   const newPitch = spellingToPitch(best, voicedNote.midi, needsExplicit, ctx);
   const newPitchCS = fromAst(newPitch, ctx);
   replace(pitchCSNode, newPitchCS);
 
   // Update snapshots so subsequent notes see this accidental
   if (needsExplicit) {
-    const { line, char } = getNodeLineAndChar(noteNode);
-    const pos = encode(line, char);
+    const pos = encode(noteLine, noteChar);
     const newMeasureAccidentals = new Map(snapshot.measureAccidentals ?? []);
-    newMeasureAccidentals.set(best.letter, semitonesToAccidentalType(best.alteration));
+    newMeasureAccidentals.set(measureAccidentalKey(best.letter, spellingOctave(best.letter as NoteLetter, voicedNote.midi)), semitonesToAccidentalType(best.alteration));
     insertSnapshotSorted(snapshots, pos, {
       ...snapshot,
       measureAccidentals: newMeasureAccidentals,
     });
+    insertBarResetSnapshot(snapshots, resetPos, snapshot);
   }
 }
 
@@ -401,16 +404,16 @@ function respellChromatic(
  * contain the letter, which indicates either a barline reset or a position beyond the
  * original accidental's reach.
  */
-function removeMeasureAccidentalFromSubsequentSnapshots(snapshots: DocumentSnapshots, startPos: number, letter: "C" | "D" | "E" | "F" | "G" | "A" | "B"): void {
+export function removeMeasureAccidentalFromSubsequentSnapshots(snapshots: DocumentSnapshots, startPos: number, accidentalKey: string): void {
   const startIndex = binarySearchFloor(snapshots, startPos);
   if (startIndex < 0) return;
 
   for (let i = startIndex; i < snapshots.length; i++) {
     const entry = snapshots[i];
     if (entry.pos < startPos) continue;
-    if (!entry.snapshot.measureAccidentals?.has(letter)) break;
+    if (!entry.snapshot.measureAccidentals?.has(accidentalKey)) break;
     const updated = new Map(entry.snapshot.measureAccidentals);
-    updated.delete(letter);
+    updated.delete(accidentalKey);
     entry.snapshot = { ...entry.snapshot, measureAccidentals: updated };
   }
 }

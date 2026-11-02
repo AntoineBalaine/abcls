@@ -112,7 +112,7 @@ export interface VoiceState {
   currentKey: KeySignature;
   currentClef: ClefProperties;
   currentMeter?: Meter;
-  measureAccidentals: Map<"C" | "D" | "E" | "F" | "G" | "A" | "B", AccidentalType>; // Cleared each measure
+  measureAccidentals: Map<string, AccidentalType>; // Keyed by letter and octave (see measureAccidentalKey), cleared each measure
 
   // Beam tracking (for automatic beaming)
   potentialStartBeam?: NoteElement; // First note of potential beam group

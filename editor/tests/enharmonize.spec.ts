@@ -1076,3 +1076,14 @@ describe("enharmonizeToKey with beamed notes", () => {
     expect(beamed.replace(/ /g, "")).to.equal(spaced.replace(/ /g, ""));
   });
 });
+
+describe("enharmonizeToKey with accidentals in another octave", () => {
+  it("does not let a flat on D4 change the pitch of a bare d in the same bar", () => {
+    // Because ABC applies a bar accidental only to the same octave, the d one octave above _D is D natural.
+    expect(runEnharmonizeToKey("X:1\nK:Eb\n_D d|\n")).to.contain("_D d|");
+  });
+
+  it("keeps a natural written one octave above a flat as D natural", () => {
+    expect(runEnharmonizeToKey("X:1\nK:Eb\n_D [Ac]4 d|\n")).to.contain("d|");
+  });
+});

@@ -12,7 +12,7 @@
 
 import { SemanticData } from "../analyzers/semantic-analyzer";
 import { NATURAL_SEMITONES } from "../music-theory/constants";
-import { getKeyAccidentalForPitch, accidentalTypeToSemitones as pitchUtilsAccidentalTypeToSemitones } from "../music-theory/pitchUtils";
+import { getKeyAccidentalForPitch, measureAccidentalKey, computeOctaveFromPitch, accidentalTypeToSemitones as pitchUtilsAccidentalTypeToSemitones } from "../music-theory/pitchUtils";
 import { Token, TT } from "../parsers/scan";
 import {
   Visitor,
@@ -253,10 +253,10 @@ export class ChordPositionCollector implements Visitor<void> {
       accidentalSemitones = pitchUtilsAccidentalTypeToSemitones(accType);
 
       // Store in measure accidentals
-      voice.measureAccidentals.set(letter, accType);
+      voice.measureAccidentals.set(measureAccidentalKey(letter, octave), accType);
     } else {
       // Check measure accidentals first
-      const measureAcc = voice.measureAccidentals.get(letter);
+      const measureAcc = voice.measureAccidentals.get(measureAccidentalKey(letter, octave));
       if (measureAcc !== undefined) {
         accidentalSemitones = pitchUtilsAccidentalTypeToSemitones(measureAcc);
       } else {
@@ -366,9 +366,8 @@ export class ChordPositionCollector implements Visitor<void> {
     const pitch = expr.pitch;
 
     if (pitch.alteration) {
-      const letter = pitch.noteLetter.lexeme.toUpperCase() as "C" | "D" | "E" | "F" | "G" | "A" | "B";
       const accType = convertAccidentalToType(pitch.alteration.lexeme);
-      voice.measureAccidentals.set(letter, accType);
+      voice.measureAccidentals.set(measureAccidentalKey(pitch.noteLetter.lexeme, computeOctaveFromPitch(pitch)), accType);
     }
   }
 
@@ -385,9 +384,8 @@ export class ChordPositionCollector implements Visitor<void> {
 
       // Track measure accidentals
       if (pitch.alteration) {
-        const letter = pitch.noteLetter.lexeme.toUpperCase() as "C" | "D" | "E" | "F" | "G" | "A" | "B";
         const accType = convertAccidentalToType(pitch.alteration.lexeme);
-        voice.measureAccidentals.set(letter, accType);
+        voice.measureAccidentals.set(measureAccidentalKey(pitch.noteLetter.lexeme, computeOctaveFromPitch(pitch)), accType);
       }
 
       // Compute MIDI pitch

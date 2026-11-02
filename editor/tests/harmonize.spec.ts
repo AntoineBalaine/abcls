@@ -568,7 +568,7 @@ describe("harmonize", () => {
         const { root } = toCSTreeWithContext("X:1\nK:C\nF|\n");
         const notes = findByTag(root, TAGS.Note);
         const snapshot = makeSnapshot();
-        snapshot.measureAccidentals.set("F", 1); // F# in measure
+        snapshot.measureAccidentals.set("F4", 1); // F# in measure
         const result = extractLead(notes[0], snapshot);
         expect(result).to.deep.equal({ letter: "F", midi: 66, alteration: 1 });
       });

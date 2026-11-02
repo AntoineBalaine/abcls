@@ -13,7 +13,7 @@ import {
   semitonesToAccidentalType,
 } from "abcls-parser";
 import { ChordPosition } from "abcls-parser/interpreter/ChordPositionCollector";
-import { DocumentSnapshots, ContextSnapshot, getSnapshotAtPosition, encode } from "abcls-parser/interpreter/ContextInterpreter";
+import { DocumentSnapshots, ContextSnapshot, getSnapshotAtPosition, binarySearchFloor, encode } from "abcls-parser/interpreter/ContextInterpreter";
 import { AccidentalType } from "abcls-parser/types/abcjs-ast";
 import { cloneExpr, cloneToken } from "abcls-parser/Visitors/CloneVisitor";
 import { fromAst } from "../csTree/fromAst";
@@ -21,8 +21,10 @@ import { toAst } from "../csTree/toAst";
 import { CSNode, TAGS } from "../csTree/types";
 import { Selection } from "../selection";
 import { pitchToDiatonic, toChordAst, HarmonizeSnapshot } from "./harmonize";
-import { findChildByTag, findTieChild, getNodeLineAndChar } from "./treeUtils";
+import { findChildByTag, findTieChild, getNodeLineAndChar, findNextBarResetPos } from "./treeUtils";
 import { findNodesById } from "./types";
+import { noteSpellingsForMidi, spellingOctave } from "./pitchHelpers";
+import { measureAccidentalKey } from "abcls-parser/music-theory/pitchUtils";
 
 export type ParallelDirection = "prev" | "next";
 export type ParallelMode = "diatonic" | "chromatic";
@@ -68,12 +70,10 @@ export function calcDiatonicOffset(targetPitch: Pitch, refPitch: Pitch): number 
  * Converts ContextSnapshot's measureAccidentals (Map<string, AccidentalType>)
  * to the semitone-based Map<string, number> that HarmonizeSnapshot expects.
  */
-export function convertMeasureAccidentals(
-  measureAccidentals: Map<"C" | "D" | "E" | "F" | "G" | "A" | "B", AccidentalType>
-): Map<"C" | "D" | "E" | "F" | "G" | "A" | "B", number> {
-  const result = new Map<"C" | "D" | "E" | "F" | "G" | "A" | "B", number>();
-  for (const [letter, accType] of measureAccidentals) {
-    result.set(letter, accidentalTypeToSemitones(accType));
+export function convertMeasureAccidentals(measureAccidentals: Map<string, AccidentalType>): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const [accidentalKey, accType] of measureAccidentals) {
+    result.set(accidentalKey, accidentalTypeToSemitones(accType));
   }
   return result;
 }
@@ -96,6 +96,22 @@ export function insertSnapshotSorted(snapshots: DocumentSnapshots, pos: number, 
   }
 
   snapshots.splice(lo, 0, { pos, snapshot });
+}
+
+/**
+ * Records that the bar accidentals are empty from the given position on.
+ *
+ * Because the interpreter only records a reset at a bar line when the bar of the source had accidentals,
+ * an accidental that a transform writes into a bar that had none would otherwise stay in force for the rest of the tune.
+ * Therefore, after inserting such an accidental, we call this with the position of the next bar line.
+ * We leave the snapshots untouched when one already exists at that position, because it holds the reset state.
+ */
+export function insertBarResetSnapshot(snapshots: DocumentSnapshots, resetPos: number | null, snapshot: ContextSnapshot): void {
+  if (resetPos === null) return;
+  const index = binarySearchFloor(snapshots, resetPos);
+  if (index >= 0 && snapshots[index].pos === resetPos) return;
+  const line = Math.floor(resetPos / 1_000_000);
+  insertSnapshotSorted(snapshots, resetPos, { ...snapshot, pos: resetPos, line, char: resetPos - line * 1_000_000, measureAccidentals: new Map() });
 }
 
 /**
@@ -316,7 +332,7 @@ export function parallelChromatic(
 
         // Build note spellings from current context
         const measureAccidentalsSemitones = convertMeasureAccidentals(measureAcc);
-        const noteSpellings = mergeAccidentals(snapshot.key, measureAccidentalsSemitones);
+        const noteSpellings = noteSpellingsForMidi(snapshot.key, measureAccidentalsSemitones, targetMidi);
 
         // Shift chord chromatically using harmonization module
         const { notes: shiftedNotes, newAccidentals } = shiftChordChromatic(refMidis, chromaticShift, noteSpellings);
@@ -341,6 +357,7 @@ export function parallelChromatic(
         const newChordCS = fromAst(chordAst, ctx);
 
         // Replace target note and update cursor
+        const resetPos = findNextBarResetPos(noteNode);
         const parent = getParent(noteNode);
         if (parent) {
           replace(noteNode, newChordCS);
@@ -352,13 +369,18 @@ export function parallelChromatic(
         if (newAccidentals.length > 0) {
           const newMeasureAccidentals = new Map(measureAcc);
           for (const spelling of newAccidentals) {
-            newMeasureAccidentals.set(spelling.letter, semitonesToAccidentalType(spelling.alteration));
+            // Because the spellings carry no octave, we recover it from the shifted note that was spelled this way.
+            const shifted = shiftedNotes.find((n) => n.spelling.letter === spelling.letter && n.spelling.alteration === spelling.alteration);
+            if (shifted === undefined) continue;
+            const accidentalKey = measureAccidentalKey(spelling.letter, spellingOctave(spelling.letter, shifted.midi));
+            newMeasureAccidentals.set(accidentalKey, semitonesToAccidentalType(spelling.alteration));
           }
 
           insertSnapshotSorted(snapshots, pos, {
             ...snapshot,
             measureAccidentals: newMeasureAccidentals,
           });
+          insertBarResetSnapshot(snapshots, resetPos, snapshot);
         }
       });
     }
