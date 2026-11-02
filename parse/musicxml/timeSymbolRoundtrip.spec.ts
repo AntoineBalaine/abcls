@@ -1,10 +1,10 @@
 import { expect } from "chai";
-import { meterToBeatsAndType, normalizeForMusicXML } from "./normalize";
-import { serializeScorePartwise } from "./serialize";
-import { importFromMusicSheet } from "./importFromMusicSheet";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
-import { validateAgainstMusicXmlSchema } from "./testSupport/xsdValidation";
 import { MeterType } from "../types/abcjs-ast";
+import { meterToBeatsAndType } from "./normalize";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
+import { serializeScorePartwise } from "./serialize";
+import { importTune, normalizeTune } from "./testSupport/unwrap";
+import { validateAgainstMusicXmlSchema } from "./testSupport/xsdValidation";
 
 /**
  * Regression test for the common/cut time symbol round-trip gap documented
@@ -14,8 +14,8 @@ import { MeterType } from "../types/abcjs-ast";
  */
 function roundTrip(xml: string): string {
   const sheet = parseMusicXmlToSheet(xml);
-  const tune = importFromMusicSheet(sheet);
-  const ir = normalizeForMusicXML(tune);
+  const tune = importTune(sheet);
+  const ir = normalizeTune(tune);
   return serializeScorePartwise(ir);
 }
 

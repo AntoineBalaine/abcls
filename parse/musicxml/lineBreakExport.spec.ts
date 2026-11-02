@@ -6,10 +6,9 @@ import { AbcErrorReporter } from "../parsers/ErrorReporter";
 import { parse } from "../parsers/parse";
 import { Scanner } from "../parsers/scan";
 import { tuneToAbcText } from "../tuneToAst";
-import { importFromMusicSheet } from "./importFromMusicSheet";
-import { normalizeForMusicXML } from "./normalize";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
 import { serializeScorePartwise } from "./serialize";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
+import { importTune, normalizeTune } from "./testSupport/unwrap";
 
 function interpretAbc(abc: string) {
   const ctx = new ABCContext(new AbcErrorReporter());
@@ -34,20 +33,20 @@ function bodyLines(abc: string): string[] {
 describe("MusicXML line breaks on export", () => {
   it("emits <print new-system> on the first measure of every ABC line after the first", () => {
     const tune = interpretAbc("X:1\nL:1/4\nM:4/4\nK:C\nC D E F|G A B c|\nc B A G|F E D C|\n");
-    const xml = serializeScorePartwise(normalizeForMusicXML(tune));
+    const xml = serializeScorePartwise(normalizeTune(tune));
     expect(xml.match(/<print new-system="yes"\/>/g)!.length).to.equal(1);
     expect(xml).to.match(/<measure number="3">\s*<print new-system="yes"\/>/);
   });
 
   it("emits no <print> element for a single-line tune", () => {
     const tune = interpretAbc("X:1\nL:1/4\nM:4/4\nK:C\nC D E F|G A B c|\n");
-    expect(serializeScorePartwise(normalizeForMusicXML(tune))).not.to.contain("<print");
+    expect(serializeScorePartwise(normalizeTune(tune))).not.to.contain("<print");
   });
 
   it("keeps the line structure through ABC -> XML -> ABC", () => {
     const tune = interpretAbc("X:1\nL:1/4\nM:4/4\nK:C\nC D E F|G A B c|\nc B A G|F E D C|\nC C C C|D D D D|\n");
-    const xml = serializeScorePartwise(normalizeForMusicXML(tune));
-    const abc = tuneToAbcText(importFromMusicSheet(parseMusicXmlToSheet(xml)), new ABCContext(), {
+    const xml = serializeScorePartwise(normalizeTune(tune));
+    const abc = tuneToAbcText(importTune(parseMusicXmlToSheet(xml)), new ABCContext(), {
       lineBreaks: { mode: "source", fallbackBarsPerLine: 4 },
     });
     expect(bodyLines(abc).length).to.equal(3);

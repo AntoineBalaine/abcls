@@ -2,19 +2,19 @@
 
 This file tracks MusicXML content that opensheetmusicdisplay itself supports,
 but that types/abcjs-ast.ts has no representation for. importFromMusicSheet
-throws UnsupportedMusicXmlFeatureError for these rather than silently
+fails with an unsupported-feature message for these rather than silently
 dropping or approximating them.
 
 ## Tablature staves
 
 Staff.isTab is true for a tab staff. abcjs upstream supports tablature
 rendering; AbcLs's Staff type has no isTab-equivalent field and no
-TabNote-equivalent type. A MusicXML file containing a tab staff throws.
+TabNote-equivalent type. A MusicXML file containing a tab staff fails to import.
 
 ## Figured bass
 
 No representation in types/abcjs-ast.ts and no known equivalent in ABC
-notation itself. Throws unconditionally.
+notation itself. Fails unconditionally.
 
 ## Microtonal and exotic accidentals
 
@@ -23,7 +23,7 @@ DblFlat, QuarterSharp, QuarterFlat. OSMD's AccidentalEnum additionally
 defines TRIPLESHARP, TRIPLEFLAT, SLASHFLAT, THREEQUARTERSSHARP,
 THREEQUARTERSFLAT, SLASHQUARTERSHARP, SLASHSHARP, DOUBLESLASHFLAT, SORI,
 and KORON, none of which have an AccidentalType equivalent. A note using
-one of these throws.
+one of these fails to import.
 
 ## Modal key signatures (dorian, phrygian, lydian, mixolydian, locrian)
 
@@ -38,7 +38,7 @@ was not built for this version, given the plan's scope target of lead
 sheets and small ensemble scores, where major and minor are overwhelmingly
 the common case. importFromMusicSheet supports major and minor (including
 OSMD's separate ionian/aeolian mode values, treated as major/minor) and
-throws for dorian, phrygian, lydian, mixolydian, and locrian.
+fails for dorian, phrygian, lydian, mixolydian, and locrian.
 
 ## Grace notes after their main note
 
@@ -46,7 +46,7 @@ VoiceEntry.GraceAfterMainNote marks grace notes that appear after the note
 they ornament (at the end of a measure), rather than before it. GraceNote
 in types/abcjs-ast.ts and NoteElement.gracenotes only represent grace
 notes preceding their main note, matching ABC's {..}note syntax. A
-VoiceEntry with IsGrace and GraceAfterMainNote both true throws.
+VoiceEntry with IsGrace and GraceAfterMainNote both true fails to import.
 
 ## Common/cut time symbol does not survive a re-export (phase 1 IR gap, not fixed here)
 
@@ -71,10 +71,10 @@ tripletMultiplier/tripletR set per note, matching what TuneInterpreter's
 own forward direction produces (ABC's (p:q:r notation has no nesting).
 importFromMusicSheet uses Note.NoteTuplet (singular, the innermost tuplet)
 and ignores any outer tuplets in NoteTuplets; a note with more than one
-entry in NoteTuplets throws, since silently dropping the outer tuplet
+entry in NoteTuplets fails to import, since silently dropping the outer tuplet
 would misrepresent the note's actual grouping.
 
-## Approximations in the ABC output (no error thrown)
+## Approximations in the ABC output (no error reported)
 
 The following content is imported, but written to ABC in a simplified form.
 
@@ -94,7 +94,7 @@ The following content is imported, but written to ABC in a simplified form.
 - Clef changes in the middle of a tune are read from the end of the
   previous measure, where OSMD stores them. A change to a clef that AbcLs
   cannot represent (for instance a C clef on line 2) is skipped instead of
-  throwing, and clef changes in the middle of a measure are not read.
+  failing, and clef changes in the middle of a measure are not read.
 - A measure is padded to the larger of OSMD's measure duration and the end
   of its longest voice. Because OSMD derives the duration from the content,
   a measure in which every voice stops early (for instance an OMR measure

@@ -2,8 +2,8 @@ import { JSDOM } from "jsdom";
 import { IXmlElement, MusicSheetReader } from "opensheetmusicdisplay";
 
 /**
- * Parses MusicXML text into an OSMD MusicSheet, for tests and for a future
- * convenience entry point. OSMD's internal reading code does `instanceof
+ * Parses MusicXML text into an OSMD MusicSheet, for the xml2abc command and
+ * for the tests. OSMD's internal reading code does `instanceof
  * Node`/`instanceof Element` checks against the bare global `Node`/`Element`
  * identifiers (not `window.Node`), so a jsdom window's own constructors are
  * not enough on their own outside a browser; they must be installed onto

@@ -32,8 +32,8 @@ import {
   Beam,
 } from "opensheetmusicdisplay";
 import { createEmptyTune } from "../interpreter/InterpreterState";
+import { getKeyAccidentalFor } from "../music-theory/harmonization";
 import {
-  Tune,
   Staff,
   StaffSystem,
   VoiceElement,
@@ -61,9 +61,9 @@ import {
   BarType,
   isBarElement,
 } from "../types/abcjs-ast";
-import { IRational, addRational, createRational, equalRational, greaterRational, subtractRational } from "../Visitors/fmt/rational";
+import { IRational, addRational, createRational, equalRational, greaterRational, multiplyRational, subtractRational } from "../Visitors/fmt/rational";
 import { INVERSE_ARTICULATION_MAP, INVERSE_ORNAMENT_MAP } from "./decorationMap";
-import { UnsupportedMusicXmlFeatureError } from "./importErrors";
+import { ImportResult, unsupportedFeature } from "./importErrors";
 
 /**
  * OSMD's NoteEnum is chromatic (C=0, D=2, E=4, F=5, G=7, A=9, B=11), not a
@@ -110,11 +110,11 @@ const ACCIDENTAL_ENUM_TO_TYPE: Partial<Record<AccidentalEnum, AccidentalType>> =
   [AccidentalEnum.QUARTERTONEFLAT]: AccidentalType.QuarterFlat,
 };
 
-function accidentalEnumToType(accidental: AccidentalEnum): AccidentalType | undefined {
+function accidentalEnumToType(accidental: AccidentalEnum, errors: string[]): AccidentalType | undefined {
   if (accidental === AccidentalEnum.NONE) return undefined;
   const mapped = ACCIDENTAL_ENUM_TO_TYPE[accidental];
   if (mapped === undefined) {
-    throw new UnsupportedMusicXmlFeatureError(`accidental enum value ${AccidentalEnum[accidental] ?? accidental}`);
+    errors.push(unsupportedFeature(`accidental enum value ${AccidentalEnum[accidental] ?? accidental}`));
   }
   return mapped;
 }
@@ -151,12 +151,16 @@ function representableClefType(clef: ClefInstruction): ClefType | undefined {
   return entry.base;
 }
 
-function clefInstructionToType(clef: ClefInstruction): ClefType {
+function clefInstructionToType(clef: ClefInstruction, errors: string[]): ClefType {
   const type = representableClefType(clef);
   if (type !== undefined) return type;
-  if (clef.ClefType === ClefEnum.TAB) throw new UnsupportedMusicXmlFeatureError("TAB clef");
+  if (clef.ClefType === ClefEnum.TAB) {
+    errors.push(unsupportedFeature("TAB clef"));
+    return ClefType.Treble;
+  }
   const label = clef.ClefType === ClefEnum.C ? `C clef on line ${clef.Line}` : `clef enum value ${ClefEnum[clef.ClefType] ?? clef.ClefType}`;
-  throw new UnsupportedMusicXmlFeatureError(label);
+  errors.push(unsupportedFeature(label));
+  return ClefType.Treble;
 }
 
 /**
@@ -200,18 +204,31 @@ const MINOR_FIFTHS_TO_ROOT: Record<number, { root: KeyRoot; acc: KeyAccidental }
   [-7]: { root: KeyRoot.A, acc: KeyAccidental.Flat },
 };
 
-function keyInstructionToSignature(key: KeyInstruction): KeySignature {
+const C_MAJOR: KeySignature = { root: KeyRoot.C, acc: KeyAccidental.None, mode: Mode.Major, accidentals: [] };
+
+/**
+ * Converts a key instruction. A key that AbcLs cannot represent is recorded in `errors`, and C major stands in for it,
+ * so that the import can go on and report every unsupported feature at once.
+ */
+function keyInstructionToSignature(key: KeyInstruction, errors: string[]): KeySignature {
   if (key.Mode === KeyEnum.major || key.Mode === KeyEnum.ionian || key.Mode === KeyEnum.none) {
     const found = MAJOR_FIFTHS_TO_ROOT[key.Key];
-    if (!found) throw new UnsupportedMusicXmlFeatureError(`key with ${key.Key} fifths`);
+    if (!found) {
+      errors.push(unsupportedFeature(`key with ${key.Key} fifths`));
+      return { ...C_MAJOR };
+    }
     return { root: found.root, acc: found.acc, mode: Mode.Major, accidentals: [] };
   }
   if (key.Mode === KeyEnum.minor || key.Mode === KeyEnum.aeolian) {
     const found = MINOR_FIFTHS_TO_ROOT[key.Key];
-    if (!found) throw new UnsupportedMusicXmlFeatureError(`key with ${key.Key} fifths`);
+    if (!found) {
+      errors.push(unsupportedFeature(`key with ${key.Key} fifths`));
+      return { ...C_MAJOR };
+    }
     return { root: found.root, acc: found.acc, mode: Mode.Minor, accidentals: [] };
   }
-  throw new UnsupportedMusicXmlFeatureError(`modal key signature (${KeyEnum[key.Mode] ?? key.Mode})`);
+  errors.push(unsupportedFeature(`modal key signature (${KeyEnum[key.Mode] ?? key.Mode})`));
+  return { ...C_MAJOR };
 }
 
 function rhythmInstructionToMeter(rhythm: RhythmInstruction): Meter {
@@ -264,8 +281,8 @@ function decorationsForVoiceEntry(voiceEntry: VoiceEntry): Decorations[] | undef
 }
 
 class SlurLabelAllocator {
-  private labels = new Map<unknown, number>();
-  private next = 1;
+  labels = new Map<unknown, number>();
+  next = 1;
 
   labelFor(slur: unknown): number {
     let label = this.labels.get(slur);
@@ -277,10 +294,45 @@ class SlurLabelAllocator {
   }
 }
 
-function buildTunePitch(note: OsmdNote, slurAllocator: SlurLabelAllocator): TunePitch {
+const STEP_LETTERS = ["C", "D", "E", "F", "G", "A", "B"];
+
+/**
+ * What decides whether an imported note must be written with an accidental.
+ * Because OSMD's Pitch.Accidental gives the alteration that sounds (it is read from <alter>), while an ABC note
+ * without an accidental takes its alteration from the key signature and from the earlier accidentals of its bar,
+ * a note is written with an accidental only when its alteration differs from the one ABC would infer,
+ * or when the MusicXML displays one.
+ */
+export interface NoteImportState {
+  key: KeySignature;
+  /** The alterations written so far in the current measure, by voice index, then by diatonic pitch number. */
+  barAltersByVoice: Map<number, number>[];
+  /** The messages of the content that AbcLs cannot represent, which make the import fail. */
+  errors: string[];
+}
+
+/**
+ * Returns the accidental to write for a pitch, and records it in the bar of the voice.
+ */
+export function writtenAccidental(osmdPitch: OsmdPitch, pitchNumber: number, voiceIndex: number, state: NoteImportState): AccidentalType | undefined {
+  const sounding = soundingHalfTones(osmdPitch);
+  const barAlters = state.barAltersByVoice[voiceIndex];
+  const stepIndex = ((pitchNumber % 7) + 7) % 7;
+  const inferred = barAlters.get(pitchNumber) ?? getKeyAccidentalFor(STEP_LETTERS[stepIndex], state.key);
+  const displayed = osmdPitch.AccidentalXml !== undefined && osmdPitch.AccidentalXml !== "";
+  if (sounding === inferred && !displayed) return undefined;
+  barAlters.set(pitchNumber, sounding);
+  return accidentalEnumToType(osmdPitch.Accidental, state.errors) ?? AccidentalType.Natural;
+}
+
+function soundingHalfTones(osmdPitch: OsmdPitch): number {
+  return OsmdPitch.HalfTonesFromAccidental(osmdPitch.Accidental);
+}
+
+function buildTunePitch(note: OsmdNote, slurAllocator: SlurLabelAllocator, voiceIndex: number, state: NoteImportState): TunePitch {
   const osmdPitch: OsmdPitch = note.Pitch;
   const pitchNumber = fundamentalNoteToDiatonic(osmdPitch.FundamentalNote, osmdPitch.Octave);
-  const accidental = accidentalEnumToType(osmdPitch.Accidental);
+  const accidental = writtenAccidental(osmdPitch, pitchNumber, voiceIndex, state);
   const pitch: TunePitch = {
     pitch: pitchNumber,
     name: osmdPitch.FundamentalNote.toString(),
@@ -307,7 +359,7 @@ function buildTunePitch(note: OsmdNote, slurAllocator: SlurLabelAllocator): Tune
   return pitch;
 }
 
-function buildGraceNote(note: OsmdNote, slash: boolean): GraceNote {
+function buildGraceNote(note: OsmdNote, slash: boolean, voiceIndex: number, state: NoteImportState): GraceNote {
   const osmdPitch: OsmdPitch = note.Pitch;
   const pitchNumber = fundamentalNoteToDiatonic(osmdPitch.FundamentalNote, osmdPitch.Octave);
   return {
@@ -315,33 +367,43 @@ function buildGraceNote(note: OsmdNote, slash: boolean): GraceNote {
     name: osmdPitch.FundamentalNote.toString(),
     duration: 0.125,
     verticalPos: pitchNumber,
-    accidental: accidentalEnumToType(osmdPitch.Accidental),
+    accidental: writtenAccidental(osmdPitch, pitchNumber, voiceIndex, state),
     acciaccatura: slash,
   };
 }
 
-function assertNoNestedTuplets(note: OsmdNote): void {
+function checkNoNestedTuplets(note: OsmdNote, errors: string[]): void {
   if (note.NoteTuplets && note.NoteTuplets.length > 1) {
-    throw new UnsupportedMusicXmlFeatureError("nested tuplets");
+    errors.push(unsupportedFeature("nested tuplets"));
   }
 }
 
+/**
+ * Records the tuplet that a note belongs to, and turns its duration back into its written length.
+ *
+ * Because ABC writes a tuplet as (p:q:r followed by notes of their written length, while OSMD's Note.Length is the
+ * length that sounds (already scaled by q/p), the duration is scaled back by p/q; otherwise the ratio would apply twice.
+ * p is the number of the tuplet's label (<actual-notes>), q is <normal-notes>, and r is the number of entries the tuplet
+ * covers, which differs from p when the tuplet mixes note values.
+ */
 function applyTupletInfo(element: NoteElement, note: OsmdNote): void {
   const tuplet: OsmdTuplet | undefined = note.NoteTuplet;
   if (!tuplet) return;
-  const p = tuplet.Notes.length;
+  const r = tuplet.Notes.length;
+  const p = tuplet.TupletLabelNumber > 0 ? tuplet.TupletLabelNumber : r;
   const index = tuplet.getNoteIndex(note);
   // NormalNotes is MusicXML's <normal-notes> (q in TuneInterpreter's p:q:r
   // terms); tuplet.Fractions[0].RealValue was tried first but turned out to
   // be the note's own written duration, not the p:q ratio, confirmed by a
   // failing test against a hand-built triplet fixture.
   const q = note.NormalNotes;
+  if (q) element.duration = multiplyRational(element.duration, createRational(p, q));
   if (index === 0) {
     element.startTriplet = p;
-    element.tripletR = p;
+    element.tripletR = r;
     if (q) element.tripletMultiplier = q / p;
   }
-  if (index === p - 1) {
+  if (index === r - 1) {
     element.endTriplet = true;
   }
 }
@@ -443,17 +505,17 @@ function collectVoicesForStaff(sheet: MusicSheet, globalStaffIndex: number): Osm
   return Array.from(seen.values()).sort((a, b) => a.VoiceId - b.VoiceId);
 }
 
-function convertMeasureAttributes(measure: SourceMeasure, globalStaffIndex: number): VoiceElement[] {
+function convertMeasureAttributes(measure: SourceMeasure, globalStaffIndex: number, errors: string[]): VoiceElement[] {
   const entry = measure.FirstInstructionsStaffEntries[globalStaffIndex];
   if (!entry) return [];
   const elements: VoiceElement[] = [];
   for (const instruction of entry.Instructions) {
     if (instruction instanceof ClefInstruction) {
-      const type = clefInstructionToType(instruction);
+      const type = clefInstructionToType(instruction, errors);
       const clefElement: ClefElement = { el_type: ElementType.Clef, startChar: 0, endChar: 0, type, verticalPos: 0 };
       elements.push(clefElement);
     } else if (instruction instanceof KeyInstruction) {
-      const sig = keyInstructionToSignature(instruction);
+      const sig = keyInstructionToSignature(instruction, errors);
       const keyElement: KeyElement = { el_type: ElementType.Key, startChar: 0, endChar: 0, ...sig };
       elements.push(keyElement);
     } else if (instruction instanceof RhythmInstruction) {
@@ -520,22 +582,24 @@ function pushNoteOrGraceForVoiceEntry(
   voiceIndex: number,
   target: VoiceElement[],
   voiceEntry: VoiceEntry,
-  slurAllocator: SlurLabelAllocator
+  slurAllocator: SlurLabelAllocator,
+  state: NoteImportState
 ): void {
   if (voiceEntry.IsGrace) {
     if (voiceEntry.GraceAfterMainNote) {
-      throw new UnsupportedMusicXmlFeatureError("grace notes after their main note");
+      state.errors.push(unsupportedFeature("grace notes after their main note"));
+      return;
     }
     const slash = !!voiceEntry.GraceNoteSlash;
     for (const note of voiceEntry.Notes) {
-      acc.pendingGraceNotes[voiceIndex].push(buildGraceNote(note, slash));
+      acc.pendingGraceNotes[voiceIndex].push(buildGraceNote(note, slash, voiceIndex, state));
     }
     return;
   }
 
   const notes = voiceEntry.Notes;
   if (notes.length === 0) return;
-  for (const note of notes) assertNoNestedTuplets(note);
+  for (const note of notes) checkNoNestedTuplets(note, state.errors);
 
   if (notes[0].isRest()) {
     const duration = fractionToRational(notes[0].Length);
@@ -546,12 +610,13 @@ function pushNoteOrGraceForVoiceEntry(
       duration,
       rest: { type: RestType.Rest },
     };
+    applyTupletInfo(element, notes[0]);
     target.push(element);
     return;
   }
 
   const duration = fractionToRational(notes[0].Length);
-  const pitches: TunePitch[] = notes.map((note) => buildTunePitch(note, slurAllocator));
+  const pitches: TunePitch[] = notes.map((note) => buildTunePitch(note, slurAllocator, voiceIndex, state));
   const decoration = decorationsForVoiceEntry(voiceEntry);
   const element: NoteElement = {
     el_type: ElementType.Note,
@@ -605,7 +670,7 @@ function pushGapRest(target: VoiceElement[], gap: IRational, type: RestType): vo
   target.push(rest);
 }
 
-function buildStaffAccumulator(sheet: MusicSheet, osmdStaff: OsmdStaff, instrument: Instrument, globalStaffIndex: number): StaffAccumulator {
+function buildStaffAccumulator(sheet: MusicSheet, osmdStaff: OsmdStaff, instrument: Instrument, globalStaffIndex: number, errors: string[]): StaffAccumulator {
   const voices = collectVoicesForStaff(sheet, globalStaffIndex);
   const acc: StaffAccumulator = {
     osmdStaff,
@@ -619,6 +684,11 @@ function buildStaffAccumulator(sheet: MusicSheet, osmdStaff: OsmdStaff, instrume
   };
   const slurAllocator = new SlurLabelAllocator();
   let pendingClefs: VoiceElement[] = [];
+  const state: NoteImportState = {
+    key: { root: KeyRoot.C, acc: KeyAccidental.None, mode: Mode.Major, accidentals: [] },
+    barAltersByVoice: voices.map(() => new Map<number, number>()),
+    errors,
+  };
 
   for (const measure of sheet.SourceMeasures) {
     const measureLists: VoiceElement[][] = voices.map(() => []);
@@ -628,8 +698,16 @@ function buildStaffAccumulator(sheet: MusicSheet, osmdStaff: OsmdStaff, instrume
         list.push(openRepeat);
       }
     }
-    acc.attributesByMeasure.push([...pendingClefs, ...convertMeasureAttributes(measure, globalStaffIndex)]);
+    const attributes = [...pendingClefs, ...convertMeasureAttributes(measure, globalStaffIndex, errors)];
+    acc.attributesByMeasure.push(attributes);
     pendingClefs = convertTrailingClefs(measure, globalStaffIndex);
+    // Because the accidentals of a bar stop at its bar line, every measure starts from the key signature alone.
+    for (const element of attributes) {
+      if (element.el_type === ElementType.Key) {
+        state.key = { root: element.root, acc: element.acc, mode: element.mode, accidentals: element.accidentals };
+      }
+    }
+    for (const barAlters of state.barAltersByVoice) barAlters.clear();
 
     const cursor: MeasureCursorContext = {
       measureLength: measureLengthFor(measure),
@@ -648,7 +726,7 @@ function buildStaffAccumulator(sheet: MusicSheet, osmdStaff: OsmdStaff, instrume
         if (voiceIndex === -1) continue;
         advanceCursorForEntry(cursor, voiceIndex, voiceEntry, measureLists[voiceIndex]);
         const lengthBefore = measureLists[voiceIndex].length;
-        pushNoteOrGraceForVoiceEntry(acc, voiceIndex, measureLists[voiceIndex], voiceEntry, slurAllocator);
+        pushNoteOrGraceForVoiceEntry(acc, voiceIndex, measureLists[voiceIndex], voiceEntry, slurAllocator, state);
         if (!chordSymbolsPlaced) chordSymbolsPlaced = attachChordSymbols(measureLists[voiceIndex], lengthBefore, chordSymbols);
       }
     }
@@ -767,12 +845,13 @@ interface FlatStaffEntry {
   instrument: Instrument;
 }
 
-function flattenStaves(sheet: MusicSheet): FlatStaffEntry[] {
+function flattenStaves(sheet: MusicSheet, errors: string[]): FlatStaffEntry[] {
   const result: FlatStaffEntry[] = [];
   for (const instrument of sheet.Instruments) {
     for (const osmdStaff of instrument.Staves) {
       if (osmdStaff.isTab) {
-        throw new UnsupportedMusicXmlFeatureError("tablature staff", `instrument ${instrument.Name}`);
+        errors.push(unsupportedFeature("tablature staff", `instrument ${instrument.Name}`));
+        continue;
       }
       result.push({ osmdStaff, instrument });
     }
@@ -850,9 +929,16 @@ function applyInstrumentGrouping(staves: Staff[], flat: FlatStaffEntry[]): void 
   }
 }
 
-export function importFromMusicSheet(sheet: MusicSheet): Tune {
-  const allFlat = flattenStaves(sheet);
-  const allAccumulators = allFlat.map((entry, index) => buildStaffAccumulator(sheet, entry.osmdStaff, entry.instrument, index));
+/**
+ * Converts a parsed MusicXML score into a Tune.
+ *
+ * Because content with no representation in AbcLs must not be silently dropped or approximated, the import fails when
+ * the score holds any: the result then lists every unsupported feature that was found, instead of a tune.
+ */
+export function importFromMusicSheet(sheet: MusicSheet): ImportResult {
+  const errors: string[] = [];
+  const allFlat = flattenStaves(sheet, errors);
+  const allAccumulators = allFlat.map((entry, index) => buildStaffAccumulator(sheet, entry.osmdStaff, entry.instrument, index, errors));
 
   // Because a staff whose voices all lack pitched notes would render as an
   // empty staff, it is removed together with its voices. An all-rest score
@@ -890,5 +976,6 @@ export function importFromMusicSheet(sheet: MusicSheet): Tune {
   tune.staffNum = accumulators.length;
   tune.voiceNum = accumulators.reduce((sum, acc) => sum + acc.voices.length, 0);
   tune.lineNum = systems.length;
-  return tune;
+  if (errors.length > 0) return { ok: false, errors };
+  return { ok: true, tune };
 }

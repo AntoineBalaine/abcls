@@ -1,16 +1,15 @@
 import { expect } from "chai";
 import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
+import { TuneInterpreter } from "../interpreter/TuneInterpreter";
 import { ABCContext } from "../parsers/Context";
 import { AbcErrorReporter } from "../parsers/ErrorReporter";
 import { parse } from "../parsers/parse";
 import { Scanner } from "../parsers/scan";
-import { TuneInterpreter } from "../interpreter/TuneInterpreter";
-import { Tune } from "../types/abcjs-ast";
 import { tuneToAbcText } from "../tuneToAst";
-import { normalizeForMusicXML } from "./normalize";
+import { Tune } from "../types/abcjs-ast";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
 import { serializeScorePartwise } from "./serialize";
-import { importFromMusicSheet } from "./importFromMusicSheet";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
+import { importTune, normalizeTune } from "./testSupport/unwrap";
 
 /**
  * Full three-phase loop: ABC text -> Tune (existing pipeline) -> MusicXML
@@ -39,11 +38,11 @@ function interpretABC(abc: string): Tune {
 function fullRoundTrip(abc: string): { originalTune: Tune; finalTune: Tune; intermediateXml: string; intermediateAbc: string } {
   const originalTune = interpretABC(abc);
 
-  const ir = normalizeForMusicXML(originalTune);
+  const ir = normalizeTune(originalTune);
   const intermediateXml = serializeScorePartwise(ir);
 
   const sheet = parseMusicXmlToSheet(intermediateXml);
-  const importedTune = importFromMusicSheet(sheet);
+  const importedTune = importTune(sheet);
 
   const ctx = new ABCContext(new AbcErrorReporter());
   const intermediateAbc = tuneToAbcText(importedTune, ctx);

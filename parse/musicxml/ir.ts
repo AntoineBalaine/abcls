@@ -20,6 +20,17 @@ export interface NotationsIR {
   technical?: string[];
   // MusicXML's <fermata> is a direct child of <notations>, not <ornaments>.
   fermata?: "upright" | "inverted";
+  /** The <tuplet> marks that draw the bracket of a tuplet, on its first and last notes. */
+  tupletStart?: boolean;
+  tupletStop?: boolean;
+}
+
+/**
+ * A <time-modification>: the note is one of `actualNotes` notes played in the time of `normalNotes`.
+ */
+export interface TimeModificationIR {
+  actualNotes: number;
+  normalNotes: number;
 }
 
 export interface GraceIR {
@@ -58,6 +69,9 @@ export interface NoteIR {
   tieStart?: boolean;
   tieStop?: boolean;
   grace?: GraceIR;
+  /** The accidental that is written on the note (<accidental>), as an XSD accidental-value such as "sharp". */
+  accidental?: string;
+  timeModification?: TimeModificationIR;
   notations?: NotationsIR;
   // Because <harmony> is a sibling that precedes the <note> it sounds with,
   // the serializer writes these immediately before this note.

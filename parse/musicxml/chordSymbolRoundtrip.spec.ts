@@ -10,10 +10,9 @@ import { parse } from "../parsers/parse";
 import { Scanner } from "../parsers/scan";
 import { tuneToAbcText } from "../tuneToAst";
 import { ElementType, isMusicLine, NoteElement, StaffSystem, Tune } from "../types/abcjs-ast";
-import { importFromMusicSheet } from "./importFromMusicSheet";
-import { normalizeForMusicXML } from "./normalize";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
 import { serializeScorePartwise } from "./serialize";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
+import { importTune, normalizeTune } from "./testSupport/unwrap";
 import { validateAgainstMusicXmlSchema } from "./testSupport/xsdValidation";
 
 function interpretAbc(abc: string): Tune {
@@ -44,11 +43,11 @@ function chordNamesOf(tune: Tune): string[] {
 }
 
 function abcToXml(abc: string): string {
-  return serializeScorePartwise(normalizeForMusicXML(interpretAbc(abc)));
+  return serializeScorePartwise(normalizeTune(interpretAbc(abc)));
 }
 
 function xmlToTune(xml: string): Tune {
-  return importFromMusicSheet(parseMusicXmlToSheet(xml));
+  return importTune(parseMusicXmlToSheet(xml));
 }
 
 const ATTRIBUTES =
@@ -187,7 +186,7 @@ describe("MusicXML chord symbols", () => {
     for (const file of harmonyFixtures) {
       it(`keeps every chord symbol and stays schema-valid through XML -> Tune -> XML -> Tune: ${file}`, () => {
         const first = xmlToTune(fs.readFileSync(path.join(FIXTURE_DIR, file), "utf8"));
-        const reExported = serializeScorePartwise(normalizeForMusicXML(first));
+        const reExported = serializeScorePartwise(normalizeTune(first));
         const validation = validateAgainstMusicXmlSchema(reExported);
         expect(validation.valid, validation.errors.join("\n")).to.equal(true);
         const firstNames = chordNamesOf(first);

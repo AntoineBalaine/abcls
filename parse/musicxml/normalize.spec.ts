@@ -1,13 +1,14 @@
 import { expect } from "chai";
 import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
+import { TuneInterpreter } from "../interpreter/TuneInterpreter";
 import { ABCContext } from "../parsers/Context";
 import { AbcErrorReporter } from "../parsers/ErrorReporter";
 import { parse } from "../parsers/parse";
 import { Scanner } from "../parsers/scan";
-import { TuneInterpreter } from "../interpreter/TuneInterpreter";
 import { Tune, StaffSystem, ElementType } from "../types/abcjs-ast";
-import { computeDivisions, diatonicToStepOctave, splitVoiceIntoMeasures, normalizeForMusicXML } from "./normalize";
 import { createRational } from "../Visitors/fmt/rational";
+import { computeDivisions, diatonicToStepOctave, splitVoiceIntoMeasures, normalizeForMusicXML } from "./normalize";
+import { normalizeTune } from "./testSupport/unwrap";
 
 function interpretABC(abc: string): Tune {
   const ctx = new ABCContext(new AbcErrorReporter());
@@ -65,7 +66,7 @@ describe("normalizeForMusicXML", () => {
   it("does not pad or error when voices in the same staff have mismatched measure counts", () => {
     const abc = "X:1\nV:1\nV:2 merge=true\nK:C\nV:1\nC D | E F | G A |\nV:2\nC D | E F |";
     const tune = interpretABC(abc);
-    const ir = normalizeForMusicXML(tune);
+    const ir = normalizeTune(tune);
     expect(ir.parts.length).to.equal(1);
     const part = ir.parts[0];
     expect(part.measures.length).to.equal(3);
@@ -77,7 +78,7 @@ describe("normalizeForMusicXML", () => {
   it("builds a part-group for a braced grand staff", () => {
     const abc = "X:1\nV:1\nV:2\nK:C\n%%staves {1 2}\nV:1\nC |\nV:2\nC, |";
     const tune = interpretABC(abc);
-    const ir = normalizeForMusicXML(tune);
+    const ir = normalizeTune(tune);
     const groupEntries = ir.partList.filter((e) => e.kind === "part-group");
     if (groupEntries.length > 0) {
       expect(groupEntries[0].kind).to.equal("part-group");
@@ -86,7 +87,7 @@ describe("normalizeForMusicXML", () => {
 
   it("computes divisions once and reuses it for every part", () => {
     const tune = interpretABC("X:1\nL:1/8\nK:C\nC2 D/2 |");
-    const ir = normalizeForMusicXML(tune);
+    const ir = normalizeTune(tune);
     const firstMeasureAttrs = ir.parts[0].measures[0].attributes;
     expect(firstMeasureAttrs?.divisions).to.equal(16);
   });
@@ -94,7 +95,7 @@ describe("normalizeForMusicXML", () => {
   it("does not count a chord's stacked notes more than once when computing the backup duration between voices", () => {
     const abc = "X:1\nM:4/4\nL:1/4\nV:1\nV:2 merge=true\nK:C\nV:1\n[CEG] |\nV:2\nC, |";
     const tune = interpretABC(abc);
-    const ir = normalizeForMusicXML(tune);
+    const ir = normalizeTune(tune);
     const content = ir.parts[0].measures[0].content;
     const backup = content.find((n) => n.kind === "backup");
     expect(backup?.duration).to.equal(4);
@@ -103,14 +104,14 @@ describe("normalizeForMusicXML", () => {
   it("emits a note with no pitches and no rest flag as a rest rather than dropping its duration", () => {
     const abc = "X:1\nM:4/4\nL:1/4\nK:C\nC D E F |";
     const tune = interpretABC(abc);
-    const ir = normalizeForMusicXML(tune);
+    const ir = normalizeTune(tune);
     // Simulate an anomalous element: neither rest nor pitches set.
     const anomalous = { el_type: ElementType.Note, startChar: 0, endChar: 0, duration: createRational(1, 4) } as never;
     const staff = tune.systems[0];
     if ("staff" in staff) {
       staff.staff[0].voices[0].splice(1, 1, anomalous);
     }
-    const irAfter = normalizeForMusicXML(tune);
+    const irAfter = normalizeTune(tune);
     const notes = irAfter.parts[0].measures[0].content.filter((n) => n.kind === "note");
     expect(notes.some((n) => n.rest === true)).to.equal(true);
     expect(ir.parts[0].measures[0].content.length).to.equal(irAfter.parts[0].measures[0].content.length);
@@ -126,7 +127,7 @@ describe("normalizeForMusicXML", () => {
     if ("staff" in staff) {
       staff.staff[1].voices = [];
     }
-    const ir = normalizeForMusicXML(tune);
+    const ir = normalizeTune(tune);
     const emptyPart = ir.parts.find((p) => p.measures.every((m) => m.content.length === 0));
     expect(emptyPart, "expected one part with zero-content measures").to.not.be.undefined;
     expect(emptyPart!.measures.length).to.be.at.least(1);
@@ -134,14 +135,16 @@ describe("normalizeForMusicXML", () => {
 });
 
 describe("SlurNumberAllocator overflow", () => {
-  it("throws rather than silently reusing a slur number that is still open", () => {
+  it("fails rather than silently reusing a slur number that is still open", () => {
     const abc = "X:1\nM:1/4\nL:1/4\nK:C\nC |";
     const tune = interpretABC(abc);
     const system = tune.systems[0];
     if (!("staff" in system)) throw new Error("expected a music line");
     const note = system.staff[0].voices[0].find((el) => el.el_type === "note") as import("../types/abcjs-ast").NoteElement;
     note.pitches![0].startSlur = Array.from({ length: 17 }, (_, i) => ({ label: 200 + i }));
-    expect(() => normalizeForMusicXML(tune)).to.throw(/more than 16 slurs/);
+    const result = normalizeForMusicXML(tune);
+    expect(result.ok).to.equal(false);
+    expect(result.ok ? [] : result.errors).to.satisfy((errors: string[]) => errors.some((error) => /more than 16 slurs/.test(error)));
   });
 });
 

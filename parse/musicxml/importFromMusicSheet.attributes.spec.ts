@@ -11,9 +11,9 @@ import { parse } from "../parsers/parse";
 import { Scanner } from "../parsers/scan";
 import { tuneToAbcText } from "../tuneToAst";
 import { ClefType, ElementType, KeyElement, MeterElement, StaffSystem, Tune, VoiceElement } from "../types/abcjs-ast";
-import { importFromMusicSheet } from "./importFromMusicSheet";
 import { staffSystems } from "./importFromMusicSheet.padding.spec";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
+import { importTune } from "./testSupport/unwrap";
 
 const CLEF_XML: Record<string, string> = {
   treble: "<sign>G</sign><line>2</line>",
@@ -83,7 +83,7 @@ function twoPartsXml(clefs: [string, string]): string {
 }
 
 function convert(xml: string): { tune: Tune; text: string } {
-  const tune = importFromMusicSheet(parseMusicXmlToSheet(xml));
+  const tune = importTune(parseMusicXmlToSheet(xml));
   return { tune, text: tuneToAbcText(tune, new ABCContext()) };
 }
 
@@ -362,7 +362,7 @@ describe("importFromMusicSheet voice ids", () => {
 
 describe("xml2abc end to end on an OMR-shaped excerpt", () => {
   const fixture = readFileSync(join(__dirname, "schema", "testFixtures", "omrPianoExcerpt.musicxml"), "utf8");
-  const tune = importFromMusicSheet(parseMusicXmlToSheet(fixture));
+  const tune = importTune(parseMusicXmlToSheet(fixture));
   const text = tuneToAbcText(tune, new ABCContext(), { lineBreaks: { mode: "source", fallbackBarsPerLine: 4 } });
 
   it("groups the staves, writes the bass clef and drops the rest-only voice", () => {
@@ -375,7 +375,7 @@ describe("xml2abc end to end on an OMR-shaped excerpt", () => {
   it("follows the source's systems and keeps the beams and the clef change", () => {
     const body = text.split("\n").slice(text.split("\n").findIndex((l) => l.startsWith("K:")) + 1);
     expect(body.filter((l) => l.startsWith("V:"))).to.deep.equal(["V:1", "V:2", "V:5", "V:1", "V:2", "V:5"]);
-    expect(text).to.contain("c_BG");
+    expect(text).to.contain("cBG");
     expect(text).to.contain("[K:clef=treble]");
     expect(text).to.contain("z4");
   });

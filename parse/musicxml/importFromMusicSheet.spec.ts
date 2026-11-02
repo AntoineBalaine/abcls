@@ -1,8 +1,9 @@
 import { expect } from "chai";
 import { AccidentalType, ClefType, ElementType, isMusicLine, Mode, RestType } from "../types/abcjs-ast";
-import { importFromMusicSheet, stepOctaveToDiatonic } from "./importFromMusicSheet";
+import { stepOctaveToDiatonic } from "./importFromMusicSheet";
 import { diatonicToStepOctave } from "./normalize";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
+import { importTune } from "./testSupport/unwrap";
 
 const SINGLE_VOICE_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0">
@@ -47,7 +48,7 @@ const SINGLE_VOICE_XML = `<?xml version="1.0" encoding="UTF-8"?>
 describe("importFromMusicSheet", () => {
   it("maps a single-voice score into a Tune with the expected pitches, durations, and rest", () => {
     const sheet = parseMusicXmlToSheet(SINGLE_VOICE_XML);
-    const tune = importFromMusicSheet(sheet);
+    const tune = importTune(sheet);
 
     expect(tune.systems.length).to.equal(1);
     const system = tune.systems[0];

@@ -1,12 +1,12 @@
-import { expect } from "chai";
 import fs from "fs";
 import path from "path";
+import { expect } from "chai";
 import { ElementType, NoteElement, StaffSystem } from "../types/abcjs-ast";
 import { Tune } from "../types/abcjs-ast";
 import { importFromMusicSheet } from "./importFromMusicSheet";
 import { normalizeForMusicXML } from "./normalize";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
 import { serializeScorePartwise } from "./serialize";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
 import { validateAgainstMusicXmlSchema } from "./testSupport/xsdValidation";
 
 /**
@@ -14,7 +14,7 @@ import { validateAgainstMusicXmlSchema } from "./testSupport/xsdValidation";
  * (vendored under schema/testFixtures/musicxmlTestSuite/, see VENDORED.md).
  * Every fixture is sorted into exactly one bucket:
  *
- * - documented gap: import throws UnsupportedMusicXmlFeatureError for a
+ * - documented gap: import reports an unsupported feature for a
  *   reason already recorded in KNOWN_GAPS.md. Asserted by error message
  *   substring, not just catch-and-ignore.
  * - clean pass: import succeeds, re-export validates against the XSD, and
@@ -46,11 +46,16 @@ function listFixtures(): string[] {
 // crashing on these nor rejecting them cleanly is a bug worth fixing for
 // this survey; see the "needs a decision" section for the crash's error
 // quality, which is a real but separate finding.
-const EXCLUDED_MALFORMED = new Set(["41g-PartNoId.invalid.musicxml", "74b-FiguredBass.invalid.musicxml", "75b-Accordion.invalid.musicxml", "41h-TooManyParts.musicxml"]);
+const EXCLUDED_MALFORMED = new Set([
+  "41g-PartNoId.invalid.musicxml",
+  "74b-FiguredBass.invalid.musicxml",
+  "75b-Accordion.invalid.musicxml",
+  "41h-TooManyParts.musicxml",
+]);
 
-// Fixtures expected to throw UnsupportedMusicXmlFeatureError for a reason
+// Fixtures expected to be reported as unsupported for a reason
 // already documented in KNOWN_GAPS.md, with the substring that must appear
-// in the thrown error's message.
+// in one of the reported messages.
 const DOCUMENTED_GAPS: Record<string, string> = {
   "01d-Pitches-Microtones.musicxml": "accidental enum value",
   "01f-Pitches-ParenthesizedMicrotoneAccidentals.musicxml": "accidental enum value",
@@ -80,24 +85,32 @@ function extractNoteSequence(tune: Tune): Array<{ pitches: number[]; duration: s
   return out;
 }
 
-function runRoundTrip(xml: string): { reExported: string; originalTune: Tune; reimportedTune: Tune } {
+/**
+ * Imports a fixture, exports it again and imports the export. Because the import and the export report the content they
+ * cannot represent instead of throwing, the result is either the three stages or the messages of the stage that failed.
+ */
+function runRoundTrip(xml: string): { ok: true; reExported: string; originalTune: Tune; reimportedTune: Tune } | { ok: false; errors: string[] } {
   const sheet = parseMusicXmlToSheet(xml);
-  const originalTune = importFromMusicSheet(sheet);
-  const ir = normalizeForMusicXML(originalTune);
-  const reExported = serializeScorePartwise(ir);
-  const reimportedSheet = parseMusicXmlToSheet(reExported);
-  const reimportedTune = importFromMusicSheet(reimportedSheet);
-  return { reExported, originalTune, reimportedTune };
+  const original = importFromMusicSheet(sheet);
+  if (!original.ok) return original;
+  const normalized = normalizeForMusicXML(original.tune);
+  if (!normalized.ok) return normalized;
+  const reExported = serializeScorePartwise(normalized.ir);
+  const reimported = importFromMusicSheet(parseMusicXmlToSheet(reExported));
+  if (!reimported.ok) return reimported;
+  return { ok: true, reExported, originalTune: original.tune, reimportedTune: reimported.tune };
 }
 
 describe("MusicXML Test Suite survey", () => {
   const allFixtures = listFixtures();
 
-  describe("documented gaps (expected UnsupportedMusicXmlFeatureError)", () => {
+  describe("documented gaps (expected unsupported-feature errors)", () => {
     for (const [file, substring] of Object.entries(DOCUMENTED_GAPS)) {
-      it(`throws for ${file} (${substring})`, () => {
+      it(`reports ${file} as unsupported (${substring})`, () => {
         const xml = fs.readFileSync(path.join(FIXTURE_DIR, file), "utf8");
-        expect(() => runRoundTrip(xml)).to.throw(substring);
+        const result = runRoundTrip(xml);
+        expect(result.ok).to.equal(false);
+        expect(result.ok ? "" : result.errors.join("\n")).to.include(substring);
       });
     }
   });
@@ -117,7 +130,9 @@ describe("MusicXML Test Suite survey", () => {
     for (const file of cleanPassFixtures) {
       it(`round-trips cleanly: ${file}`, () => {
         const xml = fs.readFileSync(path.join(FIXTURE_DIR, file), "utf8");
-        const { reExported, originalTune, reimportedTune } = runRoundTrip(xml);
+        const result = runRoundTrip(xml);
+        if (!result.ok) expect.fail(result.errors.join("; "));
+        const { reExported, originalTune, reimportedTune } = result;
         const xsd = validateAgainstMusicXmlSchema(reExported);
         expect(xsd.valid, `XSD validation errors:\n${xsd.errors.join("\n")}`).to.equal(true);
         const originalNotes = extractNoteSequence(originalTune);

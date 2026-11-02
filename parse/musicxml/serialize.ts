@@ -121,6 +121,8 @@ function buildNotationsXml(note: NoteIR): XmlNode | undefined {
       )
     );
   if (n?.fermata) children.push(el("fermata", n.fermata === "inverted" ? { type: "inverted" } : undefined));
+  if (n?.tupletStart) children.push(el("tuplet", { type: "start" }));
+  if (n?.tupletStop) children.push(el("tuplet", { type: "stop" }));
   const present = children.filter((c): c is XmlNode => c !== undefined);
   return present.length ? el("notations", undefined, present) : undefined;
 }
@@ -147,6 +149,12 @@ function buildNoteXml(note: NoteIR): XmlNode {
   if (note.tieStop) children.push(el("tie", { type: "stop" }));
   if (note.tieStart) children.push(el("tie", { type: "start" }));
   if (note.voice !== undefined) children.push(textEl("voice", note.voice));
+  if (note.accidental !== undefined) children.push(textEl("accidental", note.accidental));
+  if (note.timeModification !== undefined) {
+    children.push(
+      el("time-modification", undefined, [textEl("actual-notes", note.timeModification.actualNotes), textEl("normal-notes", note.timeModification.normalNotes)])
+    );
+  }
   const notations = buildNotationsXml(note);
   if (notations) children.push(notations);
   return el("note", undefined, children);

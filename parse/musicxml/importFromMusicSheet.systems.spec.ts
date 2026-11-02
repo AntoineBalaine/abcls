@@ -6,9 +6,9 @@ import { parse } from "../parsers/parse";
 import { Scanner } from "../parsers/scan";
 import { TuneToAbcLineBreaks, tuneToAbcText } from "../tuneToAst";
 import { BarType, ElementType, isBarElement, NoteElement, Tune, VoiceElement } from "../types/abcjs-ast";
-import { importFromMusicSheet } from "./importFromMusicSheet";
 import { note, scoreXml, staffSystems } from "./importFromMusicSheet.padding.spec";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
+import { importTune } from "./testSupport/unwrap";
 
 const NEW_SYSTEM = `<print new-system="yes"/>`;
 
@@ -27,7 +27,7 @@ function slurredWhole(step: string, type: string): string {
 }
 
 function importXml(xml: string): Tune {
-  return importFromMusicSheet(parseMusicXmlToSheet(xml));
+  return importTune(parseMusicXmlToSheet(xml));
 }
 
 /** Returns the body lines of an ABC text, i.e. the lines after K: that are not V: markers. */

@@ -1,7 +1,10 @@
 import { expect } from "chai";
+import * as fc from "fast-check";
+import { ABCContext } from "../parsers/Context";
+import { tuneToAbcText } from "../tuneToAst";
 import { ClefElement, ClefType, ElementType, isMusicLine, MeterElement, MeterType, NoteElement, VoiceElement } from "../types/abcjs-ast";
-import { importFromMusicSheet } from "./importFromMusicSheet";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
+import { importTune } from "./testSupport/unwrap";
 
 const CHORD_TIE_SLUR_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0">
@@ -119,7 +122,7 @@ function noteElements(voice: VoiceElement[]): NoteElement[] {
 describe("importFromMusicSheet: chords, ties, slurs", () => {
   it("marks the chord's first note only, ties across the barline-free repeat, and pairs the slur", () => {
     const sheet = parseMusicXmlToSheet(CHORD_TIE_SLUR_XML);
-    const tune = importFromMusicSheet(sheet);
+    const tune = importTune(sheet);
     const system = tune.systems[0];
     if (!isMusicLine(system)) throw new Error("expected music line");
     const notes = noteElements(system.staff[0].voices[0]);
@@ -143,7 +146,7 @@ describe("importFromMusicSheet: chords, ties, slurs", () => {
 describe("importFromMusicSheet: multiple voices", () => {
   it("splits backed-up voices into separate voice arrays on the same staff", () => {
     const sheet = parseMusicXmlToSheet(TWO_VOICE_XML);
-    const tune = importFromMusicSheet(sheet);
+    const tune = importTune(sheet);
     const system = tune.systems[0];
     if (!isMusicLine(system)) throw new Error("expected music line");
     const staff = system.staff[0];
@@ -157,7 +160,7 @@ describe("importFromMusicSheet: multiple voices", () => {
 describe("importFromMusicSheet: tuplets", () => {
   it("marks the first and last note of a triplet with matching multiplier and count", () => {
     const sheet = parseMusicXmlToSheet(TRIPLET_XML);
-    const tune = importFromMusicSheet(sheet);
+    const tune = importTune(sheet);
     const system = tune.systems[0];
     if (!isMusicLine(system)) throw new Error("expected music line");
     const notes = noteElements(system.staff[0].voices[0]);
@@ -188,7 +191,7 @@ describe("importFromMusicSheet: clef and meter symbol regressions", () => {
   </part>
 </score-partwise>`;
     const sheet = parseMusicXmlToSheet(tenorXml);
-    const tune = importFromMusicSheet(sheet);
+    const tune = importTune(sheet);
     const system = tune.systems[0];
     if (!isMusicLine(system)) throw new Error("expected music line");
     const clefEl = system.staff[0].voices[0].find((e): e is ClefElement => e.el_type === ElementType.Clef);
@@ -212,10 +215,115 @@ describe("importFromMusicSheet: clef and meter symbol regressions", () => {
   </part>
 </score-partwise>`;
     const sheet = parseMusicXmlToSheet(cutTimeXml);
-    const tune = importFromMusicSheet(sheet);
+    const tune = importTune(sheet);
     const system = tune.systems[0];
     if (!isMusicLine(system)) throw new Error("expected music line");
     const meterEl = system.staff[0].voices[0].find((e): e is MeterElement => e.el_type === ElementType.Meter);
     expect(meterEl?.type).to.equal(MeterType.CutTime);
+  });
+});
+
+/**
+ * Builds a one-measure score in the given key, from notes written as [step, alter, octave, displayed accidental].
+ */
+function oneMeasureXml(fifths: number, notes: Array<[string, number, number, string | null]>): string {
+  const body = notes
+    .map(
+      ([step, alter, octave, shown]) =>
+        `<note><pitch><step>${step}</step>${alter !== 0 ? `<alter>${alter}</alter>` : ""}<octave>${octave}</octave></pitch>` +
+        `<duration>1</duration><voice>1</voice><type>quarter</type>${shown !== null ? `<accidental>${shown}</accidental>` : ""}</note>`
+    )
+    .join("");
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0"><part-list><score-part id="P1"><part-name>M</part-name></score-part></part-list>` +
+    `<part id="P1"><measure number="1"><attributes><divisions>1</divisions><key><fifths>${fifths}</fifths></key>` +
+    `<time><beats>${notes.length}</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>${body}</measure></part></score-partwise>`
+  );
+}
+
+function importedBody(xml: string): string {
+  const text = tuneToAbcText(importTune(parseMusicXmlToSheet(xml)), new ABCContext());
+  return text
+    .split("\n")
+    .filter((line) => line.includes("|"))[0]
+    .trim();
+}
+
+describe("importFromMusicSheet: written accidentals", () => {
+  it("writes a natural on a note that the key signature would otherwise sharpen", () => {
+    // The F has no <accidental> element: its <alter> of 0 alone says that it is natural.
+    expect(
+      importedBody(
+        oneMeasureXml(1, [
+          ["F", 0, 4, null],
+          ["G", 0, 4, null],
+        ])
+      )
+    ).to.equal("=F2 G2 |");
+  });
+
+  it("leaves out the accidental that the key signature or the bar already gives", () => {
+    expect(
+      importedBody(
+        oneMeasureXml(1, [
+          ["F", 1, 4, null],
+          ["F", 1, 4, null],
+        ])
+      )
+    ).to.equal("F2 F2 |");
+    expect(
+      importedBody(
+        oneMeasureXml(0, [
+          ["F", 1, 4, "sharp"],
+          ["F", 1, 4, null],
+          ["F", 0, 4, "natural"],
+        ])
+      )
+    ).to.equal("^F2 F2 =F2 |");
+  });
+
+  it("gives back the alteration of every note when the ABC is read with its key and bar accidentals", () => {
+    const letters = ["C", "D", "E", "F", "G", "A", "B"];
+    const noteArb = fc.tuple(fc.constantFrom(...letters), fc.constantFrom(-1, 0, 0, 1), fc.constantFrom(4, 5));
+    fc.assert(
+      fc.property(fc.constantFrom(-3, -1, 0, 2, 4), fc.array(noteArb, { minLength: 1, maxLength: 6 }), (fifths, notes) => {
+        const tune = importTune(
+          parseMusicXmlToSheet(
+            oneMeasureXml(
+              fifths,
+              notes.map(([s, a, o]) => [s, a, o, null])
+            )
+          )
+        );
+        const system = tune.systems[0];
+        if (!isMusicLine(system)) throw new Error("expected music line");
+        const keyAlter = (letter: string): number => {
+          const sharps = "FCGDAEB".slice(0, Math.max(0, fifths));
+          const flats = "BEADGCF".slice(0, Math.max(0, -fifths));
+          return sharps.includes(letter) ? 1 : flats.includes(letter) ? -1 : 0;
+        };
+        const ALTER: Record<string, number> = { sharp: 1, flat: -1, natural: 0 };
+        const bar = new Map<number, number>();
+        const read = noteElements(system.staff[0].voices[0]).map((element) => {
+          const pitch = element.pitches![0];
+          if (pitch.accidental !== undefined) bar.set(pitch.pitch, ALTER[pitch.accidental]);
+          return bar.get(pitch.pitch) ?? keyAlter(letters[((pitch.pitch % 7) + 7) % 7]);
+        });
+        expect(read).to.deep.equal(notes.map(([, alter]) => alter));
+      }),
+      { numRuns: 80 }
+    );
+  });
+});
+
+describe("importFromMusicSheet: tuplet lengths", () => {
+  it("keeps the written length of a tuplet note, so that the ratio applies only once", () => {
+    const tune = importTune(parseMusicXmlToSheet(TRIPLET_XML));
+    const system = tune.systems[0];
+    if (!isMusicLine(system)) throw new Error("expected music line");
+    const notes = noteElements(system.staff[0].voices[0]);
+    expect(notes.map((note) => note.duration.numerator / note.duration.denominator)).to.deep.equal([1 / 8, 1 / 8, 1 / 8]);
+    const text = tuneToAbcText(tune, new ABCContext());
+    expect(text).to.contain("(3:2:3C D E");
   });
 });

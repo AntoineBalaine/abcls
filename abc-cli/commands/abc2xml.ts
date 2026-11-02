@@ -40,18 +40,16 @@ export const abc2xmlCommand = new Command("abc2xml")
       process.exit(1);
     }
 
-    try {
-      const ir = normalizeForMusicXML(tunes[0]);
-      const xml = serializeScorePartwise(ir);
-
-      if (options.output) {
-        writeFile(options.output, xml);
-      } else {
-        process.stdout.write(xml);
-      }
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      console.error(`Error: ${msg}`);
+    const normalized = normalizeForMusicXML(tunes[0]);
+    if (!normalized.ok) {
+      normalized.errors.forEach((message) => console.error(`Error: ${message}`));
       process.exit(1);
+    }
+    const xml = serializeScorePartwise(normalized.ir);
+
+    if (options.output) {
+      writeFile(options.output, xml);
+    } else {
+      process.stdout.write(xml);
     }
   });

@@ -2,8 +2,8 @@ import { expect } from "chai";
 import * as fc from "fast-check";
 import { ElementType, MediaType, Tune, NoteElement, BarElement, VoiceElement, Pitch, KeyRoot, KeyAccidental, Mode, MeterType } from "../types/abcjs-ast";
 import { createRational } from "../Visitors/fmt/rational";
-import { normalizeForMusicXML } from "./normalize";
 import { serializeScorePartwise } from "./serialize";
+import { normalizeTune } from "./testSupport/unwrap";
 import { validateAgainstMusicXmlSchema } from "./testSupport/xsdValidation";
 
 function makeTune(voiceElements: VoiceElement[]): Tune {
@@ -52,20 +52,22 @@ function makeTune(voiceElements: VoiceElement[]): Tune {
 const pitchNumberArb = fc.integer({ min: -7, max: 13 });
 const denominatorArb = fc.constantFrom(1, 2, 4, 8, 16);
 
-const noteArb: fc.Arbitrary<NoteElement> = fc.record({
-  pitchNumber: pitchNumberArb,
-  numerator: fc.integer({ min: 1, max: 3 }),
-  denominator: denominatorArb,
-}).map(({ pitchNumber, numerator, denominator }): NoteElement => {
-  const pitch: Pitch = { pitch: pitchNumber, name: "", verticalPos: pitchNumber };
-  return {
-    el_type: ElementType.Note,
-    startChar: 0,
-    endChar: 0,
-    duration: createRational(numerator, denominator),
-    pitches: [pitch],
-  };
-});
+const noteArb: fc.Arbitrary<NoteElement> = fc
+  .record({
+    pitchNumber: pitchNumberArb,
+    numerator: fc.integer({ min: 1, max: 3 }),
+    denominator: denominatorArb,
+  })
+  .map(({ pitchNumber, numerator, denominator }): NoteElement => {
+    const pitch: Pitch = { pitch: pitchNumber, name: "", verticalPos: pitchNumber };
+    return {
+      el_type: ElementType.Note,
+      startChar: 0,
+      endChar: 0,
+      duration: createRational(numerator, denominator),
+      pitches: [pitch],
+    };
+  });
 
 const barArb: fc.Arbitrary<BarElement> = fc.constant({
   el_type: ElementType.Bar,
@@ -81,7 +83,7 @@ describe("Tune to MusicXML property-based round trip", () => {
     fc.assert(
       fc.property(fc.array(voiceElementArb, { minLength: 1, maxLength: 30 }), (elements) => {
         const tune = makeTune(elements);
-        const xml = serializeScorePartwise(normalizeForMusicXML(tune));
+        const xml = serializeScorePartwise(normalizeTune(tune));
         const result = validateAgainstMusicXmlSchema(xml);
         expect(result.valid, result.errors.join("\n")).to.equal(true);
       }),

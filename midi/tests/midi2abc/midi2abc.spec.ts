@@ -61,6 +61,13 @@ describe("midi2abc", () => {
     expect(restateNaturals("K:C clef=F4\n")).to.equal("K:C clef=F4\n");
   });
 
+  it("restates a natural that the sharp of its own octave would still reach, after a natural in another octave", () => {
+    // Under the per-octave reading, the =C does not cancel the ^c, so the last c needs its own natural.
+    expect(restateNaturals("^c C c|\n")).to.equal("^c =C =c|\n");
+    // Once a pitch is restated, the next note of that pitch needs no other natural.
+    expect(restateNaturals("^c c c|\n")).to.equal("^c =c c|\n");
+  });
+
   it("keeps a leading silence as a rest instead of moving the first note to the start", () => {
     // MINIMAL_MIDI with a delay of 96 ticks (one quarter note) before the note-on.
     const delayed = new Uint8Array(MINIMAL_MIDI);

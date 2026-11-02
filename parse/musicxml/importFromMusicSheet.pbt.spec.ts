@@ -1,9 +1,10 @@
 import { expect } from "chai";
 import * as fc from "fast-check";
 import { BarType, ElementType, isBarElement, isMusicLine, NoteElement, StaffSystem, VoiceElement } from "../types/abcjs-ast";
-import { importFromMusicSheet, stepOctaveToDiatonic } from "./importFromMusicSheet";
+import { stepOctaveToDiatonic } from "./importFromMusicSheet";
 import { durationSum, measuresOf } from "./importFromMusicSheet.padding.spec";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
+import { importTune } from "./testSupport/unwrap";
 
 /**
  * The plan's testing strategy calls for generating MusicSheet-shaped
@@ -60,7 +61,7 @@ describe("importFromMusicSheet property-based tests", () => {
         (step, octave, durationType, alter) => {
           const xml = buildSingleNoteMeasureXml(step, octave, durationType, alter);
           const sheet = parseMusicXmlToSheet(xml);
-          const tune = importFromMusicSheet(sheet);
+          const tune = importTune(sheet);
           const system = tune.systems[0];
           if (!isMusicLine(system)) throw new Error("expected a music line");
           const notes = system.staff[0].voices[0].filter((e): e is NoteElement => e.el_type === ElementType.Note);
@@ -184,7 +185,7 @@ describe("importFromMusicSheet rest padding properties", () => {
   it("fills every measure of every voice to the measure's length", () => {
     fc.assert(
       fc.property(genPaddingScore, ({ voice1, voice2 }) => {
-        const tune = importFromMusicSheet(parseMusicXmlToSheet(twoVoiceScoreXml(voice1, voice2)));
+        const tune = importTune(parseMusicXmlToSheet(twoVoiceScoreXml(voice1, voice2)));
         const system = tune.systems[0] as StaffSystem;
         for (const voice of system.staff[0].voices) {
           for (const measure of measuresOf(voice)) {
@@ -199,7 +200,7 @@ describe("importFromMusicSheet rest padding properties", () => {
   it("never outputs a voice without pitched notes, and keeps every voice that has one", () => {
     fc.assert(
       fc.property(genPaddingScore, ({ voice1, voice2 }) => {
-        const tune = importFromMusicSheet(parseMusicXmlToSheet(twoVoiceScoreXml(voice1, voice2)));
+        const tune = importTune(parseMusicXmlToSheet(twoVoiceScoreXml(voice1, voice2)));
         const voices = (tune.systems[0] as StaffSystem).staff.flatMap((s) => s.voices);
         const voice1HasNotes = voice1.some((m) => m.some((s) => s.kind === "note"));
         const voice2HasNotes = voice2.some((m) => m.some((s) => s.kind === "note"));
@@ -216,7 +217,7 @@ describe("importFromMusicSheet rest padding properties", () => {
   it("gives every voice the same number of closing bars", () => {
     fc.assert(
       fc.property(genPaddingScore, ({ voice1, voice2 }) => {
-        const tune = importFromMusicSheet(parseMusicXmlToSheet(twoVoiceScoreXml(voice1, voice2)));
+        const tune = importTune(parseMusicXmlToSheet(twoVoiceScoreXml(voice1, voice2)));
         const counts = (tune.systems[0] as StaffSystem).staff.flatMap((s) => s.voices).map(closingBarCount);
         expect(new Set(counts).size).to.equal(1);
         expect(counts[0]).to.equal(voice1.length);
@@ -228,7 +229,7 @@ describe("importFromMusicSheet rest padding properties", () => {
   it("preserves each surviving voice's pitched sequence once the padding rests are ignored", () => {
     fc.assert(
       fc.property(genPaddingScore, ({ voice1, voice2 }) => {
-        const tune = importFromMusicSheet(parseMusicXmlToSheet(twoVoiceScoreXml(voice1, voice2)));
+        const tune = importTune(parseMusicXmlToSheet(twoVoiceScoreXml(voice1, voice2)));
         const voices = (tune.systems[0] as StaffSystem).staff[0].voices;
         const expected = [expectedPitchedSequence(voice1), expectedPitchedSequence(voice2)].filter((seq) => seq.length > 0);
         if (expected.length === 0) return;

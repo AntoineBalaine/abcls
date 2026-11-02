@@ -1,8 +1,7 @@
 import { expect } from "chai";
-import { normalizeForMusicXML } from "./normalize";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
 import { serializeScorePartwise } from "./serialize";
-import { importFromMusicSheet } from "./importFromMusicSheet";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
+import { importTune, normalizeTune } from "./testSupport/unwrap";
 import { validateAgainstMusicXmlSchema } from "./testSupport/xsdValidation";
 
 /**
@@ -15,8 +14,8 @@ import { validateAgainstMusicXmlSchema } from "./testSupport/xsdValidation";
  */
 function roundTrip(xml: string): string {
   const sheet = parseMusicXmlToSheet(xml);
-  const tune = importFromMusicSheet(sheet);
-  const ir = normalizeForMusicXML(tune);
+  const tune = importTune(sheet);
+  const ir = normalizeTune(tune);
   return serializeScorePartwise(ir);
 }
 

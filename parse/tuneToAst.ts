@@ -457,16 +457,10 @@ function findWholeMeasureRests(elements: VoiceElement[], initialMeterText: strin
   const found = new Set<NoteElement>();
   let measureLength = meterTextToMeasureLength(initialMeterText);
   let notesInMeasure: NoteElement[] = [];
-  const closeMeasure = (): void => {
-    const only = notesInMeasure.length === 1 ? notesInMeasure[0] : undefined;
-    if (only && measureLength && only.rest?.type === RestType.Invisible && equalRational(only.duration, measureLength)) {
-      found.add(only);
-    }
-    notesInMeasure = [];
-  };
   for (const element of elements) {
     if (isBarElement(element)) {
-      closeMeasure();
+      addWholeMeasureRest(notesInMeasure, measureLength, found);
+      notesInMeasure = [];
     } else if (element.el_type === ElementType.Note) {
       notesInMeasure.push(element as NoteElement);
     } else if (element.el_type === ElementType.Meter) {
@@ -474,8 +468,18 @@ function findWholeMeasureRests(elements: VoiceElement[], initialMeterText: strin
       measureLength = meterTextToMeasureLength(meterToAbcString({ type: meterElement.type, value: meterElement.value }));
     }
   }
-  closeMeasure();
+  addWholeMeasureRest(notesInMeasure, measureLength, found);
   return found;
+}
+
+/**
+ * Adds the only note of a measure to `found` when it is an invisible rest that fills the whole measure.
+ */
+function addWholeMeasureRest(notesInMeasure: NoteElement[], measureLength: IRational | null, found: Set<NoteElement>): void {
+  const only = notesInMeasure.length === 1 ? notesInMeasure[0] : undefined;
+  if (only && measureLength && only.rest?.type === RestType.Invisible && equalRational(only.duration, measureLength)) {
+    found.add(only);
+  }
 }
 
 function buildVoiceBody(ctx: ABCContext, elements: VoiceElement[], defaultLength: IRational, state: VoiceBodyState): music_code[] {
@@ -486,8 +490,7 @@ function buildVoiceBody(ctx: ABCContext, elements: VoiceElement[], defaultLength
   for (const element of elements) {
     if (isBarElement(element)) {
       flushBeamRun(ctx, beamRun, out);
-      const barElement = element as BarElement;
-      out.push(new BarLine(ctx.generateId(), [synth_barlineToken(ctx, barElement)]));
+      pushBarLine(ctx, element as BarElement, out);
       continue;
     }
     if (element.el_type === ElementType.Note) {
@@ -526,14 +529,34 @@ function buildVoiceBody(ctx: ABCContext, elements: VoiceElement[], defaultLength
   return out;
 }
 
-function synth_barlineToken(ctx: ABCContext, _bar: BarElement): Token {
-  // BarType-to-lexeme reconstruction is intentionally minimal for a first
-  // version: every bar renders as a plain "|", since the common lead-sheet
-  // and small-score scope this whole effort targets rarely depends on the
-  // visual distinction between e.g. thin-thick and double-repeat bars
-  // surviving a round trip, and getting every BarType/repeat-number
-  // combination exactly right is real, separate work.
-  return synthToken(ctx, TT.BARLINE, "|");
+const BAR_LEXEMES: Record<BarType, string> = {
+  [BarType.BarThin]: "|",
+  [BarType.BarThinThin]: "||",
+  [BarType.BarThickThin]: "[|",
+  [BarType.BarThinThick]: "|]",
+  [BarType.BarLeftRepeat]: "|:",
+  [BarType.BarRightRepeat]: ":|",
+  [BarType.BarDblRepeat]: "::",
+  [BarType.BarInvisible]: "[|]",
+};
+
+/**
+ * Writes a bar line of the type the element gives.
+ *
+ * Because the importer writes a left repeat at the start of a repeated measure in addition to the bar line that closes
+ * the previous measure, a left repeat that directly follows a bar line replaces it: "|" then "|:" is written "|:",
+ * and ":|" then "|:" is written "::". Otherwise the two would be written side by side, with an empty bar between them.
+ */
+function pushBarLine(ctx: ABCContext, bar: BarElement, out: music_code[]): void {
+  const lexeme = BAR_LEXEMES[bar.type] ?? "|";
+  const previous = out[out.length - 1];
+  if (bar.type === BarType.BarLeftRepeat && previous instanceof BarLine) {
+    const previousLexeme = previous.barline.map((token) => token.lexeme).join("");
+    const merged = previousLexeme === ":|" || previousLexeme === "::" ? "::" : "|:";
+    out[out.length - 1] = new BarLine(ctx.generateId(), [synthToken(ctx, TT.BARLINE, merged)]);
+    return;
+  }
+  out.push(new BarLine(ctx.generateId(), [synthToken(ctx, TT.BARLINE, lexeme)]));
 }
 
 /**

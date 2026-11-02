@@ -1,13 +1,13 @@
 import { expect } from "chai";
 import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
+import { TuneInterpreter } from "../interpreter/TuneInterpreter";
 import { ABCContext } from "../parsers/Context";
 import { AbcErrorReporter } from "../parsers/ErrorReporter";
 import { parse } from "../parsers/parse";
 import { Scanner } from "../parsers/scan";
-import { TuneInterpreter } from "../interpreter/TuneInterpreter";
 import { Tune } from "../types/abcjs-ast";
-import { normalizeForMusicXML } from "./normalize";
 import { serializeScorePartwise } from "./serialize";
+import { normalizeTune } from "./testSupport/unwrap";
 import { validateAgainstMusicXmlSchema } from "./testSupport/xsdValidation";
 
 function interpretABC(abc: string): Tune {
@@ -22,7 +22,7 @@ function interpretABC(abc: string): Tune {
 
 function exportToMusicXml(abc: string): string {
   const tune = interpretABC(abc);
-  return serializeScorePartwise(normalizeForMusicXML(tune));
+  return serializeScorePartwise(normalizeTune(tune));
 }
 
 const fixtures: Array<{ name: string; abc: string }> = [

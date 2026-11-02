@@ -1,12 +1,12 @@
 import { expect } from "chai";
 import { SemanticAnalyzer } from "./analyzers/semantic-analyzer";
+import { TuneInterpreter } from "./interpreter/TuneInterpreter";
 import { ABCContext } from "./parsers/Context";
 import { AbcErrorReporter } from "./parsers/ErrorReporter";
 import { parse } from "./parsers/parse";
 import { Scanner } from "./parsers/scan";
-import { TuneInterpreter } from "./interpreter/TuneInterpreter";
-import { Tune } from "./types/abcjs-ast";
 import { diatonicPitchToLetterAndMarks, tuneToAbcText } from "./tuneToAst";
+import { Tune } from "./types/abcjs-ast";
 
 function interpretABC(abc: string): Tune {
   const ctx = new ABCContext(new AbcErrorReporter());
@@ -205,5 +205,23 @@ C, D, E, F, |`;
       const reparsed = interpretABC(text);
       expect(summarizeTune(reparsed)).to.deep.equal(summarizeTune(original));
     });
+  });
+});
+
+describe("tuneToAbcText bar lines", () => {
+  function musicLine(abc: string): string {
+    const text = tuneToAbcText(interpretABC(abc), new ABCContext());
+    return text
+      .split("\n")
+      .find((line) => line.includes("|"))!
+      .trim();
+  }
+
+  it("writes the type of each bar line", () => {
+    expect(musicLine("X:1\nL:1/8\nK:C\n|: C D :| E F || G A |]\n")).to.equal("|: C D :| E F || G A |]");
+  });
+
+  it("writes a left repeat that follows a closing bar line once, merged with it", () => {
+    expect(musicLine("X:1\nL:1/8\nK:C\nC D | |: E F :| |: G A :|\n")).to.equal("C D |: E F :: G A :|");
   });
 });

@@ -2,8 +2,8 @@ import { expect } from "chai";
 import { ABCContext } from "../parsers/Context";
 import { tuneToAbcText } from "../tuneToAst";
 import { ElementType, NoteElement, StaffSystem, Tune } from "../types/abcjs-ast";
-import { importFromMusicSheet } from "./importFromMusicSheet";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
+import { importTune } from "./testSupport/unwrap";
 
 const ATTRIBUTES = `<attributes>
         <divisions>2</divisions>
@@ -53,7 +53,7 @@ function scoreXml(measures: string[]): string {
 }
 
 function convert(xml: string): { tune: Tune; body: string } {
-  const tune = importFromMusicSheet(parseMusicXmlToSheet(xml));
+  const tune = importTune(parseMusicXmlToSheet(xml));
   const text = tuneToAbcText(tune, new ABCContext());
   const lines = text.slice(text.indexOf("K:")).split("\n").slice(1);
   const body = lines

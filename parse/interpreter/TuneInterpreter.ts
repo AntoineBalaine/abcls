@@ -1114,6 +1114,10 @@ export class TuneInterpreter implements Visitor<void> {
   // visited at depth 0 are separated by whitespace and are never beamed.
   beamExprDepth = 0;
 
+  // Because a line that ends with a line continuation (a backslash) is joined to the next one, the end of that line is not
+  // a line break. The flag is set at the continuation and consumed by the end-of-line token that follows it.
+  lineContinuationPending = false;
+
   private sourceText: string = "";
   private lineOffsets: number[] = [];
 
@@ -1702,6 +1706,10 @@ export class TuneInterpreter implements Visitor<void> {
 
   visitToken(token: Token): void {
     if (token.type === TT.EOL) {
+      if (this.lineContinuationPending) {
+        this.lineContinuationPending = false;
+        return;
+      }
       this.markLineBreakAfterLastBar();
       return;
     }
@@ -2052,7 +2060,9 @@ export class TuneInterpreter implements Visitor<void> {
     }
   }
   visitVoiceOverlayExpr(_expr: Voice_overlay): void {}
-  visitLineContinuationExpr(_expr: Line_continuation): void {}
+  visitLineContinuationExpr(_expr: Line_continuation): void {
+    this.lineContinuationPending = true;
+  }
 
   visitTupletExpr(expr: Tuplet): void {
     // Parse tuplet notation: (p:q:r or (p:q or (p

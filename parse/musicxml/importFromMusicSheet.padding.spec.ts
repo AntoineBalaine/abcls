@@ -2,8 +2,8 @@ import { expect } from "chai";
 import { ABCContext } from "../parsers/Context";
 import { tuneToAbcText } from "../tuneToAst";
 import { BarType, ElementType, isBarElement, isMusicLine, NoteElement, RestType, StaffSystem, Tune, VoiceElement } from "../types/abcjs-ast";
-import { importFromMusicSheet } from "./importFromMusicSheet";
-import { parseMusicXmlToSheet } from "./testSupport/parseMusicXml";
+import { parseMusicXmlToSheet } from "./parseMusicXml";
+import { importTune } from "./testSupport/unwrap";
 
 const ATTRIBUTES_4_4 = `<attributes>
         <divisions>1</divisions>
@@ -35,7 +35,7 @@ function scoreXml(measures: string[], extraAttributes = ""): string {
 }
 
 function importXml(xml: string): Tune {
-  return importFromMusicSheet(parseMusicXmlToSheet(xml));
+  return importTune(parseMusicXmlToSheet(xml));
 }
 
 function staffSystems(tune: Tune): StaffSystem[] {

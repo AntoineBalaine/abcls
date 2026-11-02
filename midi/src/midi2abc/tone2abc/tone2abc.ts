@@ -626,40 +626,72 @@ const HEADER_LINE = /^(?:[A-Za-z]:|%%)/;
 const NOTE_PATTERN = /\^?([A-Ga-g])([,']*)|(\|)/g;
 
 /**
+ * The sharps in force while restateNaturals walks one line, under the two readings of ABC accidentals.
+ */
+export interface NaturalsWalkState {
+  /** The letters whose last accidental in the bar was a sharp, when an accidental reaches every octave of its letter. */
+  sharpLetters: Set<string>;
+  /** The pitches (letter, case and octave marks) that carry a sharp in the bar, when an accidental reaches its own octave only. */
+  sharpPitches: Set<string>;
+}
+
+/**
  * Because the generator writes a sharp on the notes that need one and nothing
  * on the others, while ABC keeps an accidental in force until the end of the
- * bar for the same pitch, a natural note that follows a sharp of the same
- * pitch in a bar would be read as sharp. Because readers differ on whether an
- * accidental reaches the other octaves of the same letter (the editor's own
- * transforms treat it as reaching them), the `=` is also written in front of
- * the same letter in another octave. This walks every music line and writes
- * it, so that the pitches of the MIDI file are the pitches of the score under
- * either reading. The key is C major, so the default is natural.
+ * bar, a natural note that follows a sharp in a bar could be read as sharp.
+ * Because readers differ on whether an accidental reaches the other octaves of
+ * the same letter, the `=` is written whenever either reading would keep a
+ * sharp in force: a sharp on the same letter in any octave that no natural has
+ * cancelled yet, or a sharp on the very same pitch earlier in the bar. The
+ * pitches of the MIDI file are then the pitches of the score under either
+ * reading. The key is C major, so the default is natural.
  */
 export function restateNaturals(abc: string): string {
   return abc
     .split("\n")
-    .map((line) => {
-      if (HEADER_LINE.test(line)) return line;
-      const sharpened = new Set<string>();
-      return line.replace(NOTE_PATTERN, (match: string, letter?: string, _marks?: string, bar?: string) => {
-        if (bar) {
-          sharpened.clear();
-          return match;
-        }
-        const key = letter!.toUpperCase();
-        if (match.startsWith("^")) {
-          sharpened.add(key);
-          return match;
-        }
-        if (sharpened.has(key)) {
-          sharpened.delete(key);
-          return "=" + match;
-        }
-        return match;
-      });
-    })
+    .map((line) => (HEADER_LINE.test(line) ? line : restateNaturalsInLine(line)))
     .join("\n");
+}
+
+/**
+ * Writes the restated naturals of one music line.
+ */
+export function restateNaturalsInLine(line: string): string {
+  const state: NaturalsWalkState = { sharpLetters: new Set(), sharpPitches: new Set() };
+  const pattern = new RegExp(NOTE_PATTERN.source, "g");
+  let result = "";
+  let copied = 0;
+  for (let match = pattern.exec(line); match !== null; match = pattern.exec(line)) {
+    result += line.slice(copied, match.index) + restatedToken(match[0], match[1], match[2], match[3], state);
+    copied = match.index + match[0].length;
+  }
+  return result + line.slice(copied);
+}
+
+/**
+ * Returns the text of one matched note or bar line, with a restated natural when one is needed.
+ */
+export function restatedToken(text: string, letter: string | undefined, marks: string | undefined, bar: string | undefined, state: NaturalsWalkState): string {
+  if (bar !== undefined) {
+    state.sharpLetters.clear();
+    state.sharpPitches.clear();
+    return text;
+  }
+  const letterKey = letter!.toUpperCase();
+  const pitchKey = `${letter}${marks ?? ""}`;
+  if (text.startsWith("^")) {
+    state.sharpLetters.add(letterKey);
+    state.sharpPitches.add(pitchKey);
+    return text;
+  }
+  if (state.sharpLetters.has(letterKey) || state.sharpPitches.has(pitchKey)) {
+    // Because a natural cancels the sharp of its own pitch under both readings, and of its whole letter under the
+    // letter-wide reading, both records are cleared; a sharp on the letter in another octave stays recorded for that pitch.
+    state.sharpLetters.delete(letterKey);
+    state.sharpPitches.delete(pitchKey);
+    return "=" + text;
+  }
+  return text;
 }
 
 export function tone2abc(ns: NoteSequence, options?: ConversionOptions): string {
