@@ -1,12 +1,25 @@
-import { KeyAccidental, KeyRoot, KeySignature } from "abcls-parser/types/abcjs-ast";
 import { MAJOR_KEY_SHARPS, MODE_FIFTH_OFFSET } from "abcls-parser/music-theory/constants";
+import { KeyAccidental, KeyRoot, KeySignature } from "abcls-parser/types/abcjs-ast";
 
 /**
  * The tonic names we can give to a key, by pitch class.
  *
  * Because the library derives a key signature from a tonic that is in MAJOR_KEY_SHARPS, we only offer names from that table.
  */
-const TONIC_NAMES_BY_PITCH_CLASS: string[][] = [["C"], ["C#", "Db"], ["D"], ["Eb"], ["E"], ["F"], ["F#", "Gb"], ["G"], ["Ab"], ["A"], ["Bb"], ["B", "Cb"]];
+const TONIC_NAMES_BY_PITCH_CLASS: string[][] = [
+  ["C"],
+  ["C#", "Db"],
+  ["D"],
+  ["D#", "Eb"],
+  ["E"],
+  ["F"],
+  ["F#", "Gb"],
+  ["G"],
+  ["G#", "Ab"],
+  ["A"],
+  ["A#", "Bb"],
+  ["B", "Cb"],
+];
 
 const PITCH_CLASS_BY_TONIC_NAME: Record<string, number> = {};
 TONIC_NAMES_BY_PITCH_CLASS.forEach((names, pitchClass) => names.forEach((name) => (PITCH_CLASS_BY_TONIC_NAME[name] = pitchClass)));

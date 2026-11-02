@@ -1,6 +1,7 @@
+import { isChordSymbolText } from "abcls-parser/music-theory/scanChordSymbol";
 import { expect } from "chai";
 import { describe, it } from "mocha";
-import { isChordSymbolText, transposeChordText } from "../src/transforms/transposeChord";
+import { transposeChordText } from "../src/transforms/transposeChord";
 
 describe("transposeChordText", () => {
   it("moves the root by the steps of the interval, so Bb goes to Ab when F major goes to Eb major", () => {

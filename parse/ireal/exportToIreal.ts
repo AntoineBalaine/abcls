@@ -15,13 +15,13 @@
  */
 
 import { ABCContext } from "../parsers/Context";
+import { parse } from "../parsers/parse";
 import { parseAbcx } from "../parsers/parse_abcx";
+import { Scanner } from "../parsers/scan";
 import { ScannerAbcx } from "../parsers/scan_abcx_tunebody";
 import { File_structure, Info_line, Tune } from "../types/Expr";
-import { Scanner } from "../parsers/scan";
-import { parse } from "../parsers/parse";
 import { abcTuneToIrealChart, AbcToIrealOptions } from "./abcToIrealChart";
-import { abcxTuneToIrealChart, abcxTuneToSongFields } from "./abcxToIrealChart";
+import { abcxTuneToIrealChart, abcxTuneToSongFields, report } from "./abcxToIrealChart";
 import { buildPlaylistLink, IrealSongFields, withChordDataMarker } from "./fields";
 import { writeGrid } from "./gridWriter";
 import { scramble } from "./scramble";
@@ -70,8 +70,10 @@ export interface AbcToIrealLinkOptions extends AbcToIrealOptions {
  *
  * The chords are read from one voice of each tune (see `abcToIrealChart.ts`), and the key is the key written in the
  * header, so a tune is exported in the key it is written in.
+ *
+ * @returns The link, or null when no tune can be exported; the reason is then reported to the context's error reporter
  */
-export function exportAbcToIrealLink(abcSource: string, options: AbcToIrealLinkOptions = {}, ctx: ABCContext = new ABCContext()): string {
+export function exportAbcToIrealLink(abcSource: string, options: AbcToIrealLinkOptions = {}, ctx: ABCContext = new ABCContext()): string | null {
   const fileStructure: File_structure = parse(Scanner(abcSource, ctx), ctx);
 
   const songs: IrealSongFields[] = [];
@@ -88,7 +90,8 @@ export function exportAbcToIrealLink(abcSource: string, options: AbcToIrealLinkO
   }
 
   if (songs.length === 0) {
-    throw new Error("No tune to export: the file has no tune, or none of them matches the requested X: numbers");
+    report(ctx, "No tune to export: the file has no tune, or none of them matches the requested X: numbers", "", 0);
+    return null;
   }
 
   return buildPlaylistLink({ songs });

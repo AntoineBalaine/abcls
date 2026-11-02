@@ -12,9 +12,9 @@
  * - A chord written after the last bar line of a line, with no music after it, belongs to no bar, so we report it and skip it.
  */
 
-import { ABCContext } from "../parsers/Context";
-import { scanChordSymbol } from "../music-theory/scanChordSymbol";
+import { isChordSymbolText } from "../music-theory/scanChordSymbol";
 import { ParsedChord } from "../music-theory/types";
+import { ABCContext } from "../parsers/Context";
 import {
   Annotation as AbcAnnotation,
   BarLine,
@@ -30,7 +30,19 @@ import {
   Tune,
   Tuplet,
 } from "../types/Expr";
-import { applyField, annotationBody, closeSection, createWalk, flushBar, navigationMarker, parseMeter, readBarLine, readChord, report, Walk } from "./abcxToIrealChart";
+import {
+  applyField,
+  annotationBody,
+  closeSection,
+  createWalk,
+  flushBar,
+  navigationMarker,
+  parseMeter,
+  readBarLine,
+  readChord,
+  report,
+  Walk,
+} from "./abcxToIrealChart";
 import { IrealChart } from "./gridAst";
 
 export interface AbcToIrealOptions {
@@ -48,12 +60,23 @@ function fieldKeyAndValue(node: Expr): { key: string; value: string; position: n
   if (node instanceof Inline_field) {
     return {
       key: node.field.lexeme.replace(/:$/, ""),
-      value: (node.text ?? []).map((token) => token.lexeme).join("").replace(/^[A-Za-z]:/, "").trim(),
+      value: (node.text ?? [])
+        .map((token) => token.lexeme)
+        .join("")
+        .replace(/^[A-Za-z]:/, "")
+        .trim(),
       position: node.field.position,
     };
   }
   if (node instanceof Info_line) {
-    return { key: node.key.lexeme.replace(/:$/, ""), value: node.value.map((token) => token.lexeme).join("").trim(), position: node.key.position };
+    return {
+      key: node.key.lexeme.replace(/:$/, ""),
+      value: node.value
+        .map((token) => token.lexeme)
+        .join("")
+        .trim(),
+      position: node.key.position,
+    };
   }
   return null;
 }
@@ -63,14 +86,26 @@ function voiceIdOf(value: string): string {
 }
 
 /**
+ * Returns the id of the first voice that the tune header declares, or "" when it declares none.
+ */
+function firstHeaderVoice(tune: Tune): string {
+  for (const line of tune.tune_header.info_lines) {
+    const field = line instanceof Info_line ? fieldKeyAndValue(line) : null;
+    if (field !== null && field.key === "V") return voiceIdOf(field.value);
+  }
+  return "";
+}
+
+/**
  * Splits the body into lines and tells which voice each line belongs to.
  *
  * Because the parser groups the lines of all the voices written one under the other into a single system,
  * we start a new line at each voice field, so every line holds the bars of one voice only.
+ * Because the music written before any voice field belongs to the first voice of the header, the body starts in that voice.
  */
 function readBodyLines(tune: Tune): BodyLine[] {
   const lines: BodyLine[] = [];
-  let voice = "";
+  let voice = firstHeaderVoice(tune);
   for (const system of tune.tune_body?.sequence ?? []) {
     let current: BodyLine = { voice, nodes: [] };
     for (const node of system) {
@@ -87,18 +122,12 @@ function readBodyLines(tune: Tune): BodyLine[] {
   return lines;
 }
 
-/** True when the annotation reads as a chord symbol. */
-function isChordText(text: string): boolean {
-  const scanned = scanChordSymbol(text);
-  return scanned !== null && scanned.consumed === text.length;
-}
-
 function chooseChordVoice(lines: BodyLine[], requested: string | undefined): string {
   if (requested !== undefined) return requested;
   const counts = new Map<string, number>();
   for (const line of lines) {
     for (const node of line.nodes) {
-      if (node instanceof AbcAnnotation && isChordText(annotationBody(node.text.lexeme))) {
+      if (node instanceof AbcAnnotation && isChordSymbolText(annotationBody(node.text.lexeme))) {
         counts.set(line.voice, (counts.get(line.voice) ?? 0) + 1);
       }
     }
@@ -115,7 +144,9 @@ function chooseChordVoice(lines: BodyLine[], requested: string | undefined): str
 }
 
 function holdsMusic(node: Expr): boolean {
-  return node instanceof Note || node instanceof Rest || node instanceof MultiMeasureRest || node instanceof Chord || node instanceof Beam || node instanceof Tuplet;
+  return (
+    node instanceof Note || node instanceof Rest || node instanceof MultiMeasureRest || node instanceof Chord || node instanceof Beam || node instanceof Tuplet
+  );
 }
 
 /** The chords each bar of a line names, bar by bar. */
@@ -126,7 +157,7 @@ function chordsByBar(line: BodyLine, ctx: ABCContext): ParsedChord[][] {
       bars.push([]);
     } else if (node instanceof AbcAnnotation) {
       const text = annotationBody(node.text.lexeme);
-      if (isChordText(text)) {
+      if (isChordSymbolText(text)) {
         const chord = readChord(text, ctx, node.text.position);
         if (chord !== null) bars[bars.length - 1].push(chord);
       }
@@ -152,7 +183,7 @@ function readChordLine(line: BodyLine, walk: Walk, state: VoiceState, ctx: ABCCo
   for (const node of line.nodes) {
     if (node instanceof AbcAnnotation) {
       const text = annotationBody(node.text.lexeme);
-      if (isChordText(text)) {
+      if (isChordSymbolText(text)) {
         const chord = readChord(text, ctx, node.text.position);
         if (chord !== null) {
           walk.cells.push({ kind: "chord", chord, small: false, slot: walk.cells.length });
@@ -182,7 +213,7 @@ function readChordLine(line: BodyLine, walk: Walk, state: VoiceState, ctx: ABCCo
     } else if (!(node instanceof Comment)) {
       const field = fieldKeyAndValue(node);
       if (field !== null) {
-        if (field.key === "P" || field.key === "M") applyField(field.key, field.value, field.position, walk, ctx);
+        if (field.key === "P" || field.key === "M") applyField(field.key, meterAsFraction(field.key, field.value), field.position, walk, ctx);
       } else if (holdsMusic(node)) {
         hasMusic = true;
       }
@@ -200,16 +231,30 @@ function readChordLine(line: BodyLine, walk: Walk, state: VoiceState, ctx: ABCCo
 function readOtherLine(line: BodyLine, walk: Walk, ctx: ABCContext): void {
   for (const node of line.nodes) {
     const field = fieldKeyAndValue(node);
-    if (field !== null && (field.key === "P" || field.key === "M")) applyField(field.key, field.value, field.position, walk, ctx);
+    if (field !== null && (field.key === "P" || field.key === "M")) applyField(field.key, meterAsFraction(field.key, field.value), field.position, walk, ctx);
   }
+}
+
+/**
+ * Writes the common time and cut time symbols ("C" and "C|") of a meter field as the fractions they stand for.
+ * Because the iReal Pro grid only reads fractions, every M: field (in the header, in the body or inline) goes through it.
+ */
+function meterAsFraction(key: string, value: string): string {
+  if (key !== "M") return value;
+  return value === "C" ? "4/4" : value === "C|" ? "2/2" : value;
 }
 
 /** The meter the header gives, as a time signature, with "C" and "C|" read as common and cut time. */
 function headerMeter(tune: Tune, walk: Walk, ctx: ABCContext): void {
   for (const line of tune.tune_header.info_lines) {
     if (!(line instanceof Info_line) || line.key.lexeme !== "M:") continue;
-    const text = line.value.map((token) => token.lexeme).join("").trim();
-    const value = text === "C" ? "4/4" : text === "C|" ? "2/2" : text;
+    const value = meterAsFraction(
+      "M",
+      line.value
+        .map((token) => token.lexeme)
+        .join("")
+        .trim()
+    );
     if (parseMeter(value, ctx, line.key.position) !== null) applyField("M", value, line.key.position, walk, ctx);
     return;
   }

@@ -1,15 +1,9 @@
-import { scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
+import { LETTERS, NATURAL_SEMITONES } from "abcls-parser/music-theory/constants";
+import { isChordSymbolText } from "abcls-parser/music-theory/scanChordSymbol";
+import { NoteLetter } from "./pitchHelpers";
 
-const NATURAL_PITCH_CLASS: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-const LETTERS = ["C", "D", "E", "F", "G", "A", "B"];
 const FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-
-/** True when the whole text reads as a chord symbol. */
-export function isChordSymbolText(text: string): boolean {
-  const scanned = scanChordSymbol(text);
-  return scanned !== null && scanned.consumed === text.length;
-}
 
 /**
  * Transposes one note name of a chord, such as "Bb" or "F#".
@@ -19,12 +13,12 @@ export function isChordSymbolText(text: string): boolean {
  * names when going down and sharp names when going up.
  */
 function transposeNoteName(letter: string, accidental: string, semitones: number, steps: number | null): string {
-  const pitchClass = NATURAL_PITCH_CLASS[letter] + (accidental === "#" ? 1 : accidental === "b" ? -1 : 0);
+  const pitchClass = NATURAL_SEMITONES[letter as NoteLetter] + (accidental === "#" ? 1 : accidental === "b" ? -1 : 0);
   const target = (((pitchClass + semitones) % 12) + 12) % 12;
   if (steps !== null) {
-    const newLetter = LETTERS[(((LETTERS.indexOf(letter) + steps) % 7) + 7) % 7];
+    const newLetter = LETTERS[(((LETTERS.indexOf(letter as NoteLetter) + steps) % 7) + 7) % 7];
     // Because the difference is only meaningful modulo an octave, we fold it into the range -6..5.
-    let alteration = (((target - NATURAL_PITCH_CLASS[newLetter]) % 12) + 12) % 12;
+    let alteration = (((target - NATURAL_SEMITONES[newLetter]) % 12) + 12) % 12;
     if (alteration > 6) alteration -= 12;
     if (Math.abs(alteration) <= 1) return newLetter + (alteration === 1 ? "#" : alteration === -1 ? "b" : "");
   }

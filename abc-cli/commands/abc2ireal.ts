@@ -21,7 +21,7 @@ export const abc2irealCommand = new Command("abc2ireal")
   .option("-o, --output <file>", "Write the link to this file (an .html extension writes a page that iReal Pro can open); writes to stdout if omitted")
   .option("-t, --tune <numbers...>", "Export only the specified tunes by X:number (supports comma-separated, dash-separated or repeated flags)")
   .option("--voice <id>", "ABC only: the voice that carries the chords (defaults to the voice with the most chord symbols)")
-  .option("--style <name>", "ABC only: the iReal Pro style to use when the tune has no %%irealstyle directive, e.g. \"Medium Swing\"")
+  .option("--style <name>", 'ABC only: the iReal Pro style to use when the tune has no %%irealstyle directive, e.g. "Medium Swing"')
   .action((file: string, options: { output?: string; tune?: string | string[]; voice?: string; style?: string }) => {
     const content = readAbcFile(file);
     const ctx = new ABCContext();
@@ -32,10 +32,12 @@ export const abc2irealCommand = new Command("abc2ireal")
         ? exportAbcxToIrealLink(content, ctx)
         : exportAbcToIrealLink(content, { tunes: tuneNumbers.length > 0 ? tuneNumbers : undefined, voice: options.voice, style: options.style }, ctx);
 
-      // Because the export reports what it could not express rather than failing, we show those conditions as warnings.
+      // Because the export reports what it could not express rather than failing, we show those conditions as warnings,
+      // unless no link came out at all, in which case they are the reason of the failure.
       for (const error of ctx.errorReporter.getErrors()) {
-        console.error(`Warning: ${error.message}`);
+        console.error(`${link === null ? "Error" : "Warning"}: ${error.message}`);
       }
+      if (link === null) process.exit(1);
 
       if (options.output) {
         writeFileSync(options.output, options.output.endsWith(".html") ? linkPage(link) : `${link}\n`);

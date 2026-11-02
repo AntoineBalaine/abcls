@@ -92,33 +92,42 @@ export function paginateSvgs(tunes: string[][], geometry: PageGeometry = A4_PORT
   const pages: string[] = [];
 
   for (const tune of tunes) {
-    let body: string[] = [];
-    let y = geometry.margin;
-
-    const flush = (): void => {
-      if (body.length === 0) return;
-      pages.push(
-        `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${geometry.width}" height="${geometry.height}" ` +
-          `viewBox="0 0 ${geometry.width} ${geometry.height}"><rect width="${geometry.width}" height="${geometry.height}" fill="white"/>${body.join("")}</svg>`
-      );
-      body = [];
-      y = geometry.margin;
-    };
+    const page: PageInProgress = { body: [], y: geometry.margin };
 
     for (const svg of tune) {
       const line = measureSvg(svg);
       if (line === null) continue;
       const scale = Math.min(1, contentWidth / line.width);
       const height = line.height * scale;
-      if (body.length > 0 && y + height > bottom) flush();
+      if (page.body.length > 0 && page.y + height > bottom) flushPage(page, geometry, pages);
 
-      body.push(
-        `<svg${line.attributes} x="${geometry.margin}" y="${y.toFixed(2)}" width="${(line.width * scale).toFixed(2)}" ` +
+      page.body.push(
+        `<svg${line.attributes} x="${geometry.margin}" y="${page.y.toFixed(2)}" width="${(line.width * scale).toFixed(2)}" ` +
           `height="${height.toFixed(2)}" viewBox="${line.viewBox}">${line.inner}</svg>`
       );
-      y += height;
+      page.y += height;
     }
-    flush();
+    flushPage(page, geometry, pages);
   }
   return pages;
+}
+
+/** The page being filled by paginateSvgs: the lines placed on it, and the height they reach. */
+export interface PageInProgress {
+  body: string[];
+  y: number;
+}
+
+/**
+ * Writes the page being filled, if it holds a line, and starts an empty page at the top margin.
+ */
+export function flushPage(page: PageInProgress, geometry: PageGeometry, pages: string[]): void {
+  if (page.body.length > 0) {
+    pages.push(
+      `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${geometry.width}" height="${geometry.height}" ` +
+        `viewBox="0 0 ${geometry.width} ${geometry.height}"><rect width="${geometry.width}" height="${geometry.height}" fill="white"/>${page.body.join("")}</svg>`
+    );
+  }
+  page.body = [];
+  page.y = geometry.margin;
 }

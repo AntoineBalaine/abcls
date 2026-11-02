@@ -1,11 +1,18 @@
 import { expect } from "chai";
 import { describe, it } from "mocha";
-import { ABCContext } from "../parsers/Context";
 import { exportAbcToIrealLink, parsePlaylistLink, scanGrid, stripChordDataMarker, tokensToGridText, unscramble } from "../index";
+import { ABCContext } from "../parsers/Context";
 
 function gridOf(abc: string, options: Parameters<typeof exportAbcToIrealLink>[1] = {}): { grid: string; link: string; ctx: ABCContext } {
   const ctx = new ABCContext();
   const link = exportAbcToIrealLink(abc, options, ctx);
+  if (link === null)
+    expect.fail(
+      ctx.errorReporter
+        .getErrors()
+        .map((error) => error.message)
+        .join("; ")
+    );
   const song = parsePlaylistLink(link).songs[0];
   return { grid: tokensToGridText(scanGrid(unscramble(stripChordDataMarker(song.rawChordData)), new ABCContext())), link, ctx };
 }
@@ -58,11 +65,30 @@ describe("exportAbcToIrealLink", () => {
 
   it("exports only the tunes with the requested X: numbers", () => {
     const abc = 'X:1\nT:first\nK:C\n"C" c4|]\n\nX:2\nT:second\nK:D\n"D" d4|]\n';
-    const playlist = parsePlaylistLink(exportAbcToIrealLink(abc, { tunes: [1] }));
+    const playlist = parsePlaylistLink(exportAbcToIrealLink(abc, { tunes: [1] })!);
     expect(playlist.songs.map((song) => song.title)).to.deep.equal(["first"]);
   });
 
-  it("throws when no tune matches", () => {
-    expect(() => exportAbcToIrealLink('X:1\nT:t\nK:C\n"C" c4|]\n', { tunes: [9] })).to.throw("No tune to export");
+  it("reports an error and gives no link when no tune matches", () => {
+    const ctx = new ABCContext();
+    expect(exportAbcToIrealLink('X:1\nT:t\nK:C\n"C" c4|]\n', { tunes: [9] }, ctx)).to.equal(null);
+    expect(
+      ctx.errorReporter
+        .getErrors()
+        .map((error) => error.message)
+        .join("\n")
+    ).to.contain("No tune to export");
+  });
+
+  it("starts the body in the first voice of the header, so --voice finds it", () => {
+    const { grid } = gridOf('X:1\nT:t\nM:4/4\nL:1/4\nV:1\nK:C\n"C"C4|"F"F4|"G"G4|"C"C4|\n', { voice: "1" });
+    expect(grid).to.contain("C|F|G|C");
+  });
+
+  it("reads common time and cut time in a meter change of the body as the fractions they stand for", () => {
+    const common = gridOf('X:1\nT:t\nM:3/4\nL:1/4\nK:C\n"C"C3|[M:C]"F"F4|"G"G4|\n');
+    const fraction = gridOf('X:1\nT:t\nM:3/4\nL:1/4\nK:C\n"C"C3|[M:4/4]"F"F4|"G"G4|\n');
+    expect(common.ctx.errorReporter.getErrors().map((error) => error.message)).to.deep.equal([]);
+    expect(common.grid).to.equal(fraction.grid);
   });
 });
