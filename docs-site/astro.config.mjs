@@ -46,6 +46,8 @@ export default defineConfig({
               slug: "user-guide/preview-and-playback",
             },
             { label: "ABCx Chord Sheets", slug: "user-guide/abcx-chord-sheets" },
+            { label: "iReal Pro Export", slug: "user-guide/ireal-export" },
+            { label: "MusicXML", slug: "user-guide/musicxml" },
             { label: "Kakoune Integration", slug: "user-guide/kakoune" },
           ],
         },

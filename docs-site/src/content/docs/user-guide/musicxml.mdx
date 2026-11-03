@@ -1,0 +1,71 @@
+---
+title: MusicXML
+description: Exporting ABC to MusicXML and importing MusicXML as ABC
+---
+
+abcls converts a tune to MusicXML and back, so that a score can move between ABC and a notation program such as MuseScore, Finale, Sibelius or Dorico. The two commands are `abc2xml` and `xml2abc`.
+
+```bash
+abcls abc2xml myfile.abc -o myfile.musicxml
+abcls xml2abc myscore.musicxml -o myscore.abc
+```
+
+Because the conversion goes through the notes of the score and not through its text, the notes, their durations and their markings survive both ways. Layout details of a notation program, and some details of an ABC file, do not. The sections below list what each direction keeps, and what it leaves out.
+
+## Exporting ABC to MusicXML
+
+`abc2xml` writes MusicXML 4.0 in the partwise form. A file that holds several tunes stops with an error, because a MusicXML file holds one score: split the file first.
+
+What the export writes:
+
+- Notes, rests and chords, with their durations.
+- Ties, slurs, grace notes and tuplets.
+- Decorations that MusicXML names, such as `!trill!` and `.` (staccato). They are written as ornaments and articulations.
+- Clefs, key signatures (major, minor and the modes) and time signatures. Common time (`M:C`) and cut time (`M:C|`) keep their symbol. A key, a meter or a clef that changes in the middle of the tune is written at the measure where it changes.
+- Chord symbols in quotes, written as MusicXML harmonies, so that a notation program shows them as chord symbols and not as text. A quoted text that is not a chord (`"Fine"`, `"^allegro"`) is left out, because MusicXML holds it as a direction and not as a harmony.
+- Line breaks. Each line of the ABC source that ends at a bar line starts a new system in the score, and a line that ends in the middle of a measure does not.
+
+How the voices are laid out:
+
+- Each staff becomes one part, named `P1`, `P2` and so on.
+- Voices that share a staff (`V:2 merge`, or `%%score (1 2)`) become voices of the same part.
+
+What the export leaves out:
+
+- The title (`T:`), the composer (`C:`) and the other header fields. The names of the voices are not written either, which is why the parts are called `P1` and `P2`.
+- The tempo (`Q:`).
+- Repeat signs, volta endings and the style of the bar lines.
+- Beams.
+
+## Importing MusicXML as ABC
+
+`xml2abc` reads a raw `.xml` or `.musicxml` file. Because the reader does not open compressed files, a `.mxl` file stops with an error: extract it first.
+
+How the score is laid out in ABC:
+
+- Each staff of the score becomes a voice, written with inline `V:` markers. Because MusicXML numbers its voices inside each part, the voice ids that the import chooses are `1` for the first voice, and ids such as `1_2` for the voices that come after it.
+- The lines follow the layout of the MusicXML file, where it marks the start of a new system. When it does not, a line holds four bars. `--bars-per-line <n>` sets the number of bars of every line instead.
+- A stretch where a voice is silent is filled with rests, `X` for a measure in which the voice has no note at all and `z` for a gap inside a measure. A voice that has no pitched note anywhere is left out.
+- Chord symbols are written as quoted annotations. Because the reader spells every chord kind its own way, an imported symbol uses that spelling (`Cmaj6` and not `C6`), and a kind that it cannot name comes back as its root alone.
+- Key signatures are read for every mode, up to seven sharps or flats.
+
+Because the import tells you about what it cannot express, instead of dropping it silently, the command exits with an error and prints one line per reason. The content that stops the import is:
+
+- Tablature staves.
+- Microtonal accidentals, other than the quarter-tone sharp and flat.
+- Tuplets inside tuplets.
+- Grace notes written after the note they ornament.
+- A key signature beyond seven sharps or flats.
+
+Some content is imported in a simpler form, without any message:
+
+- Every bar line is written as a plain `|`, so repeat signs and endings are lost.
+- A beam over a rest, a beam that crosses a bar line and the secondary beam breaks are not kept.
+- Figured bass is dropped.
+- A clef change in the middle of a measure is not read, and a change to a clef that ABC does not have is skipped.
+
+The complete list, with the reasons, is in `parse/musicxml/KNOWN_GAPS.md` in the repository.
+
+## Going both ways
+
+Because both directions keep the notes, a tune that goes from ABC to MusicXML and back holds the same notes, in the same voices. The header fields, the tempo, the repeats and the part names are the things that do not come back, because the export does not write them.

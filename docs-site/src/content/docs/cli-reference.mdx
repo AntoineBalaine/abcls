@@ -42,8 +42,17 @@ abcls render myfile.abc
 Options:
 
 - `-t, --tune <numbers...>` -- render only the specified tunes by X: number (supports comma-separated, dash-separated, or repeated flags)
+- `--pages <dir>` -- write the score as A4 pages, one SVG file per page (`page-001.svg`, `page-002.svg`, and so on), into this directory, instead of printing the SVG of each tune
 - `--ignore-parse-errors` -- continue rendering even if the ABC file has parsing errors
 - `--ignore-missing-tunes` -- continue rendering even if some requested tunes are not found
+
+### Making a PDF
+
+Because `render` only writes SVG, a PDF comes from giving the pages to another tool. With `rsvg-convert` (from librsvg), the pages of every tune of the file become one PDF:
+
+```bash
+abcls render score.abc --pages pages && rsvg-convert -f pdf -o score.pdf pages/page-*.svg
+```
 
 ## abc2midi
 
@@ -71,6 +80,35 @@ Options:
 - `-o, --output <file>` -- output ABC file path (writes to stdout if omitted)
 - `--title <title>` -- set the title (T: field)
 - `--composer <composer>` -- set the composer (C: field)
+
+## abc2xml
+
+Exports one tune of an ABC file as MusicXML 4.0, the exchange format that MuseScore, Finale, Sibelius, Dorico and most notation programs read.
+
+```bash
+abcls abc2xml myfile.abc -o myfile.musicxml
+```
+
+Options:
+
+- `-o, --output <file>` -- output MusicXML file path (writes to stdout if omitted)
+
+Because MusicXML holds one score per file, a file that holds several tunes stops with an error that asks you to split it first. The [MusicXML guide](/abcls/user-guide/musicxml/) lists what the export writes and what it leaves out.
+
+## xml2abc
+
+Converts a MusicXML file to ABC notation.
+
+```bash
+abcls xml2abc myscore.musicxml -o myscore.abc
+```
+
+Options:
+
+- `-o, --output <file>` -- output ABC file path (writes to stdout if omitted)
+- `--bars-per-line <n>` -- break the lines every `n` bars, instead of following the layout of the MusicXML file
+
+Because the reader only takes raw XML, a compressed file (`.mxl`) stops with an error: extract it first, and give the `.xml` or `.musicxml` file inside. The command exits with an error, and prints each reason, when the file holds something that ABC cannot express. See the [MusicXML guide](/abcls/user-guide/musicxml/) for the list.
 
 ## abcx2abc
 
@@ -119,7 +157,28 @@ Options:
 
 - `--voice <ids>` -- only transform the music of these voices (comma-separated ids)
 - `--lines <range>` -- only transform these lines, counted from 1 (for example `10` or `10-20`), or a range of text given as line:column positions, where columns also count from 1 and the end column is included (for example `10:5-12:20`)
+- `--keys` -- with `transpose`, also transpose the key signatures (the `K:` fields) so that they follow the notes
+- `--chords` -- with `transpose`, also transpose the chord symbols
+- `--as-new-tune <label>` -- apply the transform to a copy of the tune, and append that copy to the file as a new tune
+- `--tune <number>` -- with `--as-new-tune`, the `X:` number of the tune to copy (the first tune by default)
 - `-w, --write` -- write the result back to the file (otherwise prints to stdout)
+
+### Transposing a whole tune
+
+Because a transposed score also needs its key signature and its chord symbols to move, `--keys` and `--chords` rewrite them together with the notes. The flags only apply to `transpose`, and any other transform stops with an error. Notes and chords move by the same interval, so the spelling stays consistent: with a tune in C minor, a transposition down a tone gives B flat minor, and the chord `Fm` becomes `Ebm`.
+
+```bash
+abcls transform myfile.abc transpose --keys --chords -- -2
+```
+
+Because a negative number looks like an option, it is written after `--`.
+
+To keep the original tune next to its transposition (for example to write the part of a B flat clarinet), `--as-new-tune` leaves the original untouched and appends the transformed copy after a blank line. The copy gets the next free `X:` number, and its title (`T:`) gets the label in parentheses, so a tune titled `Blue Moon` and a label `Bb clarinet` give `Blue Moon (Bb clarinet)`. `--voice` and `--lines` still count the lines of the file, so they select the same text as without the flag.
+
+```bash
+abcls transform myfile.abc transpose 2 --keys --chords --as-new-tune "Bb clarinet" -w
+abcls transform myfile.abc transpose 2 --as-new-tune "Bb clarinet" --tune 3 -w
+```
 
 Without `--voice` and `--lines`, the transform applies to the whole file. The transforms that depend on the chord symbols read them by position in time, so a chord symbol written in one voice applies to the notes of every voice that sounds at the same time.
 
