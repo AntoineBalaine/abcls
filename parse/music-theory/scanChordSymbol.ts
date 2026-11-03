@@ -55,7 +55,9 @@ function scanQuality(ctx: ChordScanCtx): boolean {
   // Order matters: longest match first
   // sus4 and sus2 must come before sus
   // The triangles ("▵", "△" and the Greek capital delta) are the jazz symbol of the major seventh chord.
-  const qualities = ["maj", "min", "dim", "aug", "sus4", "sus2", "sus", "add", "alt", "-^", "o^", "M", "m", "+", "-", "°", "ø", "Ø", "▵", "△", "Δ"];
+  // Because the minor chord with a major seventh is written "mM7", "mMaj7", "m^7", "-M7" and "-Maj7", these spellings come
+  // before "maj", "min", "m" and "-", which would otherwise take their first letters and leave the rest unread.
+  const qualities = ["mMaj", "mM", "m^", "-Maj", "-M", "Maj", "maj", "min", "dim", "aug", "sus4", "sus2", "sus", "add", "alt", "-^", "o^", "M", "m", "+", "-", "°", "ø", "Ø", "▵", "△", "Δ"];
   for (const q of qualities) {
     if (remaining.startsWith(q)) {
       pushToken(ctx, ChordTT.QUALITY, q);

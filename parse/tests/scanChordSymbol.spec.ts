@@ -22,6 +22,24 @@ function BASS_SLASH() {
 }
 
 describe("scanChordSymbol", () => {
+  describe("minor chord with a major seventh", () => {
+    it('scans "EbmM7", "EbmMaj7", "Ebm^7", "Eb-M7" and "Eb-Maj7" whole', () => {
+      for (const text of ["EbmM7", "EbmMaj7", "Ebm^7", "Eb-M7", "Eb-Maj7"]) {
+        expect(scanChordSymbol(text)!.consumed, text).to.equal(text.length);
+      }
+    });
+
+    it('still scans "Cm7", "Cmaj7" and "Cmin7" as before', () => {
+      expect(scanChordSymbol("Cm7")!.tokens.map((t) => t.lexeme)).to.deep.equal(["C", "m", "7"]);
+      expect(scanChordSymbol("Cmaj7")!.tokens.map((t) => t.lexeme)).to.deep.equal(["C", "maj", "7"]);
+      expect(scanChordSymbol("Cmin7")!.tokens.map((t) => t.lexeme)).to.deep.equal(["C", "min", "7"]);
+    });
+
+    it('scans a capital "Maj" as the major quality', () => {
+      expect(scanChordSymbol("BbMaj7")).to.deep.equal({ tokens: [ROOT("B"), ACCIDENTAL("b"), QUALITY("Maj"), EXTENSION("7")], consumed: 6 });
+    });
+  });
+
   describe("jazz symbols", () => {
     it('scans "F▵", the major seventh triangle, as a quality', () => {
       expect(scanChordSymbol("F▵")).to.deep.equal({ tokens: [ROOT("F"), QUALITY("▵")], consumed: 2 });

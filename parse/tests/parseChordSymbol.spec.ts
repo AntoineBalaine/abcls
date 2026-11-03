@@ -11,6 +11,27 @@ function parse(input: string) {
 }
 
 describe("parseChordSymbol", () => {
+  describe("minor chord with a major seventh", () => {
+    it('parses "EbmM7" and its other spellings as the minor-major seventh chord', () => {
+      for (const text of ["EbmM7", "EbmMaj7", "Ebm^7", "Eb-M7", "Eb-Maj7"]) {
+        const result = parse(text);
+        expect(result!.quality, text).to.equal(ChordQuality.MinorMajor7);
+        expect(result!.extension, text).to.equal(7);
+        expect(result!.rootAccidental, text).to.equal(KeyAccidental.Flat);
+      }
+    });
+
+    it('parses "CmM" as the minor-major seventh chord, because the major seventh is implied', () => {
+      expect(parse("CmM")!.extension).to.equal(7);
+    });
+
+    it('parses "BbMaj7" as a major seventh chord', () => {
+      const result = parse("BbMaj7");
+      expect(result!.quality).to.equal(ChordQuality.Major);
+      expect(result!.extension).to.equal(7);
+    });
+  });
+
   describe("jazz symbols", () => {
     it('parses "F▵" as the major seventh chord, because the triangle implies the seventh', () => {
       const result = parse("F▵");
