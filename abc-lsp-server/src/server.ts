@@ -46,12 +46,9 @@ import {
   ABCLS_FMT_OPTIONS,
   ABCLS_VOICES_OPTIONS,
 } from "./completions";
-
-
 import { collectSurvivingCursorIds, computeCursorRangesFromFreshTree } from "./cursorPreservation";
 import { computeFoldingRanges, DEFAULT_FOLDING_CONFIG } from "./foldingRangeProvider";
 import { PreviewManager } from "./PreviewManager";
-
 import { lookupSelector } from "./selectorLookup";
 import { standardTokenScopes } from "./server_helpers";
 import { SocketHandler, computeSocketPath, validateImportMidiParams } from "./socketHandler";

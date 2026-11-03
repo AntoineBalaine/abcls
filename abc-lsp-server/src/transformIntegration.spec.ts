@@ -5,7 +5,6 @@ import { expect } from "chai";
 import { describe, it } from "mocha";
 import { TAGS, Selection, fromAst, isTokenNode, getTokenData, serializeCSTree, lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "../../editor";
 import { toCSTreeWithContext, findByTag } from "../../editor/tests/helpers";
-
 import { collectSurvivingCursorIds } from "./cursorPreservation";
 
 

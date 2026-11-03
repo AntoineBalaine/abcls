@@ -10,6 +10,7 @@ import { TT, Token } from "../../parse/parsers/scan";
 import { Pitch } from "../../parse/types/Expr";
 import { TAGS } from "../src/csTree/types";
 import { Selection } from "../src/selection";
+import { buildChordTimeline } from "../src/transforms/chordTimeline";
 import {
   harmonize,
   harmonizeVoicing,
@@ -22,7 +23,6 @@ import {
   formatNote,
   HarmonizeSnapshot,
 } from "../src/transforms/harmonize";
-import { buildChordTimeline } from "../src/transforms/chordTimeline";
 import { toCSTreeWithContext, formatSelection, findByTag, genAbcTune, genAbcWithChords } from "./helpers";
 
 function createPitch(ctx: ABCContext, letter: string, alteration?: string, octaveStr?: string): Pitch {

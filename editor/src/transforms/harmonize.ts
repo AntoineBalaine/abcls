@@ -33,8 +33,8 @@ import { fromAst } from "../csTree/fromAst";
 import { toAst } from "../csTree/toAst";
 import { createCSNode, CSNode, TAGS } from "../csTree/types";
 import { Selection } from "../selection";
-import { toPitchComponents, NoteLetter } from "./pitchHelpers";
 import { buildChordTimeline, chordAtNode, ChordTimeline, nextNodeInVoice } from "./chordTimeline";
+import { toPitchComponents, NoteLetter } from "./pitchHelpers";
 import { findChildByTag, findRhythmChild, findTieChild, getNodeLineAndChar } from "./treeUtils";
 import { findNodesById } from "./types";
 

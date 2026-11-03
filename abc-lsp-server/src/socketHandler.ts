@@ -8,10 +8,8 @@ import { ChordPositionCollector } from "abcls-parser/interpreter/ChordPositionCo
 import { AbcDocument } from "./AbcDocument";
 import { AbcxDocument } from "./AbcxDocument";
 import { ERROR_CODES } from "./constants";
-
 import { collectSurvivingCursorIds, computeCursorRangesFromFreshTree } from "./cursorPreservation";
 import { PreviewManager } from "./PreviewManager";
-
 import { lookupSelector, getAvailableSelectors } from "./selectorLookup";
 import { computeTextEditsFromDiff } from "./textEditFromDiff";
 

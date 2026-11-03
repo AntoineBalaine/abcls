@@ -1,6 +1,6 @@
 import { expect } from "chai";
-import { escapeText, escapeAttr, serializeScorePartwise } from "./serialize";
 import { ScorePartwiseIR } from "./ir";
+import { escapeText, escapeAttr, serializeScorePartwise } from "./serialize";
 import { validateAgainstMusicXmlSchema } from "./testSupport/xsdValidation";
 
 describe("escaping", () => {
