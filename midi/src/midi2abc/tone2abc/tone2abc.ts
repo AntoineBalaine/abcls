@@ -645,6 +645,10 @@ export interface NaturalsWalkState {
  * cancelled yet, or a sharp on the very same pitch earlier in the bar. The
  * pitches of the MIDI file are then the pitches of the score under either
  * reading. The key is C major, so the default is natural.
+ *
+ * Only sharps are tracked, because noteToKeyString spells every black key as
+ * a sharp (^C, ^D, ^F, ^G, ^A) and the generator never writes a flat. If the
+ * spelling ever writes flats, this walk must record them the same way.
  */
 export function restateNaturals(abc: string): string {
   return abc
