@@ -1,10 +1,10 @@
 import { expect } from "chai";
 import * as fc from "fast-check";
+import { TuneToAbcLineBreaks, tuneToAbcText } from "../interpreter/tuneToAst";
 import { ABCContext } from "../parsers/Context";
 import { AbcErrorReporter } from "../parsers/ErrorReporter";
 import { parse } from "../parsers/parse";
 import { Scanner } from "../parsers/scan";
-import { TuneToAbcLineBreaks, tuneToAbcText } from "../tuneToAst";
 import { BarType, ElementType, isBarElement, NoteElement, Tune, VoiceElement } from "../types/abcjs-ast";
 import { note, scoreXml, staffSystems } from "./importFromMusicSheet.padding.spec";
 import { parseMusicXmlToSheet } from "./parseMusicXml";

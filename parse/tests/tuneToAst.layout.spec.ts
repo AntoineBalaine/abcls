@@ -1,7 +1,7 @@
 import { expect } from "chai";
-import { createEmptyTune } from "./interpreter/InterpreterState";
-import { ABCContext } from "./parsers/Context";
-import { tuneToAbcText } from "./tuneToAst";
+import { createEmptyTune } from "../interpreter/InterpreterState";
+import { tuneToAbcText } from "../interpreter/tuneToAst";
+import { ABCContext } from "../parsers/Context";
 import {
   BarElement,
   BarType,
@@ -16,8 +16,8 @@ import {
   StaffSystem,
   Tune,
   VoiceElement,
-} from "./types/abcjs-ast";
-import { createRational } from "./Visitors/fmt/rational";
+} from "../types/abcjs-ast";
+import { createRational } from "../Visitors/fmt/rational";
 
 function eighth(pitch: number): NoteElement {
   return { el_type: ElementType.Note, startChar: 0, endChar: 0, duration: createRational(1, 8), pitches: [{ pitch, name: "", verticalPos: pitch }] };

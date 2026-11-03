@@ -1,11 +1,11 @@
 import { expect } from "chai";
 import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
 import { TuneInterpreter } from "../interpreter/TuneInterpreter";
+import { tuneToAbcText } from "../interpreter/tuneToAst";
 import { ABCContext } from "../parsers/Context";
 import { AbcErrorReporter } from "../parsers/ErrorReporter";
 import { parse } from "../parsers/parse";
 import { Scanner } from "../parsers/scan";
-import { tuneToAbcText } from "../tuneToAst";
 import { parseMusicXmlToSheet } from "./parseMusicXml";
 import { serializeScorePartwise } from "./serialize";
 import { importTune, normalizeTune } from "./testSupport/unwrap";

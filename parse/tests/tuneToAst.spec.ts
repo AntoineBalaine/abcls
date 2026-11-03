@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { SemanticAnalyzer } from "./analyzers/semantic-analyzer";
-import { TuneInterpreter } from "./interpreter/TuneInterpreter";
-import { ABCContext } from "./parsers/Context";
-import { AbcErrorReporter } from "./parsers/ErrorReporter";
-import { parse } from "./parsers/parse";
-import { Scanner } from "./parsers/scan";
-import { diatonicPitchToLetterAndMarks, tuneToAbcText } from "./tuneToAst";
-import { Tune } from "./types/abcjs-ast";
+import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
+import { TuneInterpreter } from "../interpreter/TuneInterpreter";
+import { diatonicPitchToLetterAndMarks, tuneToAbcText } from "../interpreter/tuneToAst";
+import { ABCContext } from "../parsers/Context";
+import { AbcErrorReporter } from "../parsers/ErrorReporter";
+import { parse } from "../parsers/parse";
+import { Scanner } from "../parsers/scan";
+import { Tune } from "../types/abcjs-ast";
 
 function interpretABC(abc: string): Tune {
   const ctx = new ABCContext(new AbcErrorReporter());

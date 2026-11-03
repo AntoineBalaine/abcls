@@ -78,5 +78,5 @@ export type { Barline as IrealBarline, ChartLayout, LaidOutBar, LaidOutCell, Lai
 export { parseIrealKey } from "./ireal/keyField";
 export { exportAbcxToIrealLink } from "./ireal/exportToIreal";
 // Tune (interpreter output) to ABC text serializer
-export { tuneToAbcText, tuneToAst } from "./tuneToAst";
-export type { TuneToAbcLineBreaks, TuneToAbcOptions } from "./tuneToAst";
+export { tuneToAbcText, tuneToAst } from "./interpreter/tuneToAst";
+export type { TuneToAbcLineBreaks, TuneToAbcOptions } from "./interpreter/tuneToAst";

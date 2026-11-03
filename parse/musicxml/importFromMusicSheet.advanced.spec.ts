@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import * as fc from "fast-check";
+import { tuneToAbcText } from "../interpreter/tuneToAst";
 import { ABCContext } from "../parsers/Context";
-import { tuneToAbcText } from "../tuneToAst";
 import { ClefElement, ClefType, ElementType, isMusicLine, MeterElement, MeterType, NoteElement, VoiceElement } from "../types/abcjs-ast";
 import { parseMusicXmlToSheet } from "./parseMusicXml";
 import { importTune } from "./testSupport/unwrap";

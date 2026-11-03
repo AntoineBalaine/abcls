@@ -1,14 +1,14 @@
 import * as abcjs from "abcjs";
 import { expect } from "chai";
 import * as fc from "fast-check";
-import { SemanticAnalyzer } from "./analyzers/semantic-analyzer";
-import { TuneInterpreter } from "./interpreter/TuneInterpreter";
-import { ABCContext } from "./parsers/Context";
-import { AbcErrorReporter } from "./parsers/ErrorReporter";
-import { parse } from "./parsers/parse";
-import { Scanner } from "./parsers/scan";
-import { Token } from "./parsers/scan";
-import { tuneToAbcText, tuneToAst } from "./tuneToAst";
+import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
+import { TuneInterpreter } from "../interpreter/TuneInterpreter";
+import { tuneToAbcText, tuneToAst } from "../interpreter/tuneToAst";
+import { ABCContext } from "../parsers/Context";
+import { AbcErrorReporter } from "../parsers/ErrorReporter";
+import { parse } from "../parsers/parse";
+import { Scanner } from "../parsers/scan";
+import { Token } from "../parsers/scan";
 import {
   BarElement,
   ElementType,
@@ -22,9 +22,9 @@ import {
   RestType,
   Tune,
   VoiceElement,
-} from "./types/abcjs-ast";
-import { BarLine, Beam, Chord, Note, Rest } from "./types/Expr";
-import { createRational } from "./Visitors/fmt/rational";
+} from "../types/abcjs-ast";
+import { BarLine, Beam, Chord, Note, Rest } from "../types/Expr";
+import { createRational } from "../Visitors/fmt/rational";
 
 /**
  * The same makeTune shape parse/musicxml/normalize.pbt.spec.ts already uses,

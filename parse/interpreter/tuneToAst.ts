@@ -1,5 +1,5 @@
-import { ABCContext } from "./parsers/Context";
-import { Token, TT } from "./parsers/scan";
+import { ABCContext } from "../parsers/Context";
+import { Token, TT } from "../parsers/scan";
 import {
   ChordProperties,
   AccidentalType,
@@ -25,7 +25,7 @@ import {
   StaffSystem,
   Tune,
   VoiceElement,
-} from "./types/abcjs-ast";
+} from "../types/abcjs-ast";
 import {
   Annotation,
   BarLine,
@@ -48,9 +48,9 @@ import {
   Tuplet,
   music_code,
   tune_body_code,
-} from "./types/Expr";
-import { addRational, createRational, divideRational, equalRational, IRational, rationalToRhythmExpr } from "./Visitors/fmt/rational";
-import { AbcFormatter } from "./Visitors/Formatter";
+} from "../types/Expr";
+import { addRational, createRational, divideRational, equalRational, IRational, rationalToRhythmExpr } from "../Visitors/fmt/rational";
+import { AbcFormatter } from "../Visitors/Formatter";
 
 /**
  * Default note length reconstruction always uses. Because a Tune object

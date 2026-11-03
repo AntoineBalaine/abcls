@@ -1,6 +1,6 @@
 import { expect } from "chai";
+import { tuneToAbcText } from "../interpreter/tuneToAst";
 import { ABCContext } from "../parsers/Context";
-import { tuneToAbcText } from "../tuneToAst";
 import { ElementType, NoteElement, StaffSystem, Tune } from "../types/abcjs-ast";
 import { parseMusicXmlToSheet } from "./parseMusicXml";
 import { importTune } from "./testSupport/unwrap";
