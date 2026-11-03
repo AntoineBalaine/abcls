@@ -185,7 +185,7 @@ function initializePanel(context: vscode.ExtensionContext, viewColumn?: vscode.V
   panel.webview.onDidReceiveMessage((message) => {
     switch (message.name) {
       case "click":
-        select(message.startChar, message.endChar);
+        void select(message.startChar, message.endChar);
         break;
 
       case "svgExport":
@@ -342,15 +342,31 @@ function getFileNameFromEditor(): string {
   return arr[arr.length - 1];
 }
 
-function select(start: number, end: number) {
-  const editor = getEditor();
+/**
+ * Returns the editor of the document that the preview shows.
+ * Because a click in the preview gives the focus to the preview, there is then no active text editor, and the first
+ * visible editor may hold another file; the preview's own document is therefore looked up first.
+ */
+function getPreviewedEditor(): vscode.TextEditor | undefined {
+  const uri = previewSyncState?.uri;
+  const previewed = uri === undefined ? undefined : vscode.window.visibleTextEditors.find((editor) => editor.document.uri.toString() === uri);
+  return previewed ?? getEditor();
+}
+
+/**
+ * Selects the text of the note that was clicked in the preview, and gives the focus back to its editor,
+ * so that the user can type right away without clicking into the editor first.
+ */
+async function select(start: number, end: number) {
+  const editor = getPreviewedEditor();
   if (!editor) return;
 
   const startPos = editor.document.positionAt(start);
   const endPos = editor.document.positionAt(end);
+  const selection = new vscode.Selection(startPos, endPos);
 
-  editor.selection = new vscode.Selection(startPos, endPos);
-  editor.revealRange(editor.selection);
+  const focused = await vscode.window.showTextDocument(editor.document, { viewColumn: editor.viewColumn, preserveFocus: false, selection });
+  focused.revealRange(selection);
 }
 
 function readConfiguration(): object {

@@ -110,9 +110,16 @@
 
       /**
        * Run abcjs, render the score from ABC notation.
+       * Because abcjs replaces the score and measures its text while it draws, the page is laid out while it is
+       * still short, and the browser pulls the scroll position up. The position is saved before the render and
+       * restored after it, so that an edit does not move the view; the highlight then scrolls only when the
+       * highlighted note is off screen.
        */
       function drawTune(abcCode) {
+        var scrollX = window.scrollX;
+        var scrollY = window.scrollY;
         renderedTunes = ABCJS.renderAbc("paper", abcCode, options);
+        window.scrollTo(scrollX, scrollY);
         highlightCursorRange();
 
         const showSource = options.showTransposedSource;
