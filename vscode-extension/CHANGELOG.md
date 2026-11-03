@@ -2,6 +2,16 @@
 
 All notable changes to the AbcLsp extension will be documented in this file.
 
+## [0.3.0] - 2026-11-03
+
+### Added
+- The preview highlights the notes under the editor cursor or selection, and scrolls to them when they are out of view
+- Clicking a note in the preview selects its text and gives the focus back to the editor
+
+### Fixed
+- The preview keeps its scroll position while you edit
+- Quoted text that only starts like a chord (`"Fine"`, `"Coda"`) is no longer read as a chord symbol
+
 ## [0.0.4] - 2026-01-18
 
 ### Added

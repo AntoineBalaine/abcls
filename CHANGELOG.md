@@ -1,5 +1,82 @@
 # Changelog
 
+## 0.3.0 (2026-11-03)
+
+### musicxml
+
+- add `abc2xml`, which exports a tune as MusicXML 4.0 (parts, voices, clefs, keys and modes, meters with common and cut time, key, meter and clef changes, ties, slurs, grace notes, tuplets, decorations, chord symbols and line breaks)
+- add `xml2abc`, which converts a MusicXML file to ABC (lines follow the layout of the file, or `--bars-per-line`), and reports what ABC cannot express instead of dropping it
+- read every mode of a key signature on import
+- fail with an error that names the part when a `<part>` is missing from the `<part-list>`
+- document the gaps in `parse/musicxml/KNOWN_GAPS.md` and in the new MusicXML guide
+- add the MusicXML Test Suite as a survey of the round trip, and property tests that follow generated tunes from ABC through MusicXML and back
+
+### harmonize
+
+- add the `harmonize` transform and the `abcls harmonize` command: one block chord per chord symbol, or a melody harmonized into new voices, with `--voicing`, `--top-note` and `--prefer-lead`
+- read the chord symbols by position in time, so that a symbol written in one voice applies to every voice that sounds at the same time
+- count tuplets and broken rhythm, tie only repeated pitches, keep spread voicings connected and choose the top note of block chords
+- keep a lead that is the root C on top of its chord
+
+### transform
+
+- add `abcls transform`, which runs an editor transform on a file, with `--voice` and `--lines` (a line, a range of lines, or `line:column` positions)
+- transpose with `--keys` and `--chords`, so that the key signatures and the chord symbols follow the notes, spelled by interval
+- add `--as-new-tune`, which keeps the original tune and appends the transformed copy, and `--tune` to choose the tune to copy
+- make bar accidentals octave-aware, and spell transposed notes against the output
+- keep `K:` fields consistent with the notes
+
+### ireal
+
+- add `abcls abc2ireal`, which exports the chords of an ABC score as an iReal Pro link, with `--voice`, `--cells`, `--tempo` and `--style`
+- lay the chart out in cells of four per bar, pad the end of each section so that the rows stay aligned, and encode the link
+- keep the iReal Pro export consistent for voices and meters
+
+### chords
+
+- read parenthesised groups, added tones, minor-major-seventh spellings, a capital `Maj`, the major seventh triangle and superscript digits
+- read an annotation as a chord only when the whole text is a chord symbol, so that `"Fine"` and `"Coda"` no longer become chords
+
+### render
+
+- render every tune of a file, fix headless rendering, and add `--pages` to write A4 pages as SVG for a PDF
+
+### vscode-extension
+
+- highlight the notes under the editor cursor or selection in the preview
+- focus the editor when a note is clicked in the preview
+- keep the scroll position of the preview while editing
+- publish to the Marketplace through Trusted Publishing instead of a personal access token
+
+### interpreter
+
+- start a new system at each line of music, as abcjs does, and read linear tunes through their deferred conversion
+- give the voices declared in the header the key, the meter and the clef of the header
+- break beams at whitespace, read inline `K:` fields and clef-only key changes, and record the resets of accidentals at bar lines
+- stop dropping bang-delimited decorations and lost slur closes
+- read a voice id as the whole first word, and a bare `merge` on a voice line, as abcjs does
+- keep the voice id and name of each staff
+- make `KeyInfo.keySignature` optional and remove `keyOmitted`
+
+### midi2abc
+
+- keep the offset and the pitches of the MIDI file
+
+### editor
+
+- add the `selectAnnotations` selector
+
+### build
+
+- lint and type-check the staged TypeScript files in a husky pre-commit hook
+- move the CLI checks into a mocha spec
+- add a script that builds and force-installs the VS Code extension
+- drop astro and starlight from the dependencies of `abcls-parser`
+
+### docs
+
+- document `abc2xml`, `xml2abc`, `render --pages`, the transpose flags and the preview, and add the iReal Pro and MusicXML guides to the sidebar
+
 ## 0.2.0 (2026-10-14)
 
 ### vscode-extension

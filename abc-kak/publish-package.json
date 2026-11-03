@@ -1,6 +1,6 @@
 {
   "name": "abcls-kak",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "ABC notation editing for Kakoune",
   "bin": {
     "abcls-kak-install": "./dist/install.js",
