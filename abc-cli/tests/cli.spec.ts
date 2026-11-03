@@ -115,6 +115,10 @@ describe("abcls CLI", () => {
       expect(runCli(["abc2ireal", CHORDS])).to.match(/^irealb:\/\//m);
     });
 
+    it("percent-encodes the iReal Pro link, so that it holds no raw space, bar line, star or angle bracket", () => {
+      expect(runCli(["abc2ireal", CHORDS])).to.not.match(/[ |*<>]/);
+    });
+
     it("renders every tune of the file", () => {
       expect(svgCount(runCli(["render", TWO_TUNES]))).to.equal(2);
     });

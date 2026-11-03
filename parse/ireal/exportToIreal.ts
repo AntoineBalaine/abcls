@@ -63,6 +63,8 @@ export interface AbcToIrealLinkOptions extends AbcToIrealOptions {
   tunes?: number[];
   /** The iReal Pro style of the songs, used when a tune carries no `%%irealstyle` directive. */
   style?: string;
+  /** The tempo in beats per minute, used when a tune carries no `Q:` line. */
+  tempo?: number;
 }
 
 /**
@@ -83,9 +85,10 @@ export function exportAbcToIrealLink(abcSource: string, options: AbcToIrealLinkO
     if (options.tunes !== undefined && (number === null || !options.tunes.includes(number))) continue;
 
     const chart = abcTuneToIrealChart(item, ctx, options);
-    const grid = writeGrid(chart, ctx);
+    const grid = writeGrid(chart, ctx, { alignRows: true });
     const fields = abcxTuneToSongFields(item, withChordDataMarker(scramble(grid)), ctx);
     if (fields.style === "" && options.style !== undefined) fields.style = options.style;
+    if (fields.bpm === undefined && options.tempo !== undefined) fields.bpm = String(options.tempo);
     songs.push(fields);
   }
 

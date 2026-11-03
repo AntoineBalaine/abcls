@@ -45,6 +45,11 @@ interface WriteState {
    * and where they end, rather than every small chord.
    */
   small: boolean;
+  /**
+   * Whether a comma gives its cell back with a blank at the end of the bar. Because iReal Pro packs the chords that
+   * a comma joins into one cell, a bar that holds a comma is one cell short, which the blank makes up for.
+   */
+  commaTakesCell: boolean;
 }
 
 function report(ctx: ABCContext, message: string): void {
@@ -184,10 +189,19 @@ function barText(bar: Bar, state: WriteState, ctx: ABCContext): string {
     report(ctx, `A bar holds ${beyond.length} cell(s) with no position inside its ${bar.cellCount} cells`);
   }
 
+  let merged = 0;
   for (let slot = 0; slot < bar.cellCount; slot++) {
     const cell = bySlot.get(slot);
+    // Because two chords written side by side would read as one chord symbol, a comma, which occupies no cell,
+    // separates a cell from the cell before it whenever both of them hold something.
+    // The comma packs the chord into the cell before it, so the bar loses a cell, which a blank at its end gives back.
+    if (cell !== undefined && bySlot.has(slot - 1)) {
+      parts.push(",");
+      merged += 1;
+    }
     parts.push(cell === undefined ? " " : cellText(cell, state, ctx));
   }
+  if (state.commaTakesCell) parts.push(" ".repeat(merged));
   for (const cell of beyond) parts.push(cellText(cell, state, ctx));
   return parts.join("");
 }
@@ -285,13 +299,36 @@ function sectionText(section: Section, chart: IrealChart, index: number, state: 
   return parts.join("");
 }
 
-export function writeGrid(chart: IrealChart, ctx: ABCContext): string {
-  const state: WriteState = { chordWritten: false, small: false };
+export const CELLS_PER_ROW = 16;
+
+export interface WriteGridOptions {
+  /**
+   * Whether to pad the last row of every section with blank cells, up to the sixteen cells of a row.
+   *
+   * Because iReal Pro fills a row with sixteen cells and starts the next section on the cells that follow, a section
+   * whose cells do not fill its last row would let the next section start in the middle of that row, and the rows
+   * of the whole chart after it would be shifted. Blank cells at the end of that row are what iReal Pro itself
+   * writes (as `XyQ`) to align the rows.
+   */
+  alignRows?: boolean;
+}
+
+/** The number of cells a section occupies, the cells of its bars and of the bars of its endings. */
+function sectionCellCount(section: Section): number {
+  const bars = [...section.bars, ...(section.repeat?.endings ?? []).flatMap((ending) => ending.bars)];
+  return bars.reduce((total, bar) => total + bar.cellCount, 0);
+}
+
+export function writeGrid(chart: IrealChart, ctx: ABCContext, options: WriteGridOptions = {}): string {
+  const state: WriteState = { chordWritten: false, small: false, commaTakesCell: options.alignRows === true };
   reportUnreachableNavigation(chart, ctx);
 
   const parts: string[] = [];
   for (let index = 0; index < chart.sections.length; index++) {
-    parts.push(sectionText(chart.sections[index], chart, index, state, ctx));
+    const section = chart.sections[index];
+    parts.push(sectionText(section, chart, index, state, ctx));
+    const remainder = sectionCellCount(section) % CELLS_PER_ROW;
+    if (options.alignRows && remainder !== 0) parts.push(" ".repeat(CELLS_PER_ROW - remainder));
   }
   // A marker standing after the last section has no section to lead, and
   // the parser records it against the index one past the end. One chart in

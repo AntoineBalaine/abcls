@@ -12,7 +12,7 @@
  * - A chord written after the last bar line of a line, with no music after it, belongs to no bar, so we report it and skip it.
  */
 
-import { isChordSymbolText } from "../music-theory/scanChordSymbol";
+import { isChordSymbolText, scanChordSymbol } from "../music-theory/scanChordSymbol";
 import { ParsedChord } from "../music-theory/types";
 import { ABCContext } from "../parsers/Context";
 import {
@@ -48,6 +48,8 @@ import { IrealChart } from "./gridAst";
 export interface AbcToIrealOptions {
   /** The voice that carries the chords. Defaults to the voice with the most chord symbols. */
   voice?: string;
+  /** The number of cells of each bar. Defaults to four, which puts four bars on a row of sixteen cells. */
+  cellsPerBar?: number;
 }
 
 /** One line of the tune body, with the voice it belongs to. */
@@ -191,6 +193,12 @@ function readChordLine(line: BodyLine, walk: Walk, state: VoiceState, ctx: ABCCo
         }
         continue;
       }
+      // Because a symbol that starts like a chord but cannot be read would otherwise be exported as plain text
+      // without a word, we say so. A single letter is left alone, since a word such as "Chorus" starts with one.
+      const partial = scanChordSymbol(text);
+      if (partial !== null && partial.consumed >= 2 && /^[A-G]/.test(text)) {
+        report(ctx, `The chord symbol '${text}' could not be read, so it is exported as text and not as a chord`, text, node.text.position);
+      }
       const marker = navigationMarker(text);
       if (marker === "segno") walk.navigation.segnoSectionIndex = walk.sections.length;
       else if (marker === "coda") walk.navigation.codaSectionIndex = walk.sections.length;
@@ -260,6 +268,35 @@ function headerMeter(tune: Tune, walk: Walk, ctx: ABCContext): void {
   }
 }
 
+/**
+ * Gives every bar four cells, and spreads its chords over them.
+ *
+ * Because iReal Pro lays a chart out in rows of sixteen cells, a bar of four cells is the only width that puts four
+ * bars on each row. If a 6/8 bar had six cells, four bars would take twenty-four cells, so every row would start
+ * halfway through a bar of the previous row and the lines would drift out of line. So we give each bar four cells,
+ * whatever its meter is: one chord sits on the first cell, two chords on the first and the third, and so on.
+ * A bar that holds more chords than four is given one cell per chord, which is the only case where a row is wider.
+ * A bar with no chord is padded too, because an empty bar of one cell would also shift the bars that follow it.
+ */
+export const IREAL_CELLS_PER_BAR = 4;
+
+export function padBarsToMeter(chart: IrealChart, cellsPerBar: number = IREAL_CELLS_PER_BAR): void {
+  for (const section of chart.sections) {
+    const bars = [...section.bars, ...(section.repeat?.endings ?? []).flatMap((ending) => ending.bars)];
+    for (const bar of bars) {
+      const chords = bar.cells.length;
+      const cellCount = Math.max(cellsPerBar, chords);
+      // Because three chords cannot sit on three cells of four without two of them touching, which would make them
+      // share a cell, we leave the second beat empty and let the last two chords share the last two cells.
+      const slots = chords === 3 && cellCount === 4 ? [0, 2, 3] : bar.cells.map((_, index) => Math.floor((index * cellCount) / chords));
+      bar.cells.forEach((cell, index) => {
+        cell.slot = slots[index];
+      });
+      bar.cellCount = cellCount;
+    }
+  }
+}
+
 export function abcTuneToIrealChart(tune: Tune, ctx: ABCContext, options: AbcToIrealOptions = {}): IrealChart {
   const walk = createWalk();
   headerMeter(tune, walk, ctx);
@@ -280,5 +317,7 @@ export function abcTuneToIrealChart(tune: Tune, ctx: ABCContext, options: AbcToI
 
   flushBar(walk);
   closeSection(walk);
-  return { sections: walk.sections, navigation: walk.navigation, annotations: walk.chartAnnotations };
+  const chart: IrealChart = { sections: walk.sections, navigation: walk.navigation, annotations: walk.chartAnnotations };
+  padBarsToMeter(chart, options.cellsPerBar);
+  return chart;
 }
