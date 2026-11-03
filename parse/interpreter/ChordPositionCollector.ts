@@ -200,9 +200,12 @@ export class ChordPositionCollector implements Visitor<void> {
     if (isKeyInfo(info)) {
       const keyData = info.data;
       const voice = this.getCurrentVoice();
-      voice.currentKey = keyData.keySignature;
-      // Key change clears accidentals
-      voice.measureAccidentals.clear();
+      // Because a K: field that only changes the clef gives no key, the key in effect and its accidentals stay.
+      if (keyData.keySignature) {
+        voice.currentKey = keyData.keySignature;
+        // Key change clears accidentals
+        voice.measureAccidentals.clear();
+      }
     } else if (isVoiceInfo(info)) {
       const voiceData = info.data;
       this.state.currentVoiceId = voiceData.id;

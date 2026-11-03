@@ -469,19 +469,21 @@ export class ContextInterpreter implements Visitor<void> {
     const voice = this.getCurrentVoice();
 
     if (sem.type === "key") {
-      voice.currentKey = sem.data.keySignature;
+      // Because a K: field that only changes the clef gives no key, the key in effect stays.
+      const keySignature = sem.data.keySignature;
+      if (keySignature) voice.currentKey = keySignature;
       if (sem.data.clef) {
         voice.currentClef = sem.data.clef;
       }
-      this.state.tuneDefaults.key = sem.data.keySignature;
+      if (keySignature) this.state.tuneDefaults.key = keySignature;
       if (sem.data.clef) {
         this.state.tuneDefaults.clef = sem.data.clef;
       }
       // Because a header K: is tune-wide, the voices declared before it (e.g. V:1 and V:2
       // in the header) must also receive the key, otherwise they keep the default C major.
-      if (!this.state.inBody) {
+      if (keySignature && !this.state.inBody) {
         for (const headerVoice of this.state.voices.values()) {
-          headerVoice.currentKey = sem.data.keySignature;
+          headerVoice.currentKey = keySignature;
         }
       }
       return true;

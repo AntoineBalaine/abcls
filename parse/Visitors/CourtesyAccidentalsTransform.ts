@@ -239,8 +239,12 @@ export class CourtesyAccidentalsTransform implements Visitor<void> {
 
     if (sem.type === "key") {
       const voice = getCurrentVoice(this.state);
-      voice.currentKey = sem.data.keySignature;
-      this.state.tuneDefaults.key = sem.data.keySignature;
+      // Because a K: field that only changes the clef gives no key, the key in effect stays.
+      const keySignature = sem.data.keySignature;
+      if (keySignature) {
+        voice.currentKey = keySignature;
+        this.state.tuneDefaults.key = keySignature;
+      }
     } else if (sem.type === "voice") {
       this.state.currentVoiceId = sem.data.id;
       getCurrentVoice(this.state);
@@ -253,8 +257,12 @@ export class CourtesyAccidentalsTransform implements Visitor<void> {
 
     if (sem.type === "key") {
       const voice = getCurrentVoice(this.state);
-      voice.currentKey = sem.data.keySignature;
-      this.state.tuneDefaults.key = sem.data.keySignature;
+      // Because a K: field that only changes the clef gives no key, the key in effect stays.
+      const keySignature = sem.data.keySignature;
+      if (keySignature) {
+        voice.currentKey = keySignature;
+        this.state.tuneDefaults.key = keySignature;
+      }
     } else if (sem.type === "voice") {
       this.state.currentVoiceId = sem.data.id;
       getCurrentVoice(this.state);

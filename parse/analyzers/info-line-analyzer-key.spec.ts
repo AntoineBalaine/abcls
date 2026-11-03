@@ -31,9 +31,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.C);
-      expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
-      expect(result.data.keySignature.mode).to.equal(Mode.Major);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.C);
+      expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
+      expect(result.data.keySignature!.mode).to.equal(Mode.Major);
     });
 
     it("should parse K:G (G Major)", () => {
@@ -46,9 +46,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.G);
-      expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
-      expect(result.data.keySignature.mode).to.equal(Mode.Major);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.G);
+      expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
+      expect(result.data.keySignature!.mode).to.equal(Mode.Major);
     });
 
     it("should parse K:D (D Major)", () => {
@@ -61,9 +61,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.D);
-      expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
-      expect(result.data.keySignature.mode).to.equal(Mode.Major);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.D);
+      expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
+      expect(result.data.keySignature!.mode).to.equal(Mode.Major);
     });
   });
 
@@ -83,9 +83,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.F);
-      expect(result.data.keySignature.acc).to.equal(KeyAccidental.Sharp);
-      expect(result.data.keySignature.mode).to.equal(Mode.Major);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.F);
+      expect(result.data.keySignature!.acc).to.equal(KeyAccidental.Sharp);
+      expect(result.data.keySignature!.mode).to.equal(Mode.Major);
     });
 
     it("should parse K:_b major (Bb Major)", () => {
@@ -99,9 +99,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.B);
-      expect(result.data.keySignature.acc).to.equal(KeyAccidental.Flat);
-      expect(result.data.keySignature.mode).to.equal(Mode.Major);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.B);
+      expect(result.data.keySignature!.acc).to.equal(KeyAccidental.Flat);
+      expect(result.data.keySignature!.mode).to.equal(Mode.Major);
     });
 
     it("should parse K:^c major (C# Major)", () => {
@@ -115,9 +115,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.C);
-      expect(result.data.keySignature.acc).to.equal(KeyAccidental.Sharp);
-      expect(result.data.keySignature.mode).to.equal(Mode.Major);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.C);
+      expect(result.data.keySignature!.acc).to.equal(KeyAccidental.Sharp);
+      expect(result.data.keySignature!.mode).to.equal(Mode.Major);
     });
   });
 
@@ -137,9 +137,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.A);
-      expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
-      expect(result.data.keySignature.mode).to.equal(Mode.Minor);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.A);
+      expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
+      expect(result.data.keySignature!.mode).to.equal(Mode.Minor);
     });
 
     it("should parse K:G Mixolydian", () => {
@@ -153,9 +153,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.G);
-      expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
-      expect(result.data.keySignature.mode).to.equal(Mode.Mixolydian);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.G);
+      expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
+      expect(result.data.keySignature!.mode).to.equal(Mode.Mixolydian);
     });
 
     it("should parse K:D Dorian", () => {
@@ -169,9 +169,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.D);
-      expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
-      expect(result.data.keySignature.mode).to.equal(Mode.Dorian);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.D);
+      expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
+      expect(result.data.keySignature!.mode).to.equal(Mode.Dorian);
     });
   });
 
@@ -199,7 +199,7 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.D);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.D);
       const clef = result.data.clef;
       expect(clef).to.not.be.undefined;
       if (!clef) return;
@@ -225,7 +225,7 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.G);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.G);
       const clef = result.data.clef;
       expect(clef).to.not.be.undefined;
       if (!clef) return;
@@ -386,9 +386,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.F);
-      expect(result.data.keySignature.acc).to.equal(KeyAccidental.Sharp);
-      expect(result.data.keySignature.mode).to.equal(Mode.Minor);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.F);
+      expect(result.data.keySignature!.acc).to.equal(KeyAccidental.Sharp);
+      expect(result.data.keySignature!.mode).to.equal(Mode.Minor);
       const clef = result.data.clef;
       expect(clef).to.not.be.undefined;
       if (!clef) return;
@@ -440,9 +440,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
-      expect(result.data.keySignature.root).to.equal(KeyRoot.B);
-      expect(result.data.keySignature.acc).to.equal(KeyAccidental.Flat);
-      expect(result.data.keySignature.mode).to.equal(Mode.Major);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.B);
+      expect(result.data.keySignature!.acc).to.equal(KeyAccidental.Flat);
+      expect(result.data.keySignature!.mode).to.equal(Mode.Major);
       const clef = result.data.clef;
       expect(clef).to.not.be.undefined;
       if (!clef) return;
@@ -469,8 +469,8 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
       expect(result).to.not.be.null;
       if (!result || result.type !== "key") return;
       // K:none uses default values
-      expect(result.data.keySignature.root).to.equal(KeyRoot.C);
-      expect(result.data.keySignature.mode).to.equal(Mode.Major);
+      expect(result.data.keySignature!.root).to.equal(KeyRoot.C);
+      expect(result.data.keySignature!.mode).to.equal(Mode.Major);
     });
   });
 
@@ -490,9 +490,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.C);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
-        expect(result.data.keySignature.mode).to.equal(Mode.Major);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.C);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
+        expect(result.data.keySignature!.mode).to.equal(Mode.Major);
       });
 
       it("should parse KEY_SIGNATURE 'G' (G Major)", () => {
@@ -505,9 +505,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.G);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
-        expect(result.data.keySignature.mode).to.equal(Mode.Major);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.G);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
+        expect(result.data.keySignature!.mode).to.equal(Mode.Major);
       });
     });
 
@@ -522,9 +522,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.F);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.Sharp);
-        expect(result.data.keySignature.mode).to.equal(Mode.Major);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.F);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.Sharp);
+        expect(result.data.keySignature!.mode).to.equal(Mode.Major);
       });
 
       it("should parse KEY_SIGNATURE 'Bb' (Bb Major)", () => {
@@ -537,9 +537,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.B);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.Flat);
-        expect(result.data.keySignature.mode).to.equal(Mode.Major);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.B);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.Flat);
+        expect(result.data.keySignature!.mode).to.equal(Mode.Major);
       });
     });
 
@@ -554,9 +554,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.A);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
-        expect(result.data.keySignature.mode).to.equal(Mode.Minor);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.A);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
+        expect(result.data.keySignature!.mode).to.equal(Mode.Minor);
       });
 
       it("should parse KEY_SIGNATURE 'Gdor' (G Dorian)", () => {
@@ -569,9 +569,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.G);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
-        expect(result.data.keySignature.mode).to.equal(Mode.Dorian);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.G);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
+        expect(result.data.keySignature!.mode).to.equal(Mode.Dorian);
       });
 
       it("should parse KEY_SIGNATURE 'Dmix' (D Mixolydian)", () => {
@@ -584,9 +584,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.D);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
-        expect(result.data.keySignature.mode).to.equal(Mode.Mixolydian);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.D);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
+        expect(result.data.keySignature!.mode).to.equal(Mode.Mixolydian);
       });
     });
 
@@ -601,9 +601,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.C);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.Sharp);
-        expect(result.data.keySignature.mode).to.equal(Mode.Minor);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.C);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.Sharp);
+        expect(result.data.keySignature!.mode).to.equal(Mode.Minor);
       });
 
       it("should parse KEY_SIGNATURE 'Bbmaj' (Bb Major)", () => {
@@ -616,9 +616,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.B);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.Flat);
-        expect(result.data.keySignature.mode).to.equal(Mode.Major);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.B);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.Flat);
+        expect(result.data.keySignature!.mode).to.equal(Mode.Major);
       });
 
       it("should parse KEY_SIGNATURE 'F#dorian' (F# Dorian)", () => {
@@ -631,9 +631,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.F);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.Sharp);
-        expect(result.data.keySignature.mode).to.equal(Mode.Dorian);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.F);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.Sharp);
+        expect(result.data.keySignature!.mode).to.equal(Mode.Dorian);
       });
     });
 
@@ -648,8 +648,8 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.HP);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.HP);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
       });
 
       it("should parse KEY_SIGNATURE 'Hp' (Highland Pipes variant)", () => {
@@ -662,8 +662,8 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.HP);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.None);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.HP);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.None);
       });
 
       it("should parse KEY_SIGNATURE 'none' (no key signature)", () => {
@@ -677,8 +677,8 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
         // K:none uses default values
-        expect(result.data.keySignature.root).to.equal(KeyRoot.C);
-        expect(result.data.keySignature.mode).to.equal(Mode.Major);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.C);
+        expect(result.data.keySignature!.mode).to.equal(Mode.Major);
       });
     });
 
@@ -702,9 +702,9 @@ describe("Key Info Line Analyzer - Example-Based Tests", () => {
 
         expect(result).to.not.be.null;
         if (!result || result.type !== "key") return;
-        expect(result.data.keySignature.root).to.equal(KeyRoot.C);
-        expect(result.data.keySignature.acc).to.equal(KeyAccidental.Sharp);
-        expect(result.data.keySignature.mode).to.equal(Mode.Minor);
+        expect(result.data.keySignature!.root).to.equal(KeyRoot.C);
+        expect(result.data.keySignature!.acc).to.equal(KeyAccidental.Sharp);
+        expect(result.data.keySignature!.mode).to.equal(Mode.Minor);
         const clef = result.data.clef;
         expect(clef).to.not.be.undefined;
         if (!clef) return;

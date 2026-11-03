@@ -111,12 +111,12 @@ describe("inline K: fields", () => {
 
     it("reads the root and accidental of an inline key", () => {
       const info = keyInfoOf("C8 | [K:Bb] B8 |");
-      expect([info.keySignature.root, info.keySignature.acc, info.keyOmitted]).to.deep.equal(["B", "b", undefined]);
+      expect([info.keySignature?.root, info.keySignature?.acc]).to.deep.equal(["B", "b"]);
     });
 
-    it("marks a clef-only field as giving no key", () => {
+    it("gives no key signature for a clef-only field", () => {
       const info = keyInfoOf("C8 | [K:clef=bass] C8 |");
-      expect(info.keyOmitted).to.equal(true);
+      expect(info.keySignature).to.equal(undefined);
       expect(info.clef?.type).to.equal("bass");
     });
   });

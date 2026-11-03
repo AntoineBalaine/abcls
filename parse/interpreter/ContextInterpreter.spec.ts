@@ -145,6 +145,16 @@ describe("ContextInterpreter", () => {
       expect(lastSnapshot.key.root).to.equal("G");
     });
 
+    it("keeps the key in effect after a K: field that only changes the clef", () => {
+      const input = "X:1\nM:4/4\nK:G\n|C D E F|[K:clef=bass] G A B c|";
+      const { ast, semanticData, ctx } = parseWithSemantics(input);
+      const result = new ContextInterpreter().interpret(ast, semanticData, ctx);
+
+      const lastSnapshot = result[result.length - 1].snapshot;
+      expect(lastSnapshot.key.root).to.equal("G");
+      expect(lastSnapshot.clef.type).to.equal("bass");
+    });
+
     it("should increment measureNumber on barlines", () => {
       const input = "X:1\nM:4/4\nK:C\n|C D E F|G A B c|d e f g|";
       const { ast, semanticData, ctx } = parseWithSemantics(input);

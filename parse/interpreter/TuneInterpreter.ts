@@ -690,14 +690,16 @@ function applyInfoLine(semanticData: InfoLineUnion, context: HeaderContext): str
 
   // Tune header only
   if (isKeyInfo(semanticData)) {
-    context.target.tuneDefaults.key = semanticData.data.keySignature;
+    // Because a K: field that only changes the clef gives no key, the default key stays.
+    const keySignature = semanticData.data.keySignature;
+    if (keySignature) context.target.tuneDefaults.key = keySignature;
     if (semanticData.data.clef) {
       context.target.tuneDefaults.clef = semanticData.data.clef;
     }
 
     // Automatically enable bagpipes formatting for HP/Hp keys (matching abcjs behavior)
     // In abcjs, K:HP and K:Hp automatically call parseDirective.addDirective("bagpipes")
-    const keyRoot = semanticData.data.keySignature.root;
+    const keyRoot = keySignature?.root;
     if (keyRoot === "HP" || keyRoot === "Hp") {
       context.target.tune.formatting.bagpipes = true;
     }
@@ -1891,17 +1893,18 @@ export class TuneInterpreter implements Visitor<void> {
         this.pushElement(clefElement);
       }
     }
-    if (!data.keyOmitted) {
-      if (voice) voice.currentKey = data.keySignature;
-      this.state.tuneDefaults.key = data.keySignature;
+    const keySignature = data.keySignature;
+    if (keySignature) {
+      if (voice) voice.currentKey = keySignature;
+      this.state.tuneDefaults.key = keySignature;
       const keyElement: KeyElement = {
         el_type: ElementType.Key,
         startChar,
         endChar,
-        root: data.keySignature.root,
-        acc: data.keySignature.acc,
-        mode: data.keySignature.mode,
-        accidentals: data.keySignature.accidentals,
+        root: keySignature.root,
+        acc: keySignature.acc,
+        mode: keySignature.mode,
+        accidentals: keySignature.accidentals,
       };
       this.pushElement(keyElement);
     }
