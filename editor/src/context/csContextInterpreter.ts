@@ -19,7 +19,7 @@ import { ContextSnapshot, DocumentSnapshots, ContextInterpreterConfig, encode } 
 import { convertAccidentalToType } from "abcls-parser/interpreter/helpers";
 import { TuneDefaults, VoiceState, newVxState, createTuneDefaults, createFileDefaults } from "abcls-parser/interpreter/InterpreterState";
 import { parseChordSymbol } from "abcls-parser/music-theory/parseChordSymbol";
-import { scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
+import { isChordSymbolText, scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
 import { ParsedChord } from "abcls-parser/music-theory/types";
 import { Meter, MeterType, TempoProperties } from "abcls-parser/types/abcjs-ast";
 import { CSNode, TAGS, isTokenNode, getTokenData, type EditorDataMap } from "../csTree/types";
@@ -355,6 +355,10 @@ const contextVisitor: EditorVisitor = {
     if (text.length > 0 && "^_<>@".includes(text[0])) {
       text = text.slice(1);
     }
+
+    // Because the scanner stops after the longest chord prefix, text such as "Fine" would read as F; only text that reads as a chord to its end is one.
+
+    if (!isChordSymbolText(text)) return;
 
     const scanResult = scanChordSymbol(text);
     if (scanResult === null) return;

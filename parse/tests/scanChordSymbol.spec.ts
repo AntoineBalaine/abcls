@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { scanChordSymbol } from "../music-theory/scanChordSymbol";
+import { isChordSymbolText, scanChordSymbol } from "../music-theory/scanChordSymbol";
 import { ChordTT } from "../music-theory/types";
 
 function ROOT(lexeme: string) {
@@ -235,4 +235,18 @@ describe("scanChordSymbol", () => {
       });
     }
   });
+});
+
+describe("isChordSymbolText", () => {
+  for (const text of ["C", "Am7", "Bbmaj7", "F#m7b5", "G7/B", "Cdim7"]) {
+    it(`accepts "${text}", which reads as a chord to its end`, () => {
+      expect(isChordSymbolText(text)).to.equal(true);
+    });
+  }
+
+  for (const text of ["Fine", "Coda", "Allegro", "D.C. al Fine", "Am7 rit."]) {
+    it(`refuses "${text}", whose beginning only reads as a chord`, () => {
+      expect(isChordSymbolText(text)).to.equal(false);
+    });
+  }
 });

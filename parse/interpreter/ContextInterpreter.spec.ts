@@ -145,6 +145,16 @@ describe("ContextInterpreter", () => {
       expect(lastSnapshot.key.root).to.equal("G");
     });
 
+    it("does not read a text annotation that starts with a root letter as a chord", () => {
+      const input = 'X:1\nM:4/4\nK:C\n|"Am7"C D E F|"Fine"G A B c|';
+      const { ast, semanticData, ctx } = parseWithSemantics(input);
+      const result = new ContextInterpreter().interpret(ast, semanticData, ctx);
+
+      const lastSnapshot = result[result.length - 1].snapshot;
+      expect(lastSnapshot.currentChord?.root).to.equal("A");
+      expect(lastSnapshot.currentChord?.extension).to.equal(7);
+    });
+
     it("keeps the key in effect after a K: field that only changes the clef", () => {
       const input = "X:1\nM:4/4\nK:G\n|C D E F|[K:clef=bass] G A B c|";
       const { ast, semanticData, ctx } = parseWithSemantics(input);

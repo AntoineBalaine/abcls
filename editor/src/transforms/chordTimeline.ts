@@ -2,7 +2,7 @@ import { findChild } from "abcls-cstree";
 import { TT } from "abcls-parser";
 import { TUPLET_Q, getBrokenRhythmMultipliers } from "abcls-parser/interpreter/TuneInterpreter";
 import { parseChordSymbol } from "abcls-parser/music-theory/parseChordSymbol";
-import { scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
+import { isChordSymbolText, scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
 import { ParsedChord } from "abcls-parser/music-theory/types";
 import { getTokenData, isTokenNode } from "../csTree/types";
 import { CSNode, TAGS } from "../csTree/types";
@@ -92,6 +92,10 @@ export function parseAnnotationChord(node: CSNode): ParsedChord | null {
   if (text.length > 0 && "^_<>@".includes(text[0])) {
     text = text.slice(1);
   }
+
+  // Because the scanner stops after the longest chord prefix, text such as "Fine" would read as F; only text that reads as a chord to its end is one.
+
+  if (!isChordSymbolText(text)) return null;
 
   const scanResult = scanChordSymbol(text);
   if (scanResult === null) return null;

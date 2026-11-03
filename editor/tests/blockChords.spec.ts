@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { describe, it } from "mocha";
-import { barLengthInUnits, blockChords, rhythmUnits, unitsToRhythm } from "../src/runner/blockChords";
+import { barLengthInUnits, blockChords, parseChordText, rhythmUnits, unitsToRhythm } from "../src/runner/blockChords";
 import { resultError, resultValue } from "./helpers";
 
 const SCORE = 'X:1\nV:1\nV:2\nK:Cm\n[V:1] "Fm" X | "Cm" x4 "Bb6" x4 |\n[V:2] F3E G4 | G4 D4 |\n';
@@ -176,5 +176,16 @@ describe("blockChords", () => {
 
   it("throws when the chord voice has no line", () => {
     resultError(blockChords(SCORE, { chordVoice: "9", into: ["3", "4", "5", "6"], voicing: "close" }));
+  });
+});
+
+describe("parseChordText", () => {
+  it("reads an annotation that is a chord symbol to its end", () => {
+    expect(parseChordText("Am7")?.root).to.equal("A");
+  });
+
+  it("refuses text annotations that only start like a chord, such as Fine or Coda", () => {
+    expect(parseChordText("Fine")).to.equal(null);
+    expect(parseChordText("^Coda")).to.equal(null);
   });
 });

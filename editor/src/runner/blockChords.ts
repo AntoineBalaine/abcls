@@ -13,7 +13,7 @@ import {
 import { DocumentSnapshots, encode, getSnapshotAtPosition } from "abcls-parser/interpreter/ContextInterpreter";
 import { TUPLET_Q, getBrokenRhythmMultipliers } from "abcls-parser/interpreter/TuneInterpreter";
 import { parseChordSymbol } from "abcls-parser/music-theory/parseChordSymbol";
-import { scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
+import { isChordSymbolText, scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
 import { ParsedChord } from "abcls-parser/music-theory/types";
 import { KeySignature, MeterType } from "abcls-parser/types/abcjs-ast";
 import { interpretContext } from "../context/csContextInterpreter";
@@ -180,6 +180,8 @@ export function unitsToRhythm(units: number): string {
 export function parseChordText(annotation: string): ParsedChord | null {
   let text = annotation;
   if (text.length > 0 && "^_<>@".includes(text[0])) text = text.slice(1);
+  // Because the scanner stops after the longest chord prefix, text such as "Fine" would read as F; only text that reads as a chord to its end is one.
+  if (!isChordSymbolText(text)) return null;
   const scanResult = scanChordSymbol(text);
   if (scanResult === null) return null;
   return parseChordSymbol(scanResult.tokens);

@@ -137,3 +137,11 @@ export function scanChordSymbol(input: string): ScanResult | null {
 
   return { tokens: ctx.tokens, consumed: ctx.current };
 }
+
+/**
+ * Returns whether the whole text reads as a chord symbol, and not only its beginning.
+ */
+export function isChordSymbolText(text: string): boolean {
+  const scanned = scanChordSymbol(text);
+  return scanned !== null && scanned.consumed === text.length;
+}

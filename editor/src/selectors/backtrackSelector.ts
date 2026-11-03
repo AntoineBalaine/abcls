@@ -1,6 +1,6 @@
 import { TT } from "abcls-parser";
 import { parseChordSymbol } from "abcls-parser/music-theory/parseChordSymbol";
-import { scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
+import { isChordSymbolText, scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
 import { ParsedChord } from "abcls-parser/music-theory/types";
 import { CSNode, TAGS, isTokenNode, getTokenData } from "../csTree/types";
 import { Selection } from "../selection";
@@ -114,6 +114,10 @@ export function selectPreviousChordSymbol(selection: Selection, samePhysicalLine
     if (node.tag === TAGS.Annotation || node.tag === TAGS.ChordSymbol) {
       const text = extractChordText(node);
       if (text === null) continue;
+
+      // Because the scanner stops after the longest chord prefix, text such as "Fine" would read as F; only text that reads as a chord to its end is one.
+
+      if (!isChordSymbolText(text)) continue;
 
       const scanResult = scanChordSymbol(text);
       if (scanResult === null) continue;

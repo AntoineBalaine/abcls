@@ -14,7 +14,7 @@
  */
 
 import { SemanticData } from "../analyzers/semantic-analyzer";
-import { ParsedChord, scanChordSymbol, parseChordSymbol } from "../music-theory";
+import { isChordSymbolText, ParsedChord, scanChordSymbol, parseChordSymbol } from "../music-theory";
 import { ABCContext } from "../parsers/Context";
 import { Token, TT } from "../parsers/scan";
 import { Meter, KeySignature, ClefProperties, TempoProperties, MeterType, AccidentalType } from "../types/abcjs-ast";
@@ -635,6 +635,10 @@ export class ContextInterpreter implements Visitor<void> {
     if (text.length > 0 && "^_<>@".includes(text[0])) {
       text = text.slice(1);
     }
+
+    // Because the scanner stops after the longest chord prefix, text such as "Fine" would read as F; only text that reads as a chord to its end is one.
+
+    if (!isChordSymbolText(text)) return;
 
     const scanResult = scanChordSymbol(text);
     if (scanResult === null) return;
