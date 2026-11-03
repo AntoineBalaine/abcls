@@ -64,7 +64,7 @@ describe("splitVoiceIntoMeasures", () => {
 
 describe("normalizeForMusicXML", () => {
   it("does not pad or error when voices in the same staff have mismatched measure counts", () => {
-    const abc = "X:1\nV:1\nV:2 merge=true\nK:C\nV:1\nC D | E F | G A |\nV:2\nC D | E F |";
+    const abc = "X:1\nV:1\nV:2 merge\nK:C\nV:1\nC D | E F | G A |\nV:2\nC D | E F |";
     const tune = interpretABC(abc);
     const ir = normalizeTune(tune);
     expect(ir.parts.length).to.equal(1);
@@ -93,7 +93,7 @@ describe("normalizeForMusicXML", () => {
   });
 
   it("does not count a chord's stacked notes more than once when computing the backup duration between voices", () => {
-    const abc = "X:1\nM:4/4\nL:1/4\nV:1\nV:2 merge=true\nK:C\nV:1\n[CEG] |\nV:2\nC, |";
+    const abc = "X:1\nM:4/4\nL:1/4\nV:1\nV:2 merge\nK:C\nV:1\n[CEG] |\nV:2\nC, |";
     const tune = interpretABC(abc);
     const ir = normalizeTune(tune);
     const content = ir.parts[0].measures[0].content;

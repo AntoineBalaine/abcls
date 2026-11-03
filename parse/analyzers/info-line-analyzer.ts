@@ -840,6 +840,9 @@ export function analyzeVoiceInfo(expr: Info_line, analyzer: SemanticAnalyzer): I
       const key = (item.key as Token).lexeme.toLowerCase();
       const value = (item.value as Token).lexeme;
       applyVoiceProperty(properties, key, value, analyzer, expr);
+    } else if (item instanceof KV && item.key === undefined && isToken(item.value) && item.value.lexeme.trim().toLowerCase() === "merge") {
+      // Because abcjs writes merge as a flag without a value (V:2 merge), the bare word means merge=true.
+      properties.merge = true;
     }
   }
 

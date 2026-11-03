@@ -4,6 +4,7 @@
  * Tests to validate the multi-staff/multi-voice functionality.
  */
 
+import * as abcjs from "abcjs";
 import { expect } from "chai";
 import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
 import { ABCContext } from "../parsers/Context";
@@ -649,6 +650,25 @@ GABA |`;
     });
   });
 
+  describe("merge voice property", () => {
+    const tuneWith = (voiceLine: string) => `X:1\nV:1\n${voiceLine}\nK:C\nV:1\nC D |\nV:2\nE F |`;
+
+    for (const [voiceLine, staffCount] of [
+      ["V:2 merge", 1],
+      ["V:2 merge=true", 1],
+      ["V:2 merge=1", 1],
+      ["V:2", 2],
+    ] as const) {
+      it(`puts the voices of "${voiceLine}" on ${staffCount} staff, as abcjs does`, () => {
+        const system = interpretABC(tuneWith(voiceLine)).systems[0] as StaffSystem;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const abcjsStaffCount = (abcjs as any).parseOnly(tuneWith(voiceLine))[0].lines[0].staff.length;
+        expect(system.staff.length).to.equal(staffCount);
+        expect(system.staff.length).to.equal(abcjsStaffCount);
+      });
+    }
+  });
+
   describe("Voice identity (voiceIds/voiceNames)", () => {
     it("records each voice's original id and declared name, indexed in parallel with voices", () => {
       const abc = `X:1
@@ -668,7 +688,7 @@ E F |`;
     it("indexes voiceIds in parallel with voices when two voices merge onto one staff", () => {
       const abc = `X:1
 V:1
-V:2 merge=true
+V:2 merge
 K:C
 V:1
 C D |
@@ -684,7 +704,7 @@ E F |`;
     it("never stamps voiceIds/voiceNames past a system's actual voices length, even when a merged voice backfills an earlier system", () => {
       const abc = `X:1
 V:1
-V:2 merge=true
+V:2 merge
 K:C
 V:1
 C D |

@@ -44,7 +44,7 @@ const fixtures: Array<{ name: string; abc: string }> = [
   },
   {
     name: "two voices sharing a staff",
-    abc: "X:1\nM:4/4\nL:1/4\nV:1\nV:2 merge=true\nK:C\nV:1\nC D E F |\nV:2\nC, D, E, F, |",
+    abc: "X:1\nM:4/4\nL:1/4\nV:1\nV:2 merge\nK:C\nV:1\nC D E F |\nV:2\nC, D, E, F, |",
   },
   {
     name: "flats and sharps",

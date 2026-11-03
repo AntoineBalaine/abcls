@@ -1,7 +1,14 @@
+import * as abcjs from "abcjs";
 import { expect } from "chai";
+import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
+import { ABCContext } from "../parsers/Context";
+import { AbcErrorReporter } from "../parsers/ErrorReporter";
+import { parse } from "../parsers/parse";
+import { Scanner } from "../parsers/scan";
 import { Font } from "../types/abcjs-ast";
 import { FontSpec } from "../types/directive-specs";
 import { fontSpecToFont } from "./helpers";
+import { TuneInterpreter } from "./TuneInterpreter";
 
 describe("fontSpecToFont", () => {
   it("returns all-default Font when given empty spec", () => {
@@ -84,4 +91,33 @@ describe("fontSpecToFont", () => {
     expect(result.style).to.equal("normal");
     expect(result.decoration).to.equal("none");
   });
+});
+
+describe("bar types, compared with abcjs", () => {
+  const barlines = ["|", "||", "|:", ":|", "::", "|]", "[|", "[|]"];
+
+  function barTypes(systems: { staff?: { voices: { el_type: string; type?: string }[][] }[] }[]): string[] {
+    const types: string[] = [];
+    for (const system of systems) {
+      for (const element of system.staff?.[0].voices[0] ?? []) {
+        if (element.el_type === "bar") types.push(element.type!);
+      }
+    }
+    return types;
+  }
+
+  for (const barline of barlines) {
+    it(`reads "${barline}" as abcjs does`, () => {
+      const abc = `X:1\nL:1/4\nK:C\nC D ${barline} E F |\n`;
+      const ctx = new ABCContext(new AbcErrorReporter());
+      const ast = parse(Scanner(abc, ctx), ctx);
+      const analyzer = new SemanticAnalyzer(ctx);
+      ast.accept(analyzer);
+      const ours = new TuneInterpreter(analyzer, ctx, abc).interpretFile(ast).tunes[0];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const theirs = (abcjs as any).parseOnly(abc)[0];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(barTypes(ours.systems as any)).to.deep.equal(barTypes(theirs.lines));
+    });
+  }
 });
