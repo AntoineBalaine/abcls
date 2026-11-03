@@ -27,10 +27,13 @@ abcls-kak-install
 - Diagnostics (errors and warnings)
 - Document formatting (barline alignment for multi-voice systems)
 - Completions for decorations (`!`), directives (`%%`), and info lines
-- Score preview (VS Code) with SVG export
+- Score preview (VS Code) with SVG export. The notes under the editor cursor are highlighted in the score, and a click on a note selects its text
 - MIDI input and export
+- [MusicXML](https://antoinebalaine.github.io/abcls/user-guide/musicxml/) export and import, to move a score between ABC and a notation program such as MuseScore
+- [iReal Pro export](https://antoinebalaine.github.io/abcls/user-guide/ireal-export/) of the chord symbols of a score
 - [ABCx chord sheet notation](https://antoinebalaine.github.io/abcls/user-guide/abcx-chord-sheets/) for writing chord charts without full music notation
 - Selectors and transforms for programmatic score editing (transposition, rhythm manipulation, voice management, enharmonic spelling, etc.)
+- Harmonization: a block chord per chord symbol, or a melody harmonized into new voices
 
 ## CLI usage
 
@@ -38,10 +41,16 @@ abcls-kak-install
 abcls format file.abc        # Format an ABC file
 abcls check file.abc         # Check for errors and warnings
 abcls render file.abc        # Render to SVG
+abcls render file.abc --pages pages    # Write A4 pages as SVG, to make a PDF
 abcls transform file.abc transpose 2   # Run an editor transform
+abcls transform file.abc transpose --keys --chords -- -2   # Transpose the notes, the key signatures and the chord symbols
+abcls transform file.abc transpose 2 --as-new-tune "Bb clarinet" -w   # Append the transposed copy as a new tune
 abcls harmonize file.abc --chords-from 1 --into 3,4,5,6   # Write a block chord per chord symbol
 abcls abc2midi file.abc      # Export to MIDI
 abcls midi2abc file.midi     # Convert MIDI to ABC
+abcls abc2xml file.abc -o file.musicxml   # Export a tune to MusicXML
+abcls xml2abc file.musicxml  # Convert MusicXML to ABC
+abcls abc2ireal file.abc -o file.html     # Export the chords as an iReal Pro link
 abcls abcx2abc file.abcx     # Convert ABCx chord sheet to ABC
 abcls lsp --stdio            # Start the language server
 ```
