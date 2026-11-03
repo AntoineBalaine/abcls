@@ -15,6 +15,6 @@
       "abcls-cstree": ["../cstree/src/cstree"]
     }
   },
-  "include": ["*.ts", "commands/**/*.ts", "utils/**/*.ts"],
+  "include": ["*.ts", "commands/**/*.ts", "utils/**/*.ts", "tests/**/*.ts"],
   "references": [{ "path": "../parse" }, { "path": "../midi" }, { "path": "../cstree" }, { "path": "../editor" }]
 }
