@@ -636,8 +636,6 @@ export class ContextInterpreter implements Visitor<void> {
       text = text.slice(1);
     }
 
-    // Because the scanner stops after the longest chord prefix, text such as "Fine" would read as F; only text that reads as a chord to its end is one.
-
     if (!isChordSymbolText(text)) return;
 
     const scanResult = scanChordSymbol(text);

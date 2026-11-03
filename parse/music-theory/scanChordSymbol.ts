@@ -140,6 +140,10 @@ export function scanChordSymbol(input: string): ScanResult | null {
 
 /**
  * Returns whether the whole text reads as a chord symbol, and not only its beginning.
+ *
+ * Because scanChordSymbol stops after the longest prefix that reads as a chord, a text annotation such as "Fine",
+ * "Coda" or "Allegro" scans as F, C or A. A caller that reads annotations as chords must therefore check this function
+ * first, so that only a text that reads as a chord to its end counts as one.
  */
 export function isChordSymbolText(text: string): boolean {
   const scanned = scanChordSymbol(text);
