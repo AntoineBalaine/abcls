@@ -9,7 +9,6 @@ import {
   isNoteElement,
   NoteElement,
   isBarElement,
-  BarElement,
   isKeyElement,
   isMeterElement,
   isClefElement,
@@ -131,31 +130,36 @@ export function splitVoiceIntoMeasures(voiceElements: VoiceElement[]): VoiceElem
 }
 
 /**
- * Because splitVoiceIntoMeasures discards the barlines, we need a separate
- * pass to learn which measures start a new system: those are the measures
- * that follow a barline carrying lineBreakAfter.
+ * Because splitVoiceIntoMeasures discards the system boundaries, we need a separate
+ * pass to learn which measures start a new system. `systemStartElements` holds the
+ * index of the first element of every system after the first one, in the joined voice.
+ * A system that starts in the middle of a measure (a source line that does not end
+ * with a barline) starts no new MusicXML system, because MusicXML can only break
+ * between measures.
  */
-export function findSystemStartMeasureIndexes(voiceElements: VoiceElement[]): Set<number> {
+export function findSystemStartMeasureIndexes(voiceElements: VoiceElement[], systemStartElements: Set<number>): Set<number> {
   const starts = new Set<number>();
   let measureIndex = 0;
   let hasContent = false;
-  for (const element of voiceElements) {
+  voiceElements.forEach((element, elementIndex) => {
+    if (systemStartElements.has(elementIndex) && !hasContent && measureIndex > 0) starts.add(measureIndex);
     if (!isBarElement(element)) {
       hasContent = true;
-      continue;
+      return;
     }
     // Mirrors splitVoiceIntoMeasures, which skips a barline that follows no content.
-    if (!hasContent) continue;
+    if (!hasContent) return;
     hasContent = false;
     measureIndex++;
-    if ((element as BarElement).lineBreakAfter) starts.add(measureIndex);
-  }
+  });
   return starts;
 }
 
 interface CollectedStaff {
   representative: Staff;
   voices: VoiceElement[][];
+  /** For each voice, the index in the joined voice of the first element of every system after the first one. */
+  systemStartElements: Set<number>[];
 }
 
 function collectContinuousVoicesByStaff(tune: Tune): CollectedStaff[] {
@@ -172,23 +176,18 @@ function collectContinuousVoicesByStaff(tune: Tune): CollectedStaff[] {
       voiceCount = Math.max(voiceCount, staff.voices.length);
     }
     const voices: VoiceElement[][] = Array.from({ length: voiceCount }, () => []);
-    musicSystems.forEach((system, systemIndex) => {
+    const systemStartElements: Set<number>[] = Array.from({ length: voiceCount }, () => new Set<number>());
+    for (const system of musicSystems) {
       const staff = system.staff[staffIndex];
-      if (!staff) return;
-      const isLastSystem = systemIndex === musicSystems.length - 1;
+      if (!staff) continue;
       staff.voices.forEach((voiceElements, voiceIndex) => {
+        // Because each line of music is its own system, the start of every system after the first one is a line break.
+        if (voices[voiceIndex].length > 0) systemStartElements[voiceIndex].add(voices[voiceIndex].length);
         voices[voiceIndex].push(...voiceElements);
-        // Because each ABC source line becomes its own system, the end of a
-        // system that is not the last one is a line break. We flag a copy of
-        // its closing barline so that the caller's Tune is left untouched.
-        const last = voiceElements[voiceElements.length - 1];
-        if (!isLastSystem && last && isBarElement(last)) {
-          voices[voiceIndex][voices[voiceIndex].length - 1] = { ...(last as BarElement), lineBreakAfter: true };
-        }
       });
-    });
+    }
     if (representative) {
-      result.push({ representative, voices });
+      result.push({ representative, voices, systemStartElements });
     }
   }
   return result;
@@ -584,9 +583,9 @@ function attachHarmonies(notes: NoteIR[], firstIndexOfElement: number, element: 
 function buildPart(collected: CollectedStaff, partId: string, divisions: number, errors: string[]): PartIR {
   const voiceMeasures = collected.voices.map((v) => splitVoiceIntoMeasures(v));
   const systemStarts = new Set<number>();
-  for (const voice of collected.voices) {
-    for (const index of findSystemStartMeasureIndexes(voice)) systemStarts.add(index);
-  }
+  collected.voices.forEach((voice, voiceIndex) => {
+    for (const index of findSystemStartMeasureIndexes(voice, collected.systemStartElements[voiceIndex])) systemStarts.add(index);
+  });
   // MusicXML's <part> requires minOccurs="1" on <measure>.
   const measureCount = Math.max(
     1,

@@ -185,6 +185,13 @@ export interface InterpreterState {
   currentStaffNum: number; // Which staff within the system
   currentVoiceIndex: number; // Which voice within the staff
 
+  /**
+   * True when a source line has ended since the current voice last wrote an element.
+   * Because abcjs puts the nth line of each voice into the nth system, the next element of the voice
+   * must go into the next system whose slot is free for that voice, instead of the current one.
+   */
+  lineEnded: boolean;
+
   // Output being constructed
   tune: Tune;
 
@@ -239,6 +246,7 @@ export function createInterpreterState(semanticData: Map<number, SemanticData>, 
     currentSystemNum: -1,
     currentStaffNum: -1,
     currentVoiceIndex: -1,
+    lineEnded: false,
 
     tune: createEmptyTune(),
 
@@ -561,6 +569,8 @@ export function switchToVoice(state: InterpreterState, voiceID: string): void {
   state.currentStaffNum = vxNomenclature.staffNum;
   state.currentVoiceIndex = vxNomenclature.index;
   state.currentVoice = voiceID;
+  // Because the system was just chosen after any line end, the pending line end is consumed.
+  state.lineEnded = false;
   // Note: We don't update voiceCurrentSystem anymore because we always search from 0
   // This matches abcjs's setCurrentVoice behavior
 }

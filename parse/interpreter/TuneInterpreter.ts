@@ -6,6 +6,7 @@
  * following the ABCJS builder pattern.
  */
 
+import { convertTuneToDeferred } from "../abcl/AbclToAbcConverter";
 import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
 import { SemanticData } from "../analyzers/semantic-analyzer";
 import { isComment, isInfo_line, isToken } from "../helpers";
@@ -1094,6 +1095,24 @@ export interface ParseResult {
 }
 
 /**
+ * Converts a linear tune to deferred style, so that the interpreter can read it.
+ * Because the converter creates new nodes (the voice markers of each system, and the silenced lines of the voices that a
+ * system leaves out), and the semantic analysis ran before them, the directives and fields among those new nodes are
+ * analyzed here. The original nodes keep the data that the analysis already recorded.
+ */
+export function toInterpretableTune(tune: TuneExpr, analyzer: SemanticAnalyzer, ctx: ABCContext): TuneExpr {
+  const deferred = convertTuneToDeferred(tune, ctx);
+  if (deferred === tune || !deferred.tune_body) return deferred;
+  for (const system of deferred.tune_body.sequence) {
+    for (const item of system) {
+      const isAnalyzable = item instanceof Directive || item instanceof Info_line || item instanceof Inline_field;
+      if (isAnalyzable && !analyzer.data.has(item.id)) item.accept(analyzer);
+    }
+  }
+  return deferred;
+}
+
+/**
  * Main Tune Interpreter
  */
 export class TuneInterpreter implements Visitor<void> {
@@ -1157,9 +1176,10 @@ export class TuneInterpreter implements Visitor<void> {
     const voiceId = this.state.currentVoice;
     const vxNomenclature = this.state.vxNomenclatures.get(voiceId);
 
-    // Switch if: no nomenclature, no switch yet (pointers are -1), or pointing to different voice
+    // Switch if: no nomenclature, no switch yet (pointers are -1), a source line ended, or pointing to different voice
     if (
       !vxNomenclature ||
+      this.state.lineEnded ||
       this.state.currentStaffNum === -1 ||
       this.state.currentVoiceIndex === -1 ||
       vxNomenclature.staffNum !== this.state.currentStaffNum ||
@@ -1244,7 +1264,11 @@ export class TuneInterpreter implements Visitor<void> {
     }
   }
 
-  visitTuneExpr(expr: TuneExpr): void {
+  visitTuneExpr(linearOrDeferred: TuneExpr): void {
+    // Because a linear tune groups its systems by a different rule than abcjs, the interpreter only reads deferred tunes,
+    // and a linear tune is converted first, the way the preview and abc2midi convert it.
+    const expr = linearOrDeferred.linear ? toInterpretableTune(linearOrDeferred, this.analyzer, this.ctx) : linearOrDeferred;
+
     // Create fresh state for this tune
     this.state = createInterpreterState(this.analyzer.data, this.fileDefaults);
 
@@ -1655,21 +1679,6 @@ export class TuneInterpreter implements Visitor<void> {
     }
   }
 
-  /**
-   * Because a source line that ends right after a barline is a line break
-   * the author chose, we flag that barline so that the MusicXML export can
-   * emit a <print new-system="yes"/> for the measure that follows it.
-   */
-  markLineBreakAfterLastBar(): void {
-    if (this.processingContext !== "tune_body") return;
-    if (this.state.currentSystemNum === -1 || this.state.currentStaffNum === -1 || this.state.currentVoiceIndex === -1) return;
-    const elements = this.getCurrentVoiceElements();
-    const last = elements[elements.length - 1];
-    if (last && last.el_type === ElementType.Bar) {
-      (last as BarElement).lineBreakAfter = true;
-    }
-  }
-
   visitBarLineExpr(expr: BarLine): void {
     const barType = determineBarType(expr.barline);
 
@@ -1710,7 +1719,8 @@ export class TuneInterpreter implements Visitor<void> {
         this.lineContinuationPending = false;
         return;
       }
-      this.markLineBreakAfterLastBar();
+      // Because abcjs starts a new line of music at each end of line, the next element of the voice goes into the next system.
+      if (this.processingContext === "tune_body") this.state.lineEnded = true;
       return;
     }
     if (token.type === TT.SLUR) {

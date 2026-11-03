@@ -51,6 +51,27 @@ describe("MusicXML line breaks on export", () => {
     });
     expect(bodyLines(abc).length).to.equal(3);
   });
+
+  it("starts no new system for a line that ends in the middle of a measure", () => {
+    const tune = interpretAbc("X:1\nL:1/4\nM:4/4\nK:C\nC D E F|G A\nB c|\n");
+    expect(serializeScorePartwise(normalizeTune(tune))).not.to.contain("<print");
+  });
+
+  it("starts the second system of a two-voice tune written one voice block at a time on the second measure", () => {
+    const tune = interpretAbc("X:1\nL:1/4\nM:4/4\nV:1\nV:2\nK:C\nV:1\nC D E F|\nG A B c|\nV:2\nC, D, E, F,|\nG, A, B, C|\n");
+    const xml = serializeScorePartwise(normalizeTune(tune));
+    expect(xml.match(/<print new-system="yes"\/>/g)!.length).to.equal(2);
+    expect(xml).to.match(/<measure number="2">\s*<print new-system="yes"\/>/);
+  });
+
+  it("exports a linear voice that a system leaves out as a rest in that system", () => {
+    const tune = interpretAbc("%%abcls-parse linear\nX:1\nL:1/4\nM:4/4\nV:1\nV:2\nK:C\nV:1\nC D E F|\nG A B c|\nV:2\nC, D, E, F,|\n");
+    const xml = serializeScorePartwise(normalizeTune(tune));
+    const secondPart = xml.slice(xml.lastIndexOf("<part "));
+    const firstMeasure = secondPart.slice(0, secondPart.indexOf("</measure>"));
+    expect(firstMeasure).to.contain("<rest");
+    expect(firstMeasure).not.to.contain("<pitch>");
+  });
 });
 
 describe("empty measures written as X", () => {
