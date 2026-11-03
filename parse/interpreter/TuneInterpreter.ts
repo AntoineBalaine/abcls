@@ -578,7 +578,10 @@ function isInfoLineSemanticData(data: SemanticData): data is InfoLineUnion {
  */
 type HeaderContext =
   | { type: "file_header"; target: FileDefaults }
-  | { type: "tune_header"; target: { tune: Tune; tuneDefaults: TuneDefaults; parserConfig: import("./InterpreterState").ParserConfig } };
+  | {
+      type: "tune_header";
+      target: { tune: Tune; tuneDefaults: TuneDefaults; parserConfig: import("./InterpreterState").ParserConfig; voices: Map<string, VoiceState> };
+    };
 
 /**
  * Processes info line semantic data and assigns it to the appropriate target.
@@ -691,10 +694,15 @@ function applyInfoLine(semanticData: InfoLineUnion, context: HeaderContext): str
   // Tune header only
   if (isKeyInfo(semanticData)) {
     // Because a K: field that only changes the clef gives no key, the default key stays.
+    // Because a header K: is tune-wide, the voices that the header declared before it (V:1 and V:2 above the K: line)
+    // take its key and its clef too, as they do in abcjs; a voice that declares its own clef keeps it.
     const keySignature = semanticData.data.keySignature;
+    const headerClef = semanticData.data.clef;
     if (keySignature) context.target.tuneDefaults.key = keySignature;
-    if (semanticData.data.clef) {
-      context.target.tuneDefaults.clef = semanticData.data.clef;
+    if (headerClef) context.target.tuneDefaults.clef = headerClef;
+    for (const voice of context.target.voices.values()) {
+      if (keySignature) voice.currentKey = keySignature;
+      if (headerClef && !voice.properties.clef) voice.currentClef = headerClef;
     }
 
     // Automatically enable bagpipes formatting for HP/Hp keys (matching abcjs behavior)
@@ -704,7 +712,9 @@ function applyInfoLine(semanticData: InfoLineUnion, context: HeaderContext): str
       context.target.tune.formatting.bagpipes = true;
     }
   } else if (isMeterInfo(semanticData)) {
+    // Because a header M: is tune-wide too, the voices declared before it take it as well.
     context.target.tuneDefaults.meter = semanticData.data;
+    for (const voice of context.target.voices.values()) voice.currentMeter = semanticData.data;
   }
   // Voice is handled separately in visitInfoLineExpr
 
@@ -1362,7 +1372,7 @@ export class TuneInterpreter implements Visitor<void> {
       // Header info line - use the helper function
       const context: HeaderContext = {
         type: "tune_header",
-        target: { tune: this.state.tune, tuneDefaults: this.state.tuneDefaults, parserConfig: this.state.parserConfig },
+        target: { tune: this.state.tune, tuneDefaults: this.state.tuneDefaults, parserConfig: this.state.parserConfig, voices: this.state.voices },
       };
       const warning = applyInfoLine(semanticData, context);
       if (warning) {
@@ -1433,7 +1443,7 @@ export class TuneInterpreter implements Visitor<void> {
         // Tune header or body
         const context: HeaderContext = {
           type: "tune_header",
-          target: { tune: this.state.tune, tuneDefaults: this.state.tuneDefaults, parserConfig: this.state.parserConfig },
+          target: { tune: this.state.tune, tuneDefaults: this.state.tuneDefaults, parserConfig: this.state.parserConfig, voices: this.state.voices },
         };
         const warning = applyDirective(semanticData, expr.key.lexeme, context);
         if (warning) {

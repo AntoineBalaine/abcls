@@ -22,6 +22,14 @@ function abcjsFirstSystemStaffCount(abc: string): number {
   return (abcjs as any).parseOnly(abc)[0].lines[0].staff.length;
 }
 
+/**
+ * Describes the staves of the first system as text (key, meter and clef of each staff), so that our interpreter and abcjs can be compared.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function describeStaves(staves: any[]): string {
+  return staves.map((staff) => `${staff.key.root}${staff.key.acc}${staff.key.mode} ${staff.meter?.type} ${staff.clef?.type}`).join(" ; ");
+}
+
 describe("Multi-Staff Implementation", () => {
   function interpretABC(abc: string) {
     const ctx = new ABCContext(new AbcErrorReporter());
@@ -670,6 +678,23 @@ GABA |`;
         const system = interpretABC(abc).systems[0] as StaffSystem;
         expect(system.staff.length).to.equal(staffCount);
         expect(system.staff.length).to.equal(abcjsFirstSystemStaffCount(abc));
+      });
+    }
+  });
+
+  describe("header voices take the key, the meter and the clef of the header, as abcjs does", () => {
+    const cases: Record<string, string> = {
+      "voices declared above M: and K:": "X:1\nV:1\nV:2\nL:1/8\nM:C\nK:Dm\nV:1\nD2 F2|\nV:2\nD,4|\n",
+      "voices declared below M: and K:": "X:1\nL:1/8\nM:C\nK:Dm\nV:1\nV:2\nV:1\nD2 F2|\nV:2\nD,4|\n",
+      "a voice with its own clef, above K:": "X:1\nV:1\nV:2 clef=bass\nM:3/4\nK:G\nV:1\nG2 A|\nV:2\nG,3|\n",
+      "a clef given by the header K:": "X:1\nV:1\nV:2\nM:3/4\nK:G clef=bass\nV:1\nG,2 A,|\nV:2\nG,3|\n",
+      "a clef given by the header K: and a voice with its own clef": "X:1\nV:1\nV:2 clef=treble\nM:3/4\nK:G clef=bass\nV:1\nG,2 A,|\nV:2\nG3|\n",
+    };
+    for (const [name, abc] of Object.entries(cases)) {
+      it(name, () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const theirs = describeStaves((abcjs as any).parseOnly(abc)[0].lines[0].staff);
+        expect(describeStaves((interpretABC(abc).systems[0] as StaffSystem).staff)).to.equal(theirs);
       });
     }
   });

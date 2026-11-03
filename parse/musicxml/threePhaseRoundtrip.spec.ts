@@ -6,7 +6,7 @@ import { ABCContext } from "../parsers/Context";
 import { AbcErrorReporter } from "../parsers/ErrorReporter";
 import { parse } from "../parsers/parse";
 import { Scanner } from "../parsers/scan";
-import { Tune } from "../types/abcjs-ast";
+import { StaffSystem, Tune } from "../types/abcjs-ast";
 import { parseMusicXmlToSheet } from "./parseMusicXml";
 import { serializeScorePartwise } from "./serialize";
 import { importTune, normalizeTune } from "./testSupport/unwrap";
@@ -157,6 +157,23 @@ K:C
     expect(originalSummary[0][0].decorations, "sanity check: original C should carry the trill").to.deep.equal(["trill"]);
 
     expect(summarizeTune(finalTune)).to.deep.equal(originalSummary);
+  });
+
+  // Because xml2abc writes the voices before M: and K:, the interpreter must give those voices the key and the meter of
+  // the header, or the second export of the written ABC loses them.
+  it("keeps the key and the meter of every staff of a multi-voice tune", () => {
+    const abc = `X:1
+M:C
+L:1/4
+K:Dm
+V:1
+D F A c |
+V:2
+D, F, A, C |`;
+    const { originalTune, finalTune, intermediateAbc } = fullRoundTrip(abc);
+    const describeStaves = (tune: Tune) =>
+      (tune.systems[0] as StaffSystem).staff.map((staff) => `${staff.key.root}${staff.key.acc}${staff.key.mode} ${staff.meter?.type}`);
+    expect(describeStaves(finalTune), intermediateAbc).to.deep.equal(describeStaves(originalTune));
   });
 
   // Because MusicXML numbers voices within each part, the importer gives the voice of the second staff the id "1_2"
