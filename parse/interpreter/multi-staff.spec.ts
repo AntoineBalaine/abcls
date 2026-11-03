@@ -14,6 +14,14 @@ import { Scanner } from "../parsers/scan";
 import { StaffSystem } from "../types/abcjs-ast";
 import { TuneInterpreter } from "./TuneInterpreter";
 
+/**
+ * Returns the number of staves in the first system that abcjs reads from the text.
+ */
+function abcjsFirstSystemStaffCount(abc: string): number {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (abcjs as any).parseOnly(abc)[0].lines[0].staff.length;
+}
+
 describe("Multi-Staff Implementation", () => {
   function interpretABC(abc: string) {
     const ctx = new ABCContext(new AbcErrorReporter());
@@ -651,8 +659,6 @@ GABA |`;
   });
 
   describe("merge voice property", () => {
-    const tuneWith = (voiceLine: string) => `X:1\nV:1\n${voiceLine}\nK:C\nV:1\nC D |\nV:2\nE F |`;
-
     for (const [voiceLine, staffCount] of [
       ["V:2 merge", 1],
       ["V:2 merge=true", 1],
@@ -660,12 +666,25 @@ GABA |`;
       ["V:2", 2],
     ] as const) {
       it(`puts the voices of "${voiceLine}" on ${staffCount} staff, as abcjs does`, () => {
-        const system = interpretABC(tuneWith(voiceLine)).systems[0] as StaffSystem;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const abcjsStaffCount = (abcjs as any).parseOnly(tuneWith(voiceLine))[0].lines[0].staff.length;
+        const abc = `X:1\nV:1\n${voiceLine}\nK:C\nV:1\nC D |\nV:2\nE F |`;
+        const system = interpretABC(abc).systems[0] as StaffSystem;
         expect(system.staff.length).to.equal(staffCount);
-        expect(system.staff.length).to.equal(abcjsStaffCount);
+        expect(system.staff.length).to.equal(abcjsFirstSystemStaffCount(abc));
       });
+    }
+  });
+
+  describe("voice ids, read as abcjs reads them (the whole first word)", () => {
+    for (const id of ["2", "Tenor", "S2", "1_2", "1-2", "1b"]) {
+      for (const inline of [false, true]) {
+        it(`reads ${inline ? `[V:${id}]` : `V:${id} clef=bass`} as voice "${id}"`, () => {
+          const body = inline ? `[V:1]C2 D2 E2 F2 |\n[V:${id}]E,8 |\n` : `V:1\nC2 D2 E2 F2 |\nV:${id} clef=bass\nE,8 |\n`;
+          const abc = `X:1\nV:1\nV:${id}\nL:1/8\nM:4/4\nK:C\n${body}`;
+          const system = interpretABC(abc).systems[0] as StaffSystem;
+          expect(system.staff.map((staff) => staff.voiceIds)).to.deep.equal([["1"], [id]]);
+          expect(system.staff.length).to.equal(abcjsFirstSystemStaffCount(abc));
+        });
+      }
     }
   });
 

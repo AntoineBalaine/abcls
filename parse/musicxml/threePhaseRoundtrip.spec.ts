@@ -159,22 +159,9 @@ K:C
     expect(summarizeTune(finalTune)).to.deep.equal(originalSummary);
   });
 
-  // Skipped: reveals a genuine, confirmed bug in importFromMusicSheet.ts, not
-  // in this test or in tuneToAst.ts. V:1/V:2 with no explicit merge assigns
-  // each voice to its own staff (TuneInterpreter's default staff-assignment
-  // rule), so the original Tune has two staves, each with one voice. MusicXML
-  // numbers voices per-part (each part's own voice restarts at "1"), and
-  // importFromMusicSheet copies that per-part-scoped Voice.VoiceId directly
-  // onto Staff.voiceIds without making it tune-wide unique. Both staves end
-  // up with voiceIds === ["1"], so tuneToAst.ts's by-voice-id grouping (which
-  // is correct given the data it receives) merges both staves' notes into one
-  // voice, producing a duplicate "V:1" header and concatenated note content
-  // instead of two voices. Confirmed by direct trace: the imported Tune
-  // correctly has 2 staves, but both report voiceIds ["1"]. Needs a fix in
-  // importFromMusicSheet.ts to synthesize a tune-wide-unique id (e.g.
-  // combining part index with the local VoiceId) rather than copying
-  // Voice.VoiceId verbatim. Not fixed here per this task's scope.
-  it.skip("preserves pitches and durations for a multi-voice tune", () => {
+  // Because MusicXML numbers voices within each part, the importer gives the voice of the second staff the id "1_2"
+  // (assignVoiceIds), and the ABC reader must read that whole word as one voice id, as abcjs does.
+  it("preserves pitches and durations for a multi-voice tune", () => {
     const abc = `X:1
 M:4/4
 L:1/4

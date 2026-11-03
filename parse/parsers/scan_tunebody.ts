@@ -1,6 +1,6 @@
 import { Decorations } from "../types/abcjs-ast";
 import { scanDirective } from "./infoLines/scanDirective";
-import { absolutePitch, infoLineIdentifier, singleChar, specialLiteral, stringLiteral, unsignedNumber } from "./infoLines/scanInfoLine";
+import { absolutePitch, infoLineIdentifier, singleChar, specialLiteral, stringLiteral, unsignedNumber, voiceId } from "./infoLines/scanInfoLine";
 import { keySignature } from "./infoLines/scanKeyInfoLine";
 import {
   Ctx,
@@ -508,6 +508,11 @@ export function inline_field(ctx: Ctx): boolean {
   if (fieldType === "K") {
     WS(ctx);
     keySignature(ctx);
+  }
+  // Because abcjs reads a voice id as the whole first word ([V:1_2]), a V: field starts with the voice id scanner.
+  if (fieldType === "V") {
+    WS(ctx);
+    voiceId(ctx);
   }
 
   // Tokenize content using appropriate scanners based on field type

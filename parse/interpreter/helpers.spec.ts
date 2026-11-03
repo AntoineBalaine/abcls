@@ -93,18 +93,21 @@ describe("fontSpecToFont", () => {
   });
 });
 
+/**
+ * Returns the bar types of the first voice of the first staff, in order, across the systems.
+ */
+function barTypes(systems: { staff?: { voices: { el_type: string; type?: string }[][] }[] }[]): string[] {
+  const types: string[] = [];
+  for (const system of systems) {
+    for (const element of system.staff?.[0].voices[0] ?? []) {
+      if (element.el_type === "bar") types.push(element.type!);
+    }
+  }
+  return types;
+}
+
 describe("bar types, compared with abcjs", () => {
   const barlines = ["|", "||", "|:", ":|", "::", "|]", "[|", "[|]"];
-
-  function barTypes(systems: { staff?: { voices: { el_type: string; type?: string }[][] }[] }[]): string[] {
-    const types: string[] = [];
-    for (const system of systems) {
-      for (const element of system.staff?.[0].voices[0] ?? []) {
-        if (element.el_type === "bar") types.push(element.type!);
-      }
-    }
-    return types;
-  }
 
   for (const barline of barlines) {
     it(`reads "${barline}" as abcjs does`, () => {
