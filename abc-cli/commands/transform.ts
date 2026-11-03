@@ -48,19 +48,25 @@ export function coerceArgs(transform: string, rawArgs: string[]): unknown[] {
 }
 
 /**
- * Converts a "from-to" pair of 1-indexed line numbers into a range that covers those lines.
+ * Converts a "from-to" pair of 1-indexed positions into a range. Each position is a line ("10"), which covers the whole
+ * line, or a line and a column ("10:5"), where columns also count from 1 and the end column is included.
+ * So "10-20" covers lines 10 to 20, and "10:5-12:20" goes from the 5th character of line 10 to the 20th of line 12.
+ * A single position ("10" or "10:5") is both the start and the end.
  */
 export function parseLineRange(text: string): Range {
-  const match = /^(\d+)(?:-(\d+))?$/.exec(text);
+  const match = /^(\d+)(?::(\d+))?(?:-(\d+)(?::(\d+))?)?$/.exec(text);
   if (match === null) {
-    throw new Error(`Invalid line range "${text}": we expect "10" or "10-20".`);
+    throw new Error(`Invalid line range "${text}": we expect "10", "10-20" or "10:5-12:20".`);
   }
-  const first = parseInt(match[1], 10) - 1;
-  const last = (match[2] ? parseInt(match[2], 10) : parseInt(match[1], 10)) - 1;
-  if (first < 0 || last < first) {
-    throw new Error(`Invalid line range "${text}": lines count from 1, and the end cannot come before the start.`);
+  const [, firstLine, firstColumn, lastLineText, lastColumnText] = match;
+  const lastLine = lastLineText ?? firstLine;
+  const lastColumn = lastLineText === undefined ? firstColumn : lastColumnText;
+  const start = { line: parseInt(firstLine, 10) - 1, character: firstColumn === undefined ? 0 : parseInt(firstColumn, 10) - 1 };
+  const end = { line: parseInt(lastLine, 10) - 1, character: lastColumn === undefined ? Number.MAX_SAFE_INTEGER : parseInt(lastColumn, 10) };
+  if (start.line < 0 || start.character < 0 || end.character < 1 || !isBefore(start, end)) {
+    throw new Error(`Invalid line range "${text}": lines and columns count from 1, and the end cannot come before the start.`);
   }
-  return { start: { line: first, character: 0 }, end: { line: last, character: Number.MAX_SAFE_INTEGER } };
+  return { start, end };
 }
 
 /**
@@ -92,7 +98,7 @@ export const transformCommand = new Command("transform")
   .argument("<name>", "Name of the transform")
   .argument("[args...]", "Arguments of the transform, e.g. close 4 null for harmonizeVoicing")
   .option("--voice <ids>", "Only transform the music of these voices (comma-separated ids)")
-  .option("--lines <range>", "Only transform these lines (1-indexed, e.g. 10-20)")
+  .option("--lines <range>", "Only transform these lines, or this text range (1-indexed, e.g. 10-20 or 10:5-12:20)")
   .option("-w, --write", "Write the result back to the file")
   .addHelpText("after", '\nBecause a negative number looks like an option, write it after "--": abcls transform file.abc transpose -- -2')
   .action((file: string, name: string, args: string[], options: { voice?: string; lines?: string; write?: boolean }) => {

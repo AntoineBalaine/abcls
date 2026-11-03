@@ -99,7 +99,7 @@ The first argument after the file is the name of the transform. The arguments th
 Options:
 
 - `--voice <ids>` -- only transform the music of these voices (comma-separated ids)
-- `--lines <range>` -- only transform these lines, counted from 1 (for example `10` or `10-20`)
+- `--lines <range>` -- only transform these lines, counted from 1 (for example `10` or `10-20`), or a range of text given as line:column positions, where columns also count from 1 and the end column is included (for example `10:5-12:20`)
 - `-w, --write` -- write the result back to the file (otherwise prints to stdout)
 
 Without `--voice` and `--lines`, the transform applies to the whole file. The transforms that depend on the chord symbols read them by position in time, so a chord symbol written in one voice applies to the notes of every voice that sounds at the same time.
