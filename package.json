@@ -43,7 +43,8 @@
     "lint": "npm run lint -w parse && npm run lint -w cstree && npm run lint -w editor && npm run lint -w abcls-midi && npm run lint -w abcls-server && npm run lint -w abcls-cli && npm run lint -w vscode-extension && npm run lint -w abcls-preview-server && npm run lint -w abcls-kak",
     "lint:fix": "npm run lint:fix -w parse && npm run lint:fix -w cstree && npm run lint:fix -w editor && npm run lint:fix -w abcls-midi && npm run lint:fix -w abcls-server && npm run lint:fix -w abcls-cli && npm run lint:fix -w vscode-extension && npm run lint:fix -w abcls-preview-server && npm run lint:fix -w abcls-kak",
     "format": "prettier --write \"**/*.{ts,js,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,js,json,md}\""
+    "format:check": "prettier --check \"**/*.{ts,js,json,md}\"",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@istanbuljs/nyc-config-typescript": "^1.0.2",
@@ -61,6 +62,7 @@
     "eslint-plugin-import": "^2.29.0",
     "eslint-plugin-n": "^16.3.1",
     "eslint-plugin-promise": "^6.1.1",
+    "husky": "^9.1.7",
     "lint-staged": "^13.1.0",
     "mocha": "^10.2.0",
     "nyc": "^15.1.0",
@@ -75,5 +77,11 @@
     "lodash": "^4.17.21",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.11"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ]
   }
 }
