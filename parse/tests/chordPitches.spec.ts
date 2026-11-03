@@ -120,6 +120,24 @@ describe("chordToPitches", () => {
     });
   });
 
+  describe("added tones", () => {
+    it("Cm(add9) -> [60, 63, 67, 74] (C, Eb, G, D), a minor triad with a ninth and no seventh", () => {
+      expect(getPitches("Cm(add9)")).to.deep.equal([60, 63, 67, 74]);
+    });
+
+    it("C7(add13) -> [60, 64, 67, 70, 81], the dominant seventh with a thirteenth", () => {
+      expect(getPitches("C7(add13)")).to.deep.equal([60, 64, 67, 70, 81]);
+    });
+
+    it("Cm(add6) -> [60, 63, 67, 69], a minor triad with a major sixth", () => {
+      expect(getPitches("Cm(add6)")).to.deep.equal([60, 63, 67, 69]);
+    });
+
+    it("C9(add9) has no second ninth, because the chord holds the ninth already", () => {
+      expect(getPitches("C9(add9)")).to.deep.equal(getPitches("C9"));
+    });
+  });
+
   describe("different roots", () => {
     it("Am at octave 4 -> [69, 72, 76] (A4, C5, E5)", () => {
       expect(getPitches("Am", 4)).to.deep.equal([69, 72, 76]);
@@ -139,6 +157,7 @@ describe("chordToPitches", () => {
         qualityExplicit: false,
         extension: null,
         alterations: [],
+        addedTones: [],
         bass: null,
       };
       expect(chordToPitches(chord)).to.be.null;
@@ -152,6 +171,7 @@ describe("chordToPitches", () => {
         qualityExplicit: false,
         extension: null,
         alterations: [],
+        addedTones: [],
         bass: null,
       };
       expect(chordToPitches(chord)).to.be.null;

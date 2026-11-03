@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { scanChordSymbol } from "../music-theory/scanChordSymbol";
+import { isChordSymbolText, scanChordSymbol } from "../music-theory/scanChordSymbol";
 import { ChordTT } from "../music-theory/types";
 
 function ROOT(lexeme: string) {
@@ -17,11 +17,117 @@ function EXTENSION(lexeme: string) {
 function ALTERATION(lexeme: string) {
   return { type: ChordTT.ALTERATION, lexeme };
 }
+function GROUP_OPEN() {
+  return { type: ChordTT.GROUP_OPEN, lexeme: "(" };
+}
+
+function GROUP_CLOSE() {
+  return { type: ChordTT.GROUP_CLOSE, lexeme: ")" };
+}
+
 function BASS_SLASH() {
   return { type: ChordTT.BASS_SLASH, lexeme: "/" };
 }
 
 describe("scanChordSymbol", () => {
+  describe("minor chord with a major seventh", () => {
+    it('scans "EbmM7", "EbmMaj7", "Ebm^7", "Eb-M7" and "Eb-Maj7" whole', () => {
+      for (const text of ["EbmM7", "EbmMaj7", "Ebm^7", "Eb-M7", "Eb-Maj7"]) {
+        expect(scanChordSymbol(text)!.consumed, text).to.equal(text.length);
+      }
+    });
+
+    it('scans "Cm(Maj7)" as the quality "m" followed by a group that holds the marker "Maj" and the extension 7', () => {
+      expect(scanChordSymbol("Cm(Maj7)")).to.deep.equal({
+        tokens: [ROOT("C"), QUALITY("m"), GROUP_OPEN(), QUALITY("Maj"), EXTENSION("7"), GROUP_CLOSE()],
+        consumed: 8,
+      });
+    });
+
+    it('scans "C7(b9)", "C7(b9,#11)", "Cmaj7(#11)(b13)" and "C(M7)" whole', () => {
+      for (const text of ["C7(b9)", "C7(b9,#11)", "Cmaj7(#11)(b13)", "C(M7)", "Cm(maj7)", "C-(Maj7)", "C7(b9)/G"]) {
+        expect(scanChordSymbol(text)!.consumed, text).to.equal(text.length);
+      }
+    });
+
+    it('scans "Cm(add9)" as the quality "m" followed by a group that holds the added tone 9', () => {
+      expect(scanChordSymbol("Cm(add9)")).to.deep.equal({
+        tokens: [ROOT("C"), QUALITY("m"), GROUP_OPEN(), QUALITY("add"), EXTENSION("9"), GROUP_CLOSE()],
+        consumed: 8,
+      });
+    });
+
+    it('scans "C7(add13,b9)" and "Cm(add9,Maj7)" whole, because a group may mix its items', () => {
+      for (const text of ["C7(add13,b9)", "Cm(add9,Maj7)"]) {
+        expect(scanChordSymbol(text)!.consumed, text).to.equal(text.length);
+      }
+    });
+
+    it('stops before the group of "Cm(add)", because an added tone needs its degree', () => {
+      expect(scanChordSymbol("Cm(add)")!.consumed).to.equal(2);
+    });
+
+    it('stops before the group of "C7(b9", because the parenthesis is never closed', () => {
+      expect(scanChordSymbol("C7(b9")).to.deep.equal({ tokens: [ROOT("C"), EXTENSION("7")], consumed: 2 });
+    });
+
+    it('stops before the group of "C7(foo)" and "C7()", because the group holds nothing that we know', () => {
+      expect(scanChordSymbol("C7(foo)")!.consumed).to.equal(2);
+      expect(scanChordSymbol("C7()")!.consumed).to.equal(2);
+    });
+
+    it('still scans "Cm7", "Cmaj7" and "Cmin7" as before', () => {
+      expect(scanChordSymbol("Cm7")!.tokens.map((t) => t.lexeme)).to.deep.equal(["C", "m", "7"]);
+      expect(scanChordSymbol("Cmaj7")!.tokens.map((t) => t.lexeme)).to.deep.equal(["C", "maj", "7"]);
+      expect(scanChordSymbol("Cmin7")!.tokens.map((t) => t.lexeme)).to.deep.equal(["C", "min", "7"]);
+    });
+
+    it('scans a capital "Maj" as the major quality', () => {
+      expect(scanChordSymbol("BbMaj7")).to.deep.equal({ tokens: [ROOT("B"), ACCIDENTAL("b"), QUALITY("Maj"), EXTENSION("7")], consumed: 6 });
+    });
+  });
+
+  describe("jazz symbols", () => {
+    it('scans "F▵", the major seventh triangle, as a quality', () => {
+      expect(scanChordSymbol("F▵")).to.deep.equal({ tokens: [ROOT("F"), QUALITY("▵")], consumed: 2 });
+    });
+
+    it('scans "FΔ7" and "F△7" like "F▵7"', () => {
+      expect(scanChordSymbol("FΔ7")!.tokens).to.deep.equal([ROOT("F"), QUALITY("Δ"), EXTENSION("7")]);
+      expect(scanChordSymbol("F△7")!.tokens).to.deep.equal([ROOT("F"), QUALITY("△"), EXTENSION("7")]);
+    });
+
+    it('scans "A⁷" with a superscript seven as the extension 7, and counts the source characters', () => {
+      expect(scanChordSymbol("A⁷")).to.deep.equal({ tokens: [ROOT("A"), EXTENSION("7")], consumed: 2 });
+    });
+
+    it('scans "C#⁷#11" with a superscript extension followed by an alteration', () => {
+      expect(scanChordSymbol("C#⁷#11")).to.deep.equal({ tokens: [ROOT("C"), ACCIDENTAL("#"), EXTENSION("7"), ALTERATION("#11")], consumed: 6 });
+    });
+
+    it("scans every superscript digit as the plain digit of the same value", () => {
+      const superscripts = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+      for (let value = 0; value <= 9; value++) {
+        expect(scanChordSymbol(`C${superscripts[value]}`)).to.deep.equal({ tokens: [ROOT("C"), EXTENSION(String(value))], consumed: 2 });
+      }
+    });
+
+    it('scans multi-digit superscripts such as "C¹¹" and "C¹³" as one extension', () => {
+      expect(scanChordSymbol("C¹¹")).to.deep.equal({ tokens: [ROOT("C"), EXTENSION("11")], consumed: 3 });
+      expect(scanChordSymbol("C¹³")!.tokens).to.deep.equal([ROOT("C"), EXTENSION("13")]);
+    });
+
+    it('scans a superscript degree in an alteration, as in "C⁷b⁹" and "C⁷#⁵"', () => {
+      expect(scanChordSymbol("C⁷b⁹")).to.deep.equal({ tokens: [ROOT("C"), EXTENSION("7"), ALTERATION("b9")], consumed: 4 });
+      expect(scanChordSymbol("C⁷#⁵")!.tokens).to.deep.equal([ROOT("C"), EXTENSION("7"), ALTERATION("#5")]);
+    });
+
+    it('scans "Db▵#5" and "F▵/E" with their alteration and bass', () => {
+      expect(scanChordSymbol("Db▵#5")!.consumed).to.equal(5);
+      expect(scanChordSymbol("F▵/E")!.consumed).to.equal(4);
+    });
+  });
+
   describe("combined quality symbols", () => {
     // Each of these names one quality rather than two, so it has to be
     // matched whole; matching only its first character leaves the "^" for
@@ -235,4 +341,18 @@ describe("scanChordSymbol", () => {
       });
     }
   });
+});
+
+describe("isChordSymbolText", () => {
+  for (const text of ["C", "Am7", "Bbmaj7", "F#m7b5", "G7/B", "Cdim7"]) {
+    it(`accepts "${text}", which reads as a chord to its end`, () => {
+      expect(isChordSymbolText(text)).to.equal(true);
+    });
+  }
+
+  for (const text of ["Fine", "Coda", "Allegro", "D.C. al Fine", "Am7 rit."]) {
+    it(`refuses "${text}", whose beginning only reads as a chord`, () => {
+      expect(isChordSymbolText(text)).to.equal(false);
+    });
+  }
 });

@@ -13,6 +13,8 @@
  * like padding and responsive SVG mode.
  */
 
+import { styleChordSymbols } from "./svg-chords";
+
 /**
  * Result of SVG rendering
  */
@@ -21,6 +23,12 @@ export interface SvgRenderResult {
    * Array of SVG strings, one per tune
    */
   svgs: string[];
+
+  /**
+   * The same SVG strings grouped by tune, so that a caller can tell where each tune starts.
+   * With the oneSvgPerLine option, a tune holds one SVG per line of music.
+   */
+  tunes: string[][];
 
   /**
    * Metadata about the rendering
@@ -76,7 +84,10 @@ If you're running from source:
  */
 async function loadAbcjs(): Promise<typeof import("abcjs")> {
   try {
-    return await import("abcjs");
+    const loaded = await import("abcjs");
+    // Because abcjs is a CommonJS package, its API sits under "default" when it is loaded with import(),
+    // and a namespace without "renderAbc" made every render fail. Therefore we use "default" when it exists.
+    return ((loaded as { default?: typeof import("abcjs") }).default ?? loaded) as typeof import("abcjs");
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     throw new SvgRenderError(
@@ -93,6 +104,33 @@ If you're running from source:
 }
 
 /**
+ * Gives the nodes of the fake DOM a parentElement property.
+ *
+ * Because svgdom only implements parentNode, and abcjs removes an empty group with
+ * "group.parentElement.removeChild(group)", any score that produced an empty group (a staff
+ * with slash notation or an annotation, for example) failed with "Cannot read properties of
+ * undefined (reading 'removeChild')". Therefore we define parentElement on the Node prototype,
+ * as a browser does, so it returns the parent when that parent is an element.
+ *
+ * @param sample Any node created by the fake DOM, used to find the Node prototype
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function installParentElement(sample: any): void {
+  let proto = Object.getPrototypeOf(sample);
+  while (proto !== null && proto.constructor?.name !== "Node") {
+    proto = Object.getPrototypeOf(proto);
+  }
+  if (proto === null || "parentElement" in proto) return;
+  Object.defineProperty(proto, "parentElement", {
+    configurable: true,
+    get(this: { parentNode?: { nodeType?: number } | null }) {
+      const parent = this.parentNode ?? null;
+      return parent !== null && parent.nodeType === 1 ? parent : null;
+    },
+  });
+}
+
+/**
  * Render ABC notation to SVG strings
  *
  * Because all formatting comes from ABC directives, we only set technical defaults
@@ -101,7 +139,7 @@ If you're running from source:
  * @param abcContent The ABC notation content to render
  * @returns Result containing SVG strings and metadata
  */
-export async function renderAbcToSvg(abcContent: string): Promise<SvgRenderResult> {
+export async function renderAbcToSvg(abcContent: string, options: { oneSvgPerLine?: boolean } = {}): Promise<SvgRenderResult> {
   // Lazy load dependencies to provide better error messages
   const { createHTMLWindow } = await loadSvgdom();
   const abcjs = await loadAbcjs();
@@ -114,6 +152,7 @@ export async function renderAbcToSvg(abcContent: string): Promise<SvgRenderResul
   const container = document.createElement("div");
   container.id = "abc-container";
   document.body.appendChild(container);
+  installParentElement(container);
 
   const warnings: string[] = [];
 
@@ -141,26 +180,37 @@ export async function renderAbcToSvg(abcContent: string): Promise<SvgRenderResul
       configurable: true,
     });
 
-    // Render ABC to the container
-    // abcjs.renderAbc returns an array of rendered tunes
-    const visualObjs = abcjs.renderAbc(container, abcContent);
-
-    // Extract SVG elements from the container
-    // Each tune is rendered as a separate div with SVG inside
-    const svgElements = container.querySelectorAll("svg");
+    // Because abcjs renders only one tune when it is given several, we render the tunes one by one,
+    // each into a container of its own, and collect their SVG in the order of the file.
+    // The count that abcjs gives includes the file header, which renders nothing, so we skip the empty results.
+    const tuneTotal = abcjs.numberOfTunes(abcContent);
     const svgs: string[] = [];
+    const tunes: string[][] = [];
+    let renderedTunes = 0;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    svgElements.forEach((svgElement: any) => {
-      // Because abcjs generates SVG for browser embedding (inline in HTML),
-      // it doesn't include the xmlns attribute required for standalone SVG files.
-      // We add it here so the SVG renders correctly in browsers when opened directly.
-      if (!svgElement.getAttribute("xmlns")) {
-        svgElement.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-      }
-      // Get the outer HTML of the SVG element
-      svgs.push(svgElement.outerHTML);
-    });
+    for (let index = 0; index < tuneTotal; index++) {
+      const tuneContainer = document.createElement("div");
+      document.body.appendChild(tuneContainer);
+      // Because the declared type of the result has exactly one element, we widen it to read the real length.
+      const visualObjs: unknown[] = abcjs.renderAbc(tuneContainer, abcContent, { startingTune: index, oneSvgPerLine: options.oneSvgPerLine === true });
+      if (visualObjs.length === 0) continue;
+      renderedTunes += visualObjs.length;
+
+      const tuneSvgs: string[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tuneContainer.querySelectorAll("svg").forEach((svgElement: any) => {
+        // Because abcjs generates SVG for browser embedding (inline in HTML),
+        // it doesn't include the xmlns attribute required for standalone SVG files.
+        // We add it here so the SVG renders correctly in browsers when opened directly.
+        if (!svgElement.getAttribute("xmlns")) {
+          svgElement.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        }
+        const styled = styleChordSymbols(svgElement.outerHTML);
+        svgs.push(styled);
+        tuneSvgs.push(styled);
+      });
+      tunes.push(tuneSvgs);
+    }
 
     // If no SVGs were generated, this might indicate an error
     if (svgs.length === 0 && abcContent.trim().length > 0) {
@@ -169,8 +219,9 @@ export async function renderAbcToSvg(abcContent: string): Promise<SvgRenderResul
 
     return {
       svgs,
+      tunes,
       metadata: {
-        tuneCount: visualObjs.length,
+        tuneCount: renderedTunes,
         warnings: warnings.length > 0 ? warnings : undefined,
       },
     };

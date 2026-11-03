@@ -562,24 +562,6 @@ function splitByChannel(notes: Note[]): Note[][] {
   return [...channelMap.values()];
 }
 
-function cleanupTime(ns: NoteSequence): NoteSequence {
-  let min = Infinity;
-  ns.notes.forEach((n) => {
-    if (n.startTime < min) min = n.startTime;
-  });
-  if (min !== 0) {
-    ns.notes.forEach((n) => {
-      n.startTime -= min;
-      n.endTime -= min;
-    });
-    ns.tempos.forEach((tempo) => {
-      if (0 < tempo.time) tempo.time -= min;
-    });
-    ns.totalTime -= min;
-  }
-  return ns;
-}
-
 function guessClef(ins: Note[]): string {
   const total = ins.reduce((sum, n) => sum + n.pitch, 0);
   const pitch = total / ins.length;
@@ -640,13 +622,90 @@ function segmentToString(ns: NoteSequence, ins: Note[], instrumentId: number, te
   return abcString;
 }
 
+const HEADER_LINE = /^(?:[A-Za-z]:|%%)/;
+const NOTE_PATTERN = /\^?([A-Ga-g])([,']*)|(\|)/g;
+
+/**
+ * The sharps in force while restateNaturals walks one line, under the two readings of ABC accidentals.
+ */
+export interface NaturalsWalkState {
+  /** The letters whose last accidental in the bar was a sharp, when an accidental reaches every octave of its letter. */
+  sharpLetters: Set<string>;
+  /** The pitches (letter, case and octave marks) that carry a sharp in the bar, when an accidental reaches its own octave only. */
+  sharpPitches: Set<string>;
+}
+
+/**
+ * Because the generator writes a sharp on the notes that need one and nothing
+ * on the others, while ABC keeps an accidental in force until the end of the
+ * bar, a natural note that follows a sharp in a bar could be read as sharp.
+ * Because readers differ on whether an accidental reaches the other octaves of
+ * the same letter, the `=` is written whenever either reading would keep a
+ * sharp in force: a sharp on the same letter in any octave that no natural has
+ * cancelled yet, or a sharp on the very same pitch earlier in the bar. The
+ * pitches of the MIDI file are then the pitches of the score under either
+ * reading. The key is C major, so the default is natural.
+ *
+ * Only sharps are tracked, because noteToKeyString spells every black key as
+ * a sharp (^C, ^D, ^F, ^G, ^A) and the generator never writes a flat. If the
+ * spelling ever writes flats, this walk must record them the same way.
+ */
+export function restateNaturals(abc: string): string {
+  return abc
+    .split("\n")
+    .map((line) => (HEADER_LINE.test(line) ? line : restateNaturalsInLine(line)))
+    .join("\n");
+}
+
+/**
+ * Writes the restated naturals of one music line.
+ */
+export function restateNaturalsInLine(line: string): string {
+  const state: NaturalsWalkState = { sharpLetters: new Set(), sharpPitches: new Set() };
+  const pattern = new RegExp(NOTE_PATTERN.source, "g");
+  let result = "";
+  let copied = 0;
+  for (let match = pattern.exec(line); match !== null; match = pattern.exec(line)) {
+    result += line.slice(copied, match.index) + restatedToken(match[0], match[1], match[2], match[3], state);
+    copied = match.index + match[0].length;
+  }
+  return result + line.slice(copied);
+}
+
+/**
+ * Returns the text of one matched note or bar line, with a restated natural when one is needed.
+ */
+export function restatedToken(text: string, letter: string | undefined, marks: string | undefined, bar: string | undefined, state: NaturalsWalkState): string {
+  if (bar !== undefined) {
+    state.sharpLetters.clear();
+    state.sharpPitches.clear();
+    return text;
+  }
+  const letterKey = letter!.toUpperCase();
+  const pitchKey = `${letter}${marks ?? ""}`;
+  if (text.startsWith("^")) {
+    state.sharpLetters.add(letterKey);
+    state.sharpPitches.add(pitchKey);
+    return text;
+  }
+  if (state.sharpLetters.has(letterKey) || state.sharpPitches.has(pitchKey)) {
+    // Because a natural cancels the sharp of its own pitch under both readings, and of its whole letter under the
+    // letter-wide reading, both records are cleared; a sharp on the letter in another octave stays recorded for that pitch.
+    state.sharpLetters.delete(letterKey);
+    state.sharpPitches.delete(pitchKey);
+    return "=" + text;
+  }
+  return text;
+}
+
 export function tone2abc(ns: NoteSequence, options?: ConversionOptions): string {
   let abcString = "X:1\n";
   if (options) {
     if (options.title) abcString += `T:${options.title}\n`;
     if (options.composer) abcString += `C:${options.composer}\n`;
   }
-  cleanupTime(ns);
+  // The notes keep the positions they have in the file, so that a first note
+  // that starts after the beginning of the bar is preceded by a rest.
 
   const ctx: ConversionContext = {
     tupletNum: 0,
@@ -662,5 +721,5 @@ export function tone2abc(ns: NoteSequence, options?: ConversionOptions): string 
       abcString += segmentToString(ns, ins, instrumentId, tempo, ctx);
     });
   });
-  return abcString;
+  return restateNaturals(abcString);
 }

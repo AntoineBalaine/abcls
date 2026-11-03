@@ -11,6 +11,7 @@ import {
   selectRests,
   selectRhythm,
   selectRhythmParent,
+  selectAnnotations,
 } from "../src/selectors/typeSelectors";
 import { toSelection, toCSTree, findById, findByTag, genAbcTune, genAbcWithChords, genAbcWithMultiMeasureRests } from "./helpers";
 
@@ -319,6 +320,41 @@ describe("selectRhythmParent", () => {
       const rhythms = selectRhythm(sel);
       const parents = selectRhythmParent(sel);
       expect(rhythms.cursors.length).to.equal(parents.cursors.length);
+    });
+  });
+
+  describe("selectAnnotations", () => {
+    it("every cursor contains exactly 1 ID of an Annotation CSNode", () => {
+      fc.assert(
+        fc.property(genAbcTune, (abc) => {
+          const result = selectAnnotations(toSelection(abc));
+          return result.cursors.every((cursor) => {
+            if (cursor.size !== 1) return false;
+            const node = findById(result.root, [...cursor][0]);
+            return !!node && node.tag === TAGS.Annotation;
+          });
+        })
+      );
+    });
+
+    it("is idempotent", () => {
+      fc.assert(
+        fc.property(genAbcTune, (abc) => {
+          const once = selectAnnotations(toSelection(abc));
+          const twice = selectAnnotations(once);
+          return once.cursors.length === twice.cursors.length;
+        })
+      );
+    });
+
+    it('"^allegro" C "_dolce" D| selects 2 annotations', () => {
+      const result = selectAnnotations(toSelection('X:1\nK:C\n"^allegro" C "_dolce" D|\n'));
+      expect(result.cursors.length).to.equal(2);
+    });
+
+    it("C D E F| selects no annotations", () => {
+      const result = selectAnnotations(toSelection("X:1\nK:C\nC D E F|\n"));
+      expect(result.cursors.length).to.equal(0);
     });
   });
 });

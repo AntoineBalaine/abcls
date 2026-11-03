@@ -202,9 +202,17 @@ describe("pitchUtils", () => {
 
     it("should return 65 for F in G major with measure accidental natural", () => {
       const measureAccidentals = new Map<string, AccidentalType>();
-      measureAccidentals.set("F", AccidentalType.Natural);
+      measureAccidentals.set("F4", AccidentalType.Natural);
       const ctx: PitchContext = { key: G_MAJOR, measureAccidentals, transpose: 0 };
       expect(resolveMelodyPitch("F", 4, null, ctx)).to.equal(65);
+    });
+
+    it("should not apply a measure accidental on E4 to E5", () => {
+      const measureAccidentals = new Map<string, AccidentalType>();
+      measureAccidentals.set("E4", AccidentalType.Flat);
+      const ctx: PitchContext = { key: C_MAJOR, measureAccidentals, transpose: 0 };
+      expect(resolveMelodyPitch("E", 4, null, ctx)).to.equal(63);
+      expect(resolveMelodyPitch("E", 5, null, ctx)).to.equal(76);
     });
 
     it("should return 70 for B in F major (Bb)", () => {
@@ -262,7 +270,7 @@ describe("pitchUtils", () => {
 
     it("should return F with no accidental for 65 in G major with measure natural", () => {
       const measureAccidentals = new Map<string, AccidentalType>();
-      measureAccidentals.set("F", AccidentalType.Natural);
+      measureAccidentals.set("F4", AccidentalType.Natural);
       const ctx: PitchContext = { key: G_MAJOR, measureAccidentals, transpose: 0 };
       const result = pitchToNoteName(65, ctx);
       expect(result.noteLetter).to.equal("F");

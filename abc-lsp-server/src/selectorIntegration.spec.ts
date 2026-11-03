@@ -1,9 +1,9 @@
 import { fromAst, createSelection, Selection, selectRange } from "abcls-editor";
+import { resolveSelectionRanges, resolveContiguousRanges } from "abcls-editor";
 import { Scanner, parse, ABCContext, File_structure } from "abcls-parser";
 import { expect } from "chai";
 import { describe, it } from "mocha";
 import { Range } from "vscode-languageserver/node";
-import { resolveSelectionRanges, resolveContiguousRanges } from "./selectionRangeResolver";
 import { lookupSelector } from "./selectorLookup";
 
 function parseAbc(source: string): { ast: File_structure; ctx: ABCContext } {

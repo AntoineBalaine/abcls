@@ -12,6 +12,7 @@ import { isToken } from "../helpers";
 import { Token, TT } from "../parsers/scan";
 import {
   KeyInfo,
+  KeySignature,
   KeyRoot,
   KeyAccidental,
   Mode,
@@ -127,25 +128,31 @@ export function analyzeKeyInfo(expr: Info_line, analyzer: SemanticAnalyzer): Inf
     return null;
   }
 
-  const keyInfo: KeyInfo = {
-    keySignature: {
-      root: KeyRoot.C,
-      acc: KeyAccidental.None,
-      mode: Mode.Major,
-      accidentals: [],
-    },
-  };
+  // Because a K: field that only changes the clef gives no key, the key is parsed into a local value,
+  // and keyInfo only receives it when the field gives one.
+  const key: KeySignature = { root: KeyRoot.C, acc: KeyAccidental.None, mode: Mode.Major, accidentals: [] };
+  const keyInfo: KeyInfo = {};
 
   let valueIndex = 0;
 
+  // Because a K: field may only change the clef ([K:clef=bass]), a first
+  // token that is the name of a modifier (followed by "=") means that no key
+  // was given, and keyInfo then gets no key signature.
+  const firstItem = expr.value[0];
+  const secondItem = expr.value[1];
+  const startsWithModifier =
+    (isToken(firstItem) && (firstItem as Token).type !== TT.KEY_SIGNATURE && isToken(secondItem) && (secondItem as Token).type === TT.EQL) ||
+    firstItem instanceof KV;
+  if (!startsWithModifier) keyInfo.keySignature = key;
+
   // 1. Parse key signature from first token in value array
-  const firstToken = expr.value[valueIndex];
+  const firstToken = startsWithModifier ? undefined : expr.value[valueIndex];
   if (isToken(firstToken)) {
     const token = firstToken as Token;
 
     // Check if this is a KEY_SIGNATURE token (new format)
     if (token.type === TT.KEY_SIGNATURE) {
-      parseKeySignatureToken(token.lexeme, keyInfo);
+      parseKeySignatureToken(token.lexeme, key);
       valueIndex++;
     } else {
       // Legacy format: parse using existing logic
@@ -178,8 +185,8 @@ export function analyzeKeyInfo(expr: Info_line, analyzer: SemanticAnalyzer): Inf
       if (keyIndex < keyStr.length) {
         const root = parseKeyRoot(keyStr[keyIndex]);
         if (root) {
-          keyInfo.keySignature.root = root;
-          keyInfo.keySignature.acc = acc;
+          key.root = root;
+          key.acc = acc;
         }
       }
 
@@ -196,7 +203,7 @@ export function analyzeKeyInfo(expr: Info_line, analyzer: SemanticAnalyzer): Inf
       if (isToken(token)) {
         const mode = parseKeyMode(token.lexeme);
         if (mode !== null) {
-          keyInfo.keySignature.mode = mode;
+          key.mode = mode;
           valueIndex++;
         }
       }
@@ -206,7 +213,7 @@ export function analyzeKeyInfo(expr: Info_line, analyzer: SemanticAnalyzer): Inf
       if (isToken(token)) {
         const mode = parseKeyMode(token.lexeme);
         if (mode !== null) {
-          keyInfo.keySignature.mode = mode;
+          key.mode = mode;
           valueIndex++;
         }
       }
@@ -241,7 +248,7 @@ export function analyzeKeyInfo(expr: Info_line, analyzer: SemanticAnalyzer): Inf
  *
  * Examples: C, Am, F#m, Bbmaj, Gdor, Amix, HP, none, C#minor, Dmixolydian
  */
-function parseKeySignatureToken(lexeme: string, keyInfo: KeyInfo): void {
+function parseKeySignatureToken(lexeme: string, key: KeySignature): void {
   // Handle special cases
   if (lexeme.toLowerCase() === "none") {
     // K:none - default values already set
@@ -249,9 +256,9 @@ function parseKeySignatureToken(lexeme: string, keyInfo: KeyInfo): void {
   }
 
   if (lexeme === "HP" || lexeme === "Hp") {
-    keyInfo.keySignature.root = KeyRoot.HP;
-    keyInfo.keySignature.acc = KeyAccidental.None;
-    keyInfo.keySignature.mode = Mode.Major;
+    key.root = KeyRoot.HP;
+    key.acc = KeyAccidental.None;
+    key.mode = Mode.Major;
     return;
   }
 
@@ -262,7 +269,7 @@ function parseKeySignatureToken(lexeme: string, keyInfo: KeyInfo): void {
   if (index < lexeme.length) {
     const root = parseKeyRoot(lexeme[index]);
     if (root) {
-      keyInfo.keySignature.root = root;
+      key.root = root;
       index++;
     }
   }
@@ -270,10 +277,10 @@ function parseKeySignatureToken(lexeme: string, keyInfo: KeyInfo): void {
   // 2. Parse optional accidental (# or b)
   if (index < lexeme.length) {
     if (lexeme[index] === "#") {
-      keyInfo.keySignature.acc = KeyAccidental.Sharp;
+      key.acc = KeyAccidental.Sharp;
       index++;
     } else if (lexeme[index] === "b") {
-      keyInfo.keySignature.acc = KeyAccidental.Flat;
+      key.acc = KeyAccidental.Flat;
       index++;
     }
   }
@@ -283,7 +290,7 @@ function parseKeySignatureToken(lexeme: string, keyInfo: KeyInfo): void {
     const modeStr = lexeme.substring(index);
     const mode = parseKeyMode(modeStr);
     if (mode !== null) {
-      keyInfo.keySignature.mode = mode;
+      key.mode = mode;
     }
   }
 }
@@ -833,6 +840,9 @@ export function analyzeVoiceInfo(expr: Info_line, analyzer: SemanticAnalyzer): I
       const key = (item.key as Token).lexeme.toLowerCase();
       const value = (item.value as Token).lexeme;
       applyVoiceProperty(properties, key, value, analyzer, expr);
+    } else if (item instanceof KV && item.key === undefined && isToken(item.value) && item.value.lexeme.trim().toLowerCase() === "merge") {
+      // Because abcjs writes merge as a flag without a value (V:2 merge), the bare word means merge=true.
+      properties.merge = true;
     }
   }
 

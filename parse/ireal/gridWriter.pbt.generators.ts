@@ -53,6 +53,7 @@ export const chordArb: fc.Arbitrary<ParsedChord> = fc
     quality: qualityArb,
     extension: fc.constantFrom(null, 6, 7, 9, 11, 13),
     alterations: fc.uniqueArray(alterationArb, { maxLength: 2, selector: (a) => a.degree }),
+    addedTones: fc.uniqueArray(fc.constantFrom(2, 4, 6, 9, 11, 13), { maxLength: 2 }),
     bass: fc.option(fc.record({ root: rootArb, accidental: accidentalArb }), { nil: null }),
   })
   .map((chord): ParsedChord => {

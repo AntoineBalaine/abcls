@@ -32,9 +32,9 @@ describe("Info Line Analyzer - Property-Based Tests", () => {
           expect(result.type).to.equal("key");
 
           const keyData = result.data as KeyInfo;
-          expect(keyData.keySignature.root).to.equal(gen.expected.root);
-          expect(keyData.keySignature.acc).to.equal(gen.expected.acc);
-          expect(keyData.keySignature.mode).to.equal(gen.expected.mode);
+          expect(keyData.keySignature!.root).to.equal(gen.expected.root);
+          expect(keyData.keySignature!.acc).to.equal(gen.expected.acc);
+          expect(keyData.keySignature!.mode).to.equal(gen.expected.mode);
 
           return true;
         }),
@@ -52,9 +52,9 @@ describe("Info Line Analyzer - Property-Based Tests", () => {
           expect(result.type).to.equal("key");
 
           const keyData = result.data as KeyInfo;
-          expect(keyData.keySignature.root).to.equal(gen.expected.root);
-          expect(keyData.keySignature.acc).to.equal(gen.expected.acc);
-          expect(keyData.keySignature.mode).to.equal(gen.expected.mode);
+          expect(keyData.keySignature!.root).to.equal(gen.expected.root);
+          expect(keyData.keySignature!.acc).to.equal(gen.expected.acc);
+          expect(keyData.keySignature!.mode).to.equal(gen.expected.mode);
 
           return true;
         }),
@@ -72,9 +72,9 @@ describe("Info Line Analyzer - Property-Based Tests", () => {
           expect(result.type).to.equal("key");
 
           const keyData = result.data as KeyInfo;
-          expect(keyData.keySignature.root).to.equal(gen.expected.root);
-          expect(keyData.keySignature.acc).to.equal(gen.expected.acc);
-          expect(keyData.keySignature.mode).to.equal(gen.expected.mode);
+          expect(keyData.keySignature!.root).to.equal(gen.expected.root);
+          expect(keyData.keySignature!.acc).to.equal(gen.expected.acc);
+          expect(keyData.keySignature!.mode).to.equal(gen.expected.mode);
 
           return true;
         }),
@@ -92,9 +92,9 @@ describe("Info Line Analyzer - Property-Based Tests", () => {
           expect(result.type).to.equal("key");
 
           const keyData = result.data as KeyInfo;
-          expect(keyData.keySignature.root).to.equal(gen.expected.root);
-          expect(keyData.keySignature.acc).to.equal(gen.expected.acc);
-          expect(keyData.keySignature.mode).to.equal(gen.expected.mode);
+          expect(keyData.keySignature!.root).to.equal(gen.expected.root);
+          expect(keyData.keySignature!.acc).to.equal(gen.expected.acc);
+          expect(keyData.keySignature!.mode).to.equal(gen.expected.mode);
 
           if (gen.expected.clef) {
             expect(keyData.clef).to.not.be.undefined;

@@ -1,5 +1,7 @@
+import { Decorations } from "../types/abcjs-ast";
 import { scanDirective } from "./infoLines/scanDirective";
-import { absolutePitch, infoLineIdentifier, singleChar, specialLiteral, stringLiteral, unsignedNumber } from "./infoLines/scanInfoLine";
+import { absolutePitch, infoLineIdentifier, singleChar, specialLiteral, stringLiteral, unsignedNumber, voiceId } from "./infoLines/scanInfoLine";
+import { keySignature } from "./infoLines/scanKeyInfoLine";
 import {
   Ctx,
   EOL,
@@ -216,6 +218,22 @@ export function systemBreak(ctx: Ctx): boolean {
   return true;
 }
 
+// The full set of decoration names AbcLs recognizes, used to tell a genuine
+// !decoration! or +decoration+ token apart from other bang/plus-delimited
+// content that symbol() also matches (e.g. unrecognized vendor extensions).
+const KNOWN_DECORATION_NAMES = new Set<string>(Object.values(Decorations));
+
+// Mirrors the delimiter- and position-hint-stripping visitDecorationExpr
+// (TuneInterpreter.ts) applies to a matched !decoration!/+decoration+ lexeme,
+// so this classification stays in sync with what the interpreter accepts.
+export function isKnownDecorationLexeme(delimitedLexeme: string): boolean {
+  let name = delimitedLexeme.slice(1, -1);
+  if (name.startsWith("^") || name.startsWith("_")) {
+    name = name.substring(1);
+  }
+  return KNOWN_DECORATION_NAMES.has(name);
+}
+
 export function symbol(ctx: Ctx): boolean {
   if (!(ctx.test(/![^\n!]*!/) || ctx.test(/\+[^\n+]*\+/))) return false;
   const is_plus_symbol = ctx.test("+");
@@ -224,7 +242,8 @@ export function symbol(ctx: Ctx): boolean {
     advance(ctx);
   }
   advance(ctx);
-  ctx.push(TT.SYMBOL);
+  const lexeme = ctx.source.substring(ctx.start, ctx.current);
+  ctx.push(isKnownDecorationLexeme(lexeme) ? TT.DECORATION : TT.SYMBOL);
   return true;
 }
 
@@ -480,6 +499,21 @@ export function inline_field(ctx: Ctx): boolean {
 
   advance(ctx); // consume the :
   ctx.push(TT.INF_HDR);
+
+  // Because the general content scanner tries pitches first, it would split
+  // a key such as "Bb" into a note letter and an accidental. A K: field
+  // therefore starts with the same key signature scanner as a K: info line,
+  // which produces a single KEY_SIGNATURE token; the modifiers that follow
+  // (clef=bass, ...) use the general scanner.
+  if (fieldType === "K") {
+    WS(ctx);
+    keySignature(ctx);
+  }
+  // Because abcjs reads a voice id as the whole first word ([V:1_2]), a V: field starts with the voice id scanner.
+  if (fieldType === "V") {
+    WS(ctx);
+    voiceId(ctx);
+  }
 
   // Tokenize content using appropriate scanners based on field type
   const scanContent = fieldType === "V" ? scanVoiceFieldContent : scanGeneralFieldContent;

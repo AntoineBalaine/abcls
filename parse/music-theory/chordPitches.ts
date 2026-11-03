@@ -37,6 +37,19 @@ const DEGREE_TO_INTERVAL: Record<number, number> = {
   13: 21,
 };
 
+/**
+ * The interval in semitones of each degree that a chord may add with "add".
+ * Because the 2, the 4 and the 6 are written in the octave of the 9, the 11 and the 13 on a chord sheet, the 2 and the 9 share an interval.
+ */
+const ADDED_TONE_TO_INTERVAL: Record<number, number> = {
+  2: 14,
+  4: 17,
+  6: 9,
+  9: 14,
+  11: 17,
+  13: 21,
+};
+
 function addExtensionIntervals(intervals: number[], chord: ParsedChord): number[] {
   const ext = chord.extension;
   const quality = chord.quality;
@@ -175,6 +188,12 @@ export function chordToPitches(chord: ParsedChord, baseOctave: number = 4): Voic
   // Apply alterations
   for (const alt of chord.alterations) {
     intervals = applyAlteration(intervals, alt);
+  }
+
+  // Because an added tone leaves the chord's own tones as they are, it only joins the intervals when the chord does not hold it yet
+  for (const degree of chord.addedTones) {
+    const interval = ADDED_TONE_TO_INTERVAL[degree];
+    if (interval !== undefined && !intervals.includes(interval)) intervals.push(interval);
   }
 
   // Sort intervals

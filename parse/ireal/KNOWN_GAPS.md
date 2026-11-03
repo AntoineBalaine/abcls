@@ -367,3 +367,13 @@ around it from the other side, spelling a sus chord quality first
 
 Fixing either means changing `pChordSymbol` and `scanChordSymbol`, which
 every ABCx consumer shares, so neither is changed here.
+
+## Added tones that iReal Pro has no chord quality for
+
+The chord symbol reference of iReal Pro (https://www.irealpro.com/learn/chord-symbols) lists "minor add 2", typed as
+`-add9`, `madd9` or `madd2` and shown as `-add2`, and "add 2", typed as `add9` and shown as `add2`. It lists no other chord
+with an added tone, so the reader accepts an added tone only on a minor chord with no extension (`C-add9`, `C-add2`), and
+reads `add2` as the added ninth. A chord such as `C7(add13)` or `Cmaj7(add9)` parses in ABC but has no iReal Pro spelling:
+the writer prints its text, and the export reports that it does not read back as itself. The writer still prints the older
+`-add9` rather than the current `-add2`, because the app converts the older spelling when it is typed; whether it does so
+when it is imported from a link was not checked.

@@ -19,7 +19,8 @@ import { ContextSnapshot, DocumentSnapshots, ContextInterpreterConfig, encode } 
 import { convertAccidentalToType } from "abcls-parser/interpreter/helpers";
 import { TuneDefaults, VoiceState, newVxState, createTuneDefaults, createFileDefaults } from "abcls-parser/interpreter/InterpreterState";
 import { parseChordSymbol } from "abcls-parser/music-theory/parseChordSymbol";
-import { scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
+import { measureAccidentalKey } from "abcls-parser/music-theory/pitchUtils";
+import { isChordSymbolText, scanChordSymbol } from "abcls-parser/music-theory/scanChordSymbol";
 import { ParsedChord } from "abcls-parser/music-theory/types";
 import { Meter, MeterType, TempoProperties } from "abcls-parser/types/abcjs-ast";
 import { CSNode, TAGS, isTokenNode, getTokenData, type EditorDataMap } from "../csTree/types";
@@ -125,18 +126,33 @@ function handleContextDirective(state: CsContextState, sem: InfoLineUnion): bool
   const voice = getCurrentVoice(state);
 
   if (sem.type === "key") {
-    voice.currentKey = sem.data.keySignature;
+    // Because a K: field that only changes the clef gives no key, the key in effect stays.
+    const keySignature = sem.data.keySignature;
+    if (keySignature) voice.currentKey = keySignature;
     if (sem.data.clef) {
       voice.currentClef = sem.data.clef;
     }
-    state.tuneDefaults.key = sem.data.keySignature;
+    if (keySignature) state.tuneDefaults.key = keySignature;
     if (sem.data.clef) {
       state.tuneDefaults.clef = sem.data.clef;
+    }
+    // Because a header K: is tune-wide, the voices declared before it (e.g. V:1 and V:2
+    // in the header) must also receive the key, otherwise they keep the default C major.
+    if (keySignature && !state.inBody) {
+      for (const headerVoice of state.voices.values()) {
+        headerVoice.currentKey = keySignature;
+      }
     }
     return true;
   } else if (sem.type === "meter") {
     voice.currentMeter = sem.data;
     state.tuneDefaults.meter = sem.data;
+    // Because a header M: is tune-wide, the voices declared before it must also receive the meter.
+    if (!state.inBody) {
+      for (const headerVoice of state.voices.values()) {
+        headerVoice.currentMeter = sem.data;
+      }
+    }
     return true;
   } else if (sem.type === "note_length") {
     state.tuneDefaults.noteLength = sem.data;
@@ -173,6 +189,7 @@ function extractNoteAccidental(noteNode: CSNode, state: CsContextState): boolean
 
   let alterationLexeme: string | null = null;
   let noteLetterLexeme: string | null = null;
+  let octaveLexeme = "";
 
   let child = pitchNode.firstChild;
   while (child !== null) {
@@ -182,6 +199,8 @@ function extractNoteAccidental(noteNode: CSNode, state: CsContextState): boolean
         alterationLexeme = data.lexeme;
       } else if (data.tokenType === TT.NOTE_LETTER) {
         noteLetterLexeme = data.lexeme;
+      } else if (data.tokenType === TT.OCTAVE) {
+        octaveLexeme = data.lexeme;
       }
     }
     child = child.nextSibling;
@@ -189,10 +208,15 @@ function extractNoteAccidental(noteNode: CSNode, state: CsContextState): boolean
 
   if (!alterationLexeme || !noteLetterLexeme) return false;
 
-  const pitchClass = noteLetterLexeme.toUpperCase() as "C" | "D" | "E" | "F" | "G" | "A" | "B";
+  // Because ABC applies a bar accidental only to the same letter in the same octave, the key carries the octave.
+  let octave = noteLetterLexeme === noteLetterLexeme.toLowerCase() ? 5 : 4;
+  for (const marker of octaveLexeme) {
+    if (marker === "'") octave++;
+    else if (marker === ",") octave--;
+  }
   const accidentalType = convertAccidentalToType(alterationLexeme);
   const voice = getCurrentVoice(state);
-  voice.measureAccidentals.set(pitchClass, accidentalType);
+  voice.measureAccidentals.set(measureAccidentalKey(noteLetterLexeme, octave), accidentalType);
 
   return true;
 }
@@ -253,7 +277,12 @@ const contextVisitor: EditorVisitor = {
       if (isTokenNode(child)) {
         const data = getTokenData(child);
         if (data.tokenType === TT.EOL) {
+          const hadAccidentals = getCurrentVoice(state).measureAccidentals.size > 0;
           clearAllVoicesAccidentals(state);
+          // Because the reset at the end of the line would otherwise leave no trace, we record it.
+          if (state.config.snapshotAccidentals && hadAccidentals) {
+            pushSnapshot(state, child);
+          }
         }
       } else {
         visit(child, state);
@@ -282,9 +311,15 @@ const contextVisitor: EditorVisitor = {
     }
   },
 
-  [TAGS.BarLine]: (_node, state) => {
+  [TAGS.BarLine]: (node, state) => {
     state.measureNumber++;
+    const hadAccidentals = getCurrentVoice(state).measureAccidentals.size > 0;
     clearCurrentVoiceAccidentals(state);
+    // Because snapshots are otherwise only pushed at notes that carry an accidental, the
+    // reset at the barline must be recorded, or the next measure would inherit the stale accidentals.
+    if (state.config.snapshotAccidentals && hadAccidentals) {
+      pushSnapshot(state, node);
+    }
   },
 
   [TAGS.Note]: (node, state) => {
@@ -329,6 +364,8 @@ const contextVisitor: EditorVisitor = {
     if (text.length > 0 && "^_<>@".includes(text[0])) {
       text = text.slice(1);
     }
+
+    if (!isChordSymbolText(text)) return;
 
     const scanResult = scanChordSymbol(text);
     if (scanResult === null) return;

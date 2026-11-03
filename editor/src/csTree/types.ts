@@ -149,6 +149,10 @@ export function isChord(node: CSNode): boolean {
   return node.tag === TAGS.Chord;
 }
 
+export function isAnnotation(node: CSNode): boolean {
+  return node.tag === TAGS.Annotation;
+}
+
 export function isBarLine(node: CSNode): boolean {
   return node.tag === TAGS.BarLine;
 }

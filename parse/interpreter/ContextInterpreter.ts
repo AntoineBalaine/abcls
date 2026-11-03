@@ -14,7 +14,7 @@
  */
 
 import { SemanticData } from "../analyzers/semantic-analyzer";
-import { ParsedChord, scanChordSymbol, parseChordSymbol } from "../music-theory";
+import { isChordSymbolText, ParsedChord, scanChordSymbol, parseChordSymbol } from "../music-theory";
 import { ABCContext } from "../parsers/Context";
 import { Token, TT } from "../parsers/scan";
 import { Meter, KeySignature, ClefProperties, TempoProperties, MeterType, AccidentalType } from "../types/abcjs-ast";
@@ -67,6 +67,7 @@ import {
 import { Range } from "../types/types";
 import { IRational } from "../Visitors/fmt/rational";
 import { RangeVisitor } from "../Visitors/RangeVisitor";
+import { measureAccidentalKey, computeOctaveFromPitch } from "../music-theory/pitchUtils";
 import { convertAccidentalToType } from "./helpers";
 import { TuneDefaults, VoiceState, newVxState, createTuneDefaults, createFileDefaults } from "./InterpreterState";
 
@@ -156,7 +157,7 @@ export interface ContextSnapshot {
   /** The octave shift in effect at this position */
   octave: number;
   /** Measure accidentals active at this position (only present when snapshotAccidentals is enabled) */
-  measureAccidentals?: Map<"C" | "D" | "E" | "F" | "G" | "A" | "B", AccidentalType>;
+  measureAccidentals?: Map<string, AccidentalType>;
   /** Current chord symbol in effect at this position */
   currentChord?: ParsedChord;
 }
@@ -443,7 +444,12 @@ export class ContextInterpreter implements Visitor<void> {
       for (const element of system) {
         if (element instanceof Token) {
           if (element.type === TT.EOL) {
+            const hadAccidentals = this.getCurrentVoice().measureAccidentals.size > 0;
             this.clearAllVoicesAccidentals();
+            // Because the reset at the end of the line would otherwise leave no trace, we record it.
+            if (this.config.snapshotAccidentals && hadAccidentals) {
+              this.pushSnapshot(element);
+            }
           }
           continue;
         }
@@ -464,18 +470,33 @@ export class ContextInterpreter implements Visitor<void> {
     const voice = this.getCurrentVoice();
 
     if (sem.type === "key") {
-      voice.currentKey = sem.data.keySignature;
+      // Because a K: field that only changes the clef gives no key, the key in effect stays.
+      const keySignature = sem.data.keySignature;
+      if (keySignature) voice.currentKey = keySignature;
       if (sem.data.clef) {
         voice.currentClef = sem.data.clef;
       }
-      this.state.tuneDefaults.key = sem.data.keySignature;
+      if (keySignature) this.state.tuneDefaults.key = keySignature;
       if (sem.data.clef) {
         this.state.tuneDefaults.clef = sem.data.clef;
+      }
+      // Because a header K: is tune-wide, the voices declared before it (e.g. V:1 and V:2
+      // in the header) must also receive the key, otherwise they keep the default C major.
+      if (keySignature && !this.state.inBody) {
+        for (const headerVoice of this.state.voices.values()) {
+          headerVoice.currentKey = keySignature;
+        }
       }
       return true;
     } else if (sem.type === "meter") {
       voice.currentMeter = sem.data;
       this.state.tuneDefaults.meter = sem.data;
+      // Because a header M: is tune-wide, the voices declared before it must also receive the meter.
+      if (!this.state.inBody) {
+        for (const headerVoice of this.state.voices.values()) {
+          headerVoice.currentMeter = sem.data;
+        }
+      }
       return true;
     } else if (sem.type === "note_length") {
       this.state.tuneDefaults.noteLength = sem.data;
@@ -532,9 +553,15 @@ export class ContextInterpreter implements Visitor<void> {
     }
   }
 
-  visitBarLineExpr(_expr: BarLine): void {
+  visitBarLineExpr(expr: BarLine): void {
     this.state.measureNumber++;
+    const hadAccidentals = this.getCurrentVoice().measureAccidentals.size > 0;
     this.clearCurrentVoiceAccidentals();
+    // Because snapshots are otherwise only pushed at notes that carry an accidental, the
+    // reset at the barline must be recorded, or the next measure would inherit the stale accidentals.
+    if (this.config.snapshotAccidentals && hadAccidentals) {
+      this.pushSnapshot(expr);
+    }
   }
 
   // ============================================================================
@@ -549,11 +576,11 @@ export class ContextInterpreter implements Visitor<void> {
     const alteration = expr.pitch.alteration?.lexeme;
     if (!alteration) return;
 
-    const pitchClass = expr.pitch.noteLetter.lexeme.toUpperCase() as "C" | "D" | "E" | "F" | "G" | "A" | "B";
+    const accidentalKey = measureAccidentalKey(expr.pitch.noteLetter.lexeme, computeOctaveFromPitch(expr.pitch));
     const accidentalType = convertAccidentalToType(alteration);
 
     const voice = this.getCurrentVoice();
-    voice.measureAccidentals.set(pitchClass, accidentalType);
+    voice.measureAccidentals.set(accidentalKey, accidentalType);
 
     this.pushSnapshot(expr);
   }
@@ -570,9 +597,9 @@ export class ContextInterpreter implements Visitor<void> {
       if (content instanceof Note) {
         const alteration = content.pitch.alteration?.lexeme;
         if (alteration) {
-          const pitchClass = content.pitch.noteLetter.lexeme.toUpperCase() as "C" | "D" | "E" | "F" | "G" | "A" | "B";
+          const accidentalKey = measureAccidentalKey(content.pitch.noteLetter.lexeme, computeOctaveFromPitch(content.pitch));
           const accidentalType = convertAccidentalToType(alteration);
-          voice.measureAccidentals.set(pitchClass, accidentalType);
+          voice.measureAccidentals.set(accidentalKey, accidentalType);
           hasAccidental = true;
         }
       }
@@ -582,7 +609,18 @@ export class ContextInterpreter implements Visitor<void> {
       this.pushSnapshot(expr);
     }
   }
-  visitBeamExpr(_expr: Beam): void {}
+  /**
+   * Because notes that are written without spaces between them form one beam,
+   * and an accidental on any of them stays in force until the end of the bar,
+   * the contents of a beam are visited one by one. Without this, a beamed
+   * `^D2=D2D2` would leave no trace in the accidental snapshots.
+   */
+  visitBeamExpr(expr: Beam): void {
+    for (const element of expr.contents) {
+      if (element instanceof Token) continue;
+      element.accept(this);
+    }
+  }
   visitTupletExpr(_expr: Tuplet): void {}
   visitGraceGroupExpr(_expr: Grace_group): void {}
   visitDecorationExpr(_expr: Decoration): void {}
@@ -598,6 +636,8 @@ export class ContextInterpreter implements Visitor<void> {
     if (text.length > 0 && "^_<>@".includes(text[0])) {
       text = text.slice(1);
     }
+
+    if (!isChordSymbolText(text)) return;
 
     const scanResult = scanChordSymbol(text);
     if (scanResult === null) return;

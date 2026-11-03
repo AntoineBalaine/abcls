@@ -54,6 +54,11 @@ export const MAJOR_KEY_SHARPS: Record<string, number> = {
   B: 5,
   "F#": 6,
   "C#": 7,
+  // Because G# minor, D# minor and A# minor (5, 6 and 7 sharps) take their signature from these tonics, the major keys
+  // beyond seven sharps are listed too; a mode subtracts its offset, which brings them back within seven.
+  "G#": 8,
+  "D#": 9,
+  "A#": 10,
   F: -1,
   Bb: -2,
   Eb: -3,

@@ -75,7 +75,11 @@ jobs:
   publish-vscode:
     needs: build-and-test
     runs-on: ubuntu-latest
+    # The environment name and this file's name must match the Trusted Publishing policy of the Marketplace publisher.
     environment: vsce-publish
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -84,12 +88,12 @@ jobs:
           cache: "npm"
       - run: npm install
       - run: npm run build:ci
+      # Because Azure DevOps retires its personal access tokens on 2026-12-01, the publish authenticates through the
+      # GitHub OIDC token (Marketplace Trusted Publishing). The --oidc flag exists from vsce 4, so the version is pinned here.
       - name: Package and publish VS Code extension
         run: |
           npm run package:vscode
-          npx vsce publish --packagePath abc-ls-*.vsix
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          npx @vscode/vsce@4.1.0 publish --packagePath abc-ls-*.vsix --oidc
 
   deploy-docs:
     needs: build-and-test

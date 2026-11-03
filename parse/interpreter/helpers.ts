@@ -17,6 +17,12 @@ export function determineBarType(barTokens: Token[]): BarType {
       return BarType.BarRightRepeat;
     case "::":
       return BarType.BarDblRepeat;
+    case "|]":
+      return BarType.BarThinThick;
+    case "[|":
+      return BarType.BarThickThin;
+    case "[|]":
+      return BarType.BarInvisible;
     default:
       return BarType.BarThin;
   }

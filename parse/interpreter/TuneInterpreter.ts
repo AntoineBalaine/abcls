@@ -6,9 +6,10 @@
  * following the ABCJS builder pattern.
  */
 
+import { convertTuneToDeferred } from "../abcl/AbclToAbcConverter";
 import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
 import { SemanticData } from "../analyzers/semantic-analyzer";
-import { isComment, isInfo_line } from "../helpers";
+import { isComment, isInfo_line, isToken } from "../helpers";
 import { ABCContext } from "../parsers/Context";
 import { Token, TT } from "../parsers/scan";
 import {
@@ -25,6 +26,8 @@ import {
   Decorations,
   ClefProperties,
   KeyElement,
+  KeyInfo,
+  ClefElement,
   MeterElement,
   TextLine,
   TextFieldProperties,
@@ -133,7 +136,7 @@ import {
  * Maps p (number of notes) to q (time they fit into)
  * E.g., (3 means 3 notes in the time of 2
  */
-const TUPLET_Q: Record<number, number> = {
+export const TUPLET_Q: Record<number, number> = {
   2: 3, // (2 → 2 notes in time of 3
   3: 2, // (3 → 3 notes in time of 2
   4: 3, // (4 → 4 notes in time of 3
@@ -189,7 +192,7 @@ const DECORATION_MAP: Record<string, string> = {
  *   >> (n=2): [7/4, 1/4] = [1.75, 0.25]
  *   >>> (n=3): [15/8, 1/8] = [1.875, 0.125]
  */
-function getBrokenRhythmMultipliers(brokenLexeme: string): [IRational, IRational] {
+export function getBrokenRhythmMultipliers(brokenLexeme: string): [IRational, IRational] {
   const char = brokenLexeme[0];
   const count = brokenLexeme.length;
 
@@ -305,6 +308,9 @@ function calculateRhythm(
  * Based on abcjs beaming algorithm:
  * - Notes with duration < 0.25 can be beamed
  * - Beams break on: quarter notes, rests, bars, whitespace
+ * - Whitespace is known through the parser: notes written without spaces
+ *   between them are grouped into a Beam expression, so a note outside a
+ *   Beam expression stands alone
  * - Track potentialStartBeam and potentialEndBeam per voice
  */
 
@@ -337,8 +343,16 @@ function endBeamGroup(voiceState: VoiceState): void {
  * Because beaming needs to be determined after each note is created,
  * we call this after creating each note element.
  */
-function processBeaming(noteElement: NoteElement, voiceState: VoiceState, isRest: boolean): void {
+function processBeaming(noteElement: NoteElement, voiceState: VoiceState, isRest: boolean, insideBeamExpr: boolean): void {
   const duration = noteElement.duration;
+
+  // Because the parser only groups notes that are written without spaces
+  // into a Beam expression, a note outside one is separated by whitespace
+  // and can never be part of a beam group.
+  if (!insideBeamExpr) {
+    endBeamGroup(voiceState);
+    return;
+  }
 
   // Beam breaks on:
   // 1. Quarter notes or longer (duration >= 1/4)
@@ -427,23 +441,28 @@ function processTieEnd(pitches: ABCJSPitch[], voiceState: VoiceState): void {
 
 /**
  * Applies start slurs to pitches.
- * When we encounter '(' or '.(' tokens, we add slur info to pendingStartSlurs, and then
- * this function applies those to the current note's pitches.
+ * When we encounter '(' or '.(' tokens, we push an entry onto openSlurs, and
+ * this function marks the not-yet-applied entries applied, writing their
+ * label onto the current note's first pitch. Entries stay on openSlurs after
+ * being applied (only their startApplied flag changes) since they must
+ * remain there until a later ')' token pops them to set endSlur.
  */
 function applyStartSlurs(pitches: ABCJSPitch[], voiceState: VoiceState): void {
-  if (voiceState.pendingStartSlurs.length === 0) return;
+  const unapplied = voiceState.openSlurs.filter((slur) => !slur.startApplied);
+  if (unapplied.length === 0) return;
 
   for (const pitch of pitches) {
     if (pitch.pitch !== undefined) {
       // Apply all pending start slurs to this pitch
       // Each slur has { label, style? } - spread to include style if present
-      pitch.startSlur = voiceState.pendingStartSlurs.map((slur) => ({ ...slur }));
+      pitch.startSlur = unapplied.map((slur) => (slur.style ? { label: slur.label, style: slur.style } : { label: slur.label }));
       break; // Only apply to first pitch
     }
   }
 
-  // Clear pending start slurs (they've been applied)
-  voiceState.pendingStartSlurs = [];
+  for (const slur of unapplied) {
+    slur.startApplied = true;
+  }
 }
 
 /**
@@ -559,7 +578,10 @@ function isInfoLineSemanticData(data: SemanticData): data is InfoLineUnion {
  */
 type HeaderContext =
   | { type: "file_header"; target: FileDefaults }
-  | { type: "tune_header"; target: { tune: Tune; tuneDefaults: TuneDefaults; parserConfig: import("./InterpreterState").ParserConfig } };
+  | {
+      type: "tune_header";
+      target: { tune: Tune; tuneDefaults: TuneDefaults; parserConfig: import("./InterpreterState").ParserConfig; voices: Map<string, VoiceState> };
+    };
 
 /**
  * Processes info line semantic data and assigns it to the appropriate target.
@@ -671,19 +693,28 @@ function applyInfoLine(semanticData: InfoLineUnion, context: HeaderContext): str
 
   // Tune header only
   if (isKeyInfo(semanticData)) {
-    context.target.tuneDefaults.key = semanticData.data.keySignature;
-    if (semanticData.data.clef) {
-      context.target.tuneDefaults.clef = semanticData.data.clef;
+    // Because a K: field that only changes the clef gives no key, the default key stays.
+    // Because a header K: is tune-wide, the voices that the header declared before it (V:1 and V:2 above the K: line)
+    // take its key and its clef too, as they do in abcjs; a voice that declares its own clef keeps it.
+    const keySignature = semanticData.data.keySignature;
+    const headerClef = semanticData.data.clef;
+    if (keySignature) context.target.tuneDefaults.key = keySignature;
+    if (headerClef) context.target.tuneDefaults.clef = headerClef;
+    for (const voice of context.target.voices.values()) {
+      if (keySignature) voice.currentKey = keySignature;
+      if (headerClef && !voice.properties.clef) voice.currentClef = headerClef;
     }
 
     // Automatically enable bagpipes formatting for HP/Hp keys (matching abcjs behavior)
     // In abcjs, K:HP and K:Hp automatically call parseDirective.addDirective("bagpipes")
-    const keyRoot = semanticData.data.keySignature.root;
+    const keyRoot = keySignature?.root;
     if (keyRoot === "HP" || keyRoot === "Hp") {
       context.target.tune.formatting.bagpipes = true;
     }
   } else if (isMeterInfo(semanticData)) {
+    // Because a header M: is tune-wide too, the voices declared before it take it as well.
     context.target.tuneDefaults.meter = semanticData.data;
+    for (const voice of context.target.voices.values()) voice.currentMeter = semanticData.data;
   }
   // Voice is handled separately in visitInfoLineExpr
 
@@ -1076,6 +1107,24 @@ export interface ParseResult {
 }
 
 /**
+ * Converts a linear tune to deferred style, so that the interpreter can read it.
+ * Because the converter creates new nodes (the voice markers of each system, and the silenced lines of the voices that a
+ * system leaves out), and the semantic analysis ran before them, the directives and fields among those new nodes are
+ * analyzed here. The original nodes keep the data that the analysis already recorded.
+ */
+export function toInterpretableTune(tune: TuneExpr, analyzer: SemanticAnalyzer, ctx: ABCContext): TuneExpr {
+  const deferred = convertTuneToDeferred(tune, ctx);
+  if (deferred === tune || !deferred.tune_body) return deferred;
+  for (const system of deferred.tune_body.sequence) {
+    for (const item of system) {
+      const isAnalyzable = item instanceof Directive || item instanceof Info_line || item instanceof Inline_field;
+      if (isAnalyzable && !analyzer.data.has(item.id)) item.accept(analyzer);
+    }
+  }
+  return deferred;
+}
+
+/**
  * Main Tune Interpreter
  */
 export class TuneInterpreter implements Visitor<void> {
@@ -1090,6 +1139,15 @@ export class TuneInterpreter implements Visitor<void> {
 
   // Processing context tracking
   processingContext: "file_header" | "tune_header" | "tune_body" = "file_header";
+
+  // Number of Beam expressions currently being visited. Because the parser
+  // only creates a Beam expression for notes written without spaces, notes
+  // visited at depth 0 are separated by whitespace and are never beamed.
+  beamExprDepth = 0;
+
+  // Because a line that ends with a line continuation (a backslash) is joined to the next one, the end of that line is not
+  // a line break. The flag is set at the continuation and consumed by the end-of-line token that follows it.
+  lineContinuationPending = false;
 
   private sourceText: string = "";
   private lineOffsets: number[] = [];
@@ -1130,9 +1188,10 @@ export class TuneInterpreter implements Visitor<void> {
     const voiceId = this.state.currentVoice;
     const vxNomenclature = this.state.vxNomenclatures.get(voiceId);
 
-    // Switch if: no nomenclature, no switch yet (pointers are -1), or pointing to different voice
+    // Switch if: no nomenclature, no switch yet (pointers are -1), a source line ended, or pointing to different voice
     if (
       !vxNomenclature ||
+      this.state.lineEnded ||
       this.state.currentStaffNum === -1 ||
       this.state.currentVoiceIndex === -1 ||
       vxNomenclature.staffNum !== this.state.currentStaffNum ||
@@ -1217,7 +1276,11 @@ export class TuneInterpreter implements Visitor<void> {
     }
   }
 
-  visitTuneExpr(expr: TuneExpr): void {
+  visitTuneExpr(linearOrDeferred: TuneExpr): void {
+    // Because a linear tune groups its systems by a different rule than abcjs, the interpreter only reads deferred tunes,
+    // and a linear tune is converted first, the way the preview and abc2midi convert it.
+    const expr = linearOrDeferred.linear ? toInterpretableTune(linearOrDeferred, this.analyzer, this.ctx) : linearOrDeferred;
+
     // Create fresh state for this tune
     this.state = createInterpreterState(this.analyzer.data, this.fileDefaults);
 
@@ -1291,18 +1354,9 @@ export class TuneInterpreter implements Visitor<void> {
         // Unlike pushElement's lazy switch, this actively searches for the next slot.
         switchToVoice(this.state, id);
       } else if (isKeyInfo(semanticData)) {
-        const voice = getCurrentVoice(this.state);
-        if (voice) {
-          voice.currentKey = semanticData.data.keySignature;
-          if (semanticData.data.clef) {
-            voice.currentClef = semanticData.data.clef;
-          }
-        }
-        // Also update tune defaults for future voices
-        this.state.tuneDefaults.key = semanticData.data.keySignature;
-        if (semanticData.data.clef) {
-          this.state.tuneDefaults.clef = semanticData.data.clef;
-        }
+        const lastToken = expr.value[expr.value.length - 1];
+        const endChar = lastToken && isToken(lastToken) ? lastToken.position + lastToken.lexeme.length : expr.key.position + expr.key.lexeme.length;
+        this.applyKeyChange(semanticData.data, expr.key.position, endChar);
       } else if (isMeterInfo(semanticData)) {
         const voice = getCurrentVoice(this.state);
         if (voice) {
@@ -1318,7 +1372,7 @@ export class TuneInterpreter implements Visitor<void> {
       // Header info line - use the helper function
       const context: HeaderContext = {
         type: "tune_header",
-        target: { tune: this.state.tune, tuneDefaults: this.state.tuneDefaults, parserConfig: this.state.parserConfig },
+        target: { tune: this.state.tune, tuneDefaults: this.state.tuneDefaults, parserConfig: this.state.parserConfig, voices: this.state.voices },
       };
       const warning = applyInfoLine(semanticData, context);
       if (warning) {
@@ -1389,7 +1443,7 @@ export class TuneInterpreter implements Visitor<void> {
         // Tune header or body
         const context: HeaderContext = {
           type: "tune_header",
-          target: { tune: this.state.tune, tuneDefaults: this.state.tuneDefaults, parserConfig: this.state.parserConfig },
+          target: { tune: this.state.tune, tuneDefaults: this.state.tuneDefaults, parserConfig: this.state.parserConfig, voices: this.state.voices },
         };
         const warning = applyDirective(semanticData, expr.key.lexeme, context);
         if (warning) {
@@ -1459,7 +1513,7 @@ export class TuneInterpreter implements Visitor<void> {
       // Process tuplets (before beaming, as tuplets affect note grouping)
       applyTuplet(element, voiceState);
 
-      processBeaming(element, voiceState, false); // false = not a rest
+      processBeaming(element, voiceState, false, this.beamExprDepth > 0); // false = not a rest
 
       // Process slurs
       if (element.pitches) {
@@ -1538,11 +1592,16 @@ export class TuneInterpreter implements Visitor<void> {
       rest: { type: restType },
     };
 
+    // Because a chord symbol may sit on a rest (a chord change during a
+    // silence), the pending symbols attach to the rest rather than drifting
+    // to the next note.
+    if (voiceState) applyChordSymbols(element, voiceState);
+
     this.pushElement(element);
 
     // Process beaming for this rest (beams break on rests, voiceState already retrieved above)
     if (voiceState) {
-      processBeaming(element, voiceState, true); // true = is a rest
+      processBeaming(element, voiceState, true, this.beamExprDepth > 0); // true = is a rest
     }
   }
 
@@ -1612,7 +1671,7 @@ export class TuneInterpreter implements Visitor<void> {
       // Process tuplets (before beaming, as tuplets affect note grouping)
       applyTuplet(element, voiceState);
 
-      processBeaming(element, voiceState, false); // false = not a rest
+      processBeaming(element, voiceState, false, this.beamExprDepth > 0); // false = not a rest
 
       // Process slurs
       if (element.pitches) {
@@ -1667,28 +1726,40 @@ export class TuneInterpreter implements Visitor<void> {
   }
 
   visitToken(token: Token): void {
+    if (token.type === TT.EOL) {
+      if (this.lineContinuationPending) {
+        this.lineContinuationPending = false;
+        return;
+      }
+      // Because abcjs starts a new line of music at each end of line, the next element of the voice goes into the next system.
+      if (this.processingContext === "tune_body") this.state.lineEnded = true;
+      return;
+    }
     if (token.type === TT.SLUR) {
       const voiceState = this.state.voices.get(this.state.currentVoice);
       if (voiceState) {
         if (token.lexeme === "(") {
-          // Start slur: generate a new label and add to pending
+          // Start slur: push a new entry onto the single open-slur stack.
+          // applyStartSlurs marks it applied once it writes the label onto a
+          // note's startSlur; it stays on the stack, unremoved, until the
+          // matching ')' pops it below.
           const label = voiceState.nextSlurLabel++;
-          voiceState.pendingStartSlurs.push({ label });
+          voiceState.openSlurs.push({ label, startApplied: false });
         } else if (token.lexeme === ")") {
-          // End slur: pop a label from start slurs and retroactively add to last note
+          // End slur: pop the most recently opened slur and retroactively add to last note
           // Because slurs can only be attached to notes, we need to check if any music has been processed yet
           if (this.state.currentSystemNum === -1 || this.state.currentStaffNum === -1 || this.state.currentVoiceIndex === -1) {
             // No music notes have been processed yet, so we skip slur attachment
-            // Pop the pending slur to keep the stack consistent
-            if (voiceState.pendingStartSlurs.length > 0) {
-              voiceState.pendingStartSlurs.pop();
+            // Pop the open slur to keep the stack consistent
+            if (voiceState.openSlurs.length > 0) {
+              voiceState.openSlurs.pop();
             }
             return;
           }
 
           const elements = this.getCurrentVoiceElements();
-          if (voiceState.pendingStartSlurs.length > 0 && elements.length > 0) {
-            const slur = voiceState.pendingStartSlurs.pop()!;
+          if (voiceState.openSlurs.length > 0 && elements.length > 0) {
+            const slur = voiceState.openSlurs.pop()!;
             const lastElement = elements[elements.length - 1];
 
             // Add endSlur to the last note's first pitch
@@ -1707,7 +1778,7 @@ export class TuneInterpreter implements Visitor<void> {
       const voiceState = this.state.voices.get(this.state.currentVoice);
       if (voiceState) {
         const label = voiceState.nextSlurLabel++;
-        voiceState.pendingStartSlurs.push({ label, style: SlurStyle.Dotted });
+        voiceState.openSlurs.push({ label, style: SlurStyle.Dotted, startApplied: false });
       }
     }
   }
@@ -1806,7 +1877,49 @@ export class TuneInterpreter implements Visitor<void> {
     voiceState.pendingGraceNotes = graceNotes;
   }
 
-  // TODO: create a helper that can be shared with the info lines?
+  /**
+   * Applies a K: change found in the tune body, either as an inline field
+   * ([K:Bb]) or as a K: line. Because abcjs pushes a key element only when
+   * the field gives a key, and a clef element when it gives a clef, a field
+   * that only changes the clef ([K:clef=bass]) keeps the key in effect.
+   * The tune defaults are updated too, so that voices created later start
+   * from the new key and clef.
+   */
+  applyKeyChange(data: KeyInfo, startChar: number, endChar: number): void {
+    const voice = getCurrentVoice(this.state);
+    // Because abcjs writes the clef before the key signature, the clef
+    // element is pushed first.
+    if (data.clef) {
+      if (voice) voice.currentClef = data.clef;
+      this.state.tuneDefaults.clef = data.clef;
+      if (data.clef.type !== undefined) {
+        const clefElement: ClefElement = {
+          el_type: ElementType.Clef,
+          startChar,
+          endChar,
+          type: data.clef.type,
+          verticalPos: data.clef.verticalPos ?? 0,
+        };
+        this.pushElement(clefElement);
+      }
+    }
+    const keySignature = data.keySignature;
+    if (keySignature) {
+      if (voice) voice.currentKey = keySignature;
+      this.state.tuneDefaults.key = keySignature;
+      const keyElement: KeyElement = {
+        el_type: ElementType.Key,
+        startChar,
+        endChar,
+        root: keySignature.root,
+        acc: keySignature.acc,
+        mode: keySignature.mode,
+        accidentals: keySignature.accidentals,
+      };
+      this.pushElement(keyElement);
+    }
+  }
+
   visitInlineFieldExpr(expr: Inline_field): void {
     // Inline fields are analyzed by SemanticAnalyzer and reuse Info_line analysis logic
     const semanticData = this.state.semanticData.get(expr.id);
@@ -1830,30 +1943,7 @@ export class TuneInterpreter implements Visitor<void> {
       }
       switchToVoice(this.state, id);
     } else if (isKeyInfo(semanticData)) {
-      const voice = getCurrentVoice(this.state);
-      if (voice) {
-        voice.currentKey = semanticData.data.keySignature;
-        if (semanticData.data.clef) {
-          voice.currentClef = semanticData.data.clef;
-        }
-      }
-      // Also update tune defaults for future voices
-      this.state.tuneDefaults.key = semanticData.data.keySignature;
-      if (semanticData.data.clef) {
-        this.state.tuneDefaults.clef = semanticData.data.clef;
-      }
-
-      // Create a key element in the voice for rendering
-      const keyElement: KeyElement = {
-        el_type: ElementType.Key,
-        startChar,
-        endChar,
-        root: semanticData.data.keySignature.root,
-        acc: semanticData.data.keySignature.acc,
-        mode: semanticData.data.keySignature.mode,
-        accidentals: semanticData.data.keySignature.accidentals,
-      };
-      this.pushElement(keyElement);
+      this.applyKeyChange(semanticData.data, startChar, endChar);
     } else if (isMeterInfo(semanticData)) {
       const voice = getCurrentVoice(this.state);
       if (voice) {
@@ -1978,9 +2068,11 @@ export class TuneInterpreter implements Visitor<void> {
 
     // The beaming will be handled automatically by processBeaming()
     // as we visit each note/chord/rest within the beam
+    this.beamExprDepth++;
     for (const content of expr.contents) {
       content.accept(this);
     }
+    this.beamExprDepth--;
 
     // After visiting all notes in the beam, check if we need to end the current beam group
     // (in case the user's beam ends but we have a valid beam group running)
@@ -1991,7 +2083,9 @@ export class TuneInterpreter implements Visitor<void> {
     }
   }
   visitVoiceOverlayExpr(_expr: Voice_overlay): void {}
-  visitLineContinuationExpr(_expr: Line_continuation): void {}
+  visitLineContinuationExpr(_expr: Line_continuation): void {
+    this.lineContinuationPending = true;
+  }
 
   visitTupletExpr(expr: Tuplet): void {
     // Parse tuplet notation: (p:q:r or (p:q or (p

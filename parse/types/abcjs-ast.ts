@@ -303,7 +303,8 @@ export interface KeySignature {
 }
 
 export interface KeyInfo {
-  keySignature: KeySignature;
+  /** Absent when the K: field gives no key, only modifiers ([K:clef=bass]); the key in effect then stays. */
+  keySignature?: KeySignature;
   clef?: ClefProperties;
 }
 
@@ -530,6 +531,12 @@ export interface Staff {
   meter?: Meter;
   workingClef: ClefProperties;
   voices: VoiceElement[][];
+  // Parallel to `voices`: the original ABC voice id (from V:<id>) and, where
+  // declared, its display name (V:<id> name="..."). TuneInterpreter is the
+  // only writer of these; the underlying `voices` arrays carry no identity
+  // of their own once interpretation is done.
+  voiceIds?: string[];
+  voiceNames?: string[];
   title?: string[];
   bracket?: BracketBracePosition;
   brace?: BracketBracePosition;

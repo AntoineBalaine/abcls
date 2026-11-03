@@ -1,7 +1,7 @@
 import { chordToPitches } from "./chordPitches";
 import { VoicedNote } from "./harmonization";
 import { parseChordSymbol } from "./parseChordSymbol";
-import { scanChordSymbol } from "./scanChordSymbol";
+import { isChordSymbolText, scanChordSymbol } from "./scanChordSymbol";
 import { ParsedChord } from "./types";
 
 export interface ChordInfo {
@@ -17,6 +17,7 @@ export interface ChordInfo {
  * @returns ChordInfo with parsed chord and MIDI pitches, or null if invalid
  */
 export function analyzeChordSymbol(text: string, baseOctave: number = 4): ChordInfo | null {
+  if (!isChordSymbolText(text)) return null;
   const scanResult = scanChordSymbol(text);
   if (!scanResult) return null;
 
@@ -29,7 +30,7 @@ export function analyzeChordSymbol(text: string, baseOctave: number = 4): ChordI
 }
 
 // Re-export from submodules
-export { scanChordSymbol, ScanResult } from "./scanChordSymbol";
+export { isChordSymbolText, scanChordSymbol, ScanResult } from "./scanChordSymbol";
 export { parseChordSymbol } from "./parseChordSymbol";
 export { chordToPitches } from "./chordPitches";
 export { ParsedChord, ChordQuality, ChordAlteration, ChordTT, ChordToken, NoteSpellings } from "./types";
@@ -95,6 +96,10 @@ export {
   scoreSpreadQuality,
   placeArrangements,
   buildSpreadVoicing,
+  enumeratePlacements,
+  maxUpperGap,
+  scoreSpreadVoicing,
+  MAX_UPPER_GAP,
   // Phase 2: Chord Tone Validation
   isChordTone,
   getAvailableTensions,

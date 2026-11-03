@@ -11,6 +11,12 @@ abcls provides a live preview that renders ABC notation as sheet music using the
 
 The preview opens as a side panel in VS Code. Use the command palette or the editor title bar button to toggle it. The panel shows the rendered notation and updates on every keystroke.
 
+The preview and the editor follow each other:
+
+- The notes under the cursor, or under the selection, of the editor are highlighted in the score. When the first highlighted note is outside the visible part of the preview, the preview scrolls to it.
+- Clicking a note in the score selects its text in the editor and gives the focus back to the editor, so that you can type right away.
+- Because the score is drawn again after each edit, the preview keeps its scroll position while you edit, and only moves when the highlighted note is out of view.
+
 ### Kakoune
 
 The Kakoune preview opens in a web browser. The plugin starts a local preview server and connects to it via WebSocket so that changes are pushed to the browser in real time.

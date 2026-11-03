@@ -5,7 +5,7 @@
 Releases are automated via GitHub Actions. Pushing a version tag triggers the release workflow, which publishes:
 
 - `abcls-parser`, `abcls` (CLI + LSP server bundle), and `abcls-kak` (Kakoune plugin) as npm-installable tarballs attached to the GitHub Release — not to the npm registry (see "Why not npm" below)
-- `abcls` to the VS Code Marketplace
+- `abcls` to the VS Code Marketplace (through Trusted Publishing, see below)
 - The documentation site to GitHub Pages
 
 ### Why not npm
@@ -28,13 +28,23 @@ Because there is no registry entry, `abcls-kak`'s `dependencies` no longer decla
 
 ## Prerequisites
 
+### Marketplace publishing (Trusted Publishing)
+
+Because Azure DevOps retires its global personal access tokens on 2026-12-01, the `publish-vscode` job does not use a token. It authenticates with the OIDC token that GitHub issues to the job, through the Marketplace's Trusted Publishing, and runs `vsce publish --oidc` (which needs vsce 4 or later, so the workflow pins `@vscode/vsce@4.1.0`).
+
+For this to work, the Marketplace publisher `antoinebalaine` holds a Trusted Publishing policy (https://marketplace.visualstudio.com/manage, then the publisher, then Trusted Publishing) with:
+
+- repository owner `AntoineBalaine` and repository `abcls`;
+- workflow filename `release.yml`;
+- environment `vsce-publish`.
+
+Because the policy names the workflow file and the environment, renaming either one breaks the publish until the policy is changed as well. The job also needs `id-token: write` and `contents: read`, which it declares.
+
 ### GitHub Secrets
 
-The following secrets must be configured in the repository settings:
+No secret is needed. There is no npm token, and there is no Marketplace token. The `publish-release` job authenticates to GitHub using the workflow's own `GITHUB_TOKEN`, granted `contents: write` permission to create the release and upload assets.
 
-- `VSCE_PAT`: Visual Studio Marketplace personal access token for the `abcls` extension.
-
-No npm token is needed. The `publish-release` job authenticates to GitHub using the workflow's own `GITHUB_TOKEN`, granted `contents: write` permission to create the release and upload assets.
+If the Marketplace publish fails, the `.vsix` that the workflow built can be uploaded by hand at https://marketplace.visualstudio.com/manage.
 
 ### Version Bumping
 

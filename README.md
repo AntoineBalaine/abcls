@@ -38,6 +38,8 @@ abcls-kak-install
 abcls format file.abc        # Format an ABC file
 abcls check file.abc         # Check for errors and warnings
 abcls render file.abc        # Render to SVG
+abcls transform file.abc transpose 2   # Run an editor transform
+abcls harmonize file.abc --chords-from 1 --into 3,4,5,6   # Write a block chord per chord symbol
 abcls abc2midi file.abc      # Export to MIDI
 abcls midi2abc file.midi     # Convert MIDI to ABC
 abcls abcx2abc file.abcx     # Convert ABCx chord sheet to ABC

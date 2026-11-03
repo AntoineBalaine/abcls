@@ -145,6 +145,26 @@ describe("ContextInterpreter", () => {
       expect(lastSnapshot.key.root).to.equal("G");
     });
 
+    it("does not read a text annotation that starts with a root letter as a chord", () => {
+      const input = 'X:1\nM:4/4\nK:C\n|"Am7"C D E F|"Fine"G A B c|';
+      const { ast, semanticData, ctx } = parseWithSemantics(input);
+      const result = new ContextInterpreter().interpret(ast, semanticData, ctx);
+
+      const lastSnapshot = result[result.length - 1].snapshot;
+      expect(lastSnapshot.currentChord?.root).to.equal("A");
+      expect(lastSnapshot.currentChord?.extension).to.equal(7);
+    });
+
+    it("keeps the key in effect after a K: field that only changes the clef", () => {
+      const input = "X:1\nM:4/4\nK:G\n|C D E F|[K:clef=bass] G A B c|";
+      const { ast, semanticData, ctx } = parseWithSemantics(input);
+      const result = new ContextInterpreter().interpret(ast, semanticData, ctx);
+
+      const lastSnapshot = result[result.length - 1].snapshot;
+      expect(lastSnapshot.key.root).to.equal("G");
+      expect(lastSnapshot.clef.type).to.equal("bass");
+    });
+
     it("should increment measureNumber on barlines", () => {
       const input = "X:1\nM:4/4\nK:C\n|C D E F|G A B c|d e f g|";
       const { ast, semanticData, ctx } = parseWithSemantics(input);
@@ -298,6 +318,23 @@ K:C
 
       expect(rangeSnapshots.length).to.be.greaterThan(0);
       expect(rangeSnapshots.every((s) => s.pos <= encode(range.end.line, range.end.character))).to.be.true;
+    });
+  });
+
+  describe("header key and meter with voices declared in the header", () => {
+    it("applies the header K: to the voices declared before it", () => {
+      const input = "X:1\nV:1\nV:2\nM:6/8\nK:D\n[V:1] F|\n[V:2] F|\n";
+      const { ast, semanticData, ctx } = parseWithSemantics(input);
+      const result = new ContextInterpreter().interpret(ast, semanticData, ctx);
+
+      const voice1Snapshot = getSnapshotAtPosition(result, encode(5, 7));
+      expect(voice1Snapshot.voiceId).to.equal("1");
+      expect(voice1Snapshot.key.root).to.equal("D");
+      expect(voice1Snapshot.meter.value?.[0]).to.deep.equal({ numerator: 6, denominator: 8 });
+
+      const voice2Snapshot = getSnapshotAtPosition(result, encode(6, 7));
+      expect(voice2Snapshot.voiceId).to.equal("2");
+      expect(voice2Snapshot.key.root).to.equal("D");
     });
   });
 

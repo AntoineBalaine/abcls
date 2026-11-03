@@ -27,14 +27,14 @@ import { ParserErrorType } from "../types/types";
 import { IrealSongFields } from "./fields";
 import { Annotation, Bar, Cell, Ending, IrealChart, Navigation, Repeat, Section, TimeSignature } from "./gridAst";
 
-function report(ctx: ABCContext, message: string, lexeme: string, position: number): void {
+export function report(ctx: ABCContext, message: string, lexeme: string, position: number): void {
   const reported = new Token(TT.INVALID, lexeme, ctx.generateId());
   reported.position = position;
   ctx.errorReporter.report(message, reported, ParserErrorType.PARSER);
 }
 
 /** The text of a `"..."` annotation, without its quotes or placement prefix. */
-function annotationBody(lexeme: string): string {
+export function annotationBody(lexeme: string): string {
   return lexeme.replace(/^"/, "").replace(/"$/, "").replace(/^[\^_<>@]/, "");
 }
 
@@ -47,7 +47,7 @@ function annotationBody(lexeme: string): string {
  * `"^coda"` are the agreed spelling, and an annotation whose whole text is
  * one of those words is read as the marker rather than as text to print.
  */
-function navigationMarker(text: string): "segno" | "coda" | null {
+export function navigationMarker(text: string): "segno" | "coda" | null {
   const word = text.trim().toLowerCase();
   if (word === "segno") return "segno";
   if (word === "coda") return "coda";
@@ -55,7 +55,7 @@ function navigationMarker(text: string): "segno" | "coda" | null {
 }
 
 /** A `[M:3/4]` field as a time signature, or null when it is not one. */
-function parseMeter(text: string, ctx: ABCContext, position: number): TimeSignature | null {
+export function parseMeter(text: string, ctx: ABCContext, position: number): TimeSignature | null {
   const match = text.match(/^(\d+)\s*\/\s*(\d+)$/);
   if (match === null) {
     report(ctx, `A time signature of '${text}' cannot be read`, text, position);
@@ -72,7 +72,7 @@ function parseMeter(text: string, ctx: ABCContext, position: number): TimeSignat
  * accepting that would export a truncated chord that still looks like a
  * chord.
  */
-function readChord(lexeme: string, ctx: ABCContext, position: number): ParsedChord | null {
+export function readChord(lexeme: string, ctx: ABCContext, position: number): ParsedChord | null {
   const scanned = scanChordSymbol(lexeme);
   if (scanned === null || scanned.consumed !== lexeme.length) {
     report(ctx, `Could not read the chord symbol '${lexeme}' for iReal Pro export`, lexeme, position);
@@ -112,7 +112,7 @@ function barlineMeaning(text: string): BarlineMeaning {
 }
 
 /** The state a walk of one tune carries. */
-interface Walk {
+export interface Walk {
   sections: Section[];
   navigation: Navigation;
   chartAnnotations: Annotation[];
@@ -126,7 +126,7 @@ interface Walk {
   currentEnding: Ending | null;
 }
 
-function ensureSection(walk: Walk): Section {
+export function ensureSection(walk: Walk): Section {
   if (walk.open === null) {
     const section: Section = { bars: [] };
     if (walk.pendingLabel !== undefined) section.label = walk.pendingLabel;
@@ -138,7 +138,7 @@ function ensureSection(walk: Walk): Section {
   return walk.open;
 }
 
-function closeSection(walk: Walk): void {
+export function closeSection(walk: Walk): void {
   walk.currentEnding = null;
   const section = walk.open;
   walk.open = null;
@@ -155,7 +155,7 @@ function closeSection(walk: Walk): void {
 }
 
 /** Ends the bar being built, if it holds anything. */
-function flushBar(walk: Walk): void {
+export function flushBar(walk: Walk): void {
   if (walk.cells.length === 0) {
     // An annotation written where no bar follows belongs to the chart.
     walk.chartAnnotations.push(...walk.annotations);
@@ -194,7 +194,7 @@ function startEnding(walk: Walk, number: number): void {
   walk.open = owner;
 }
 
-function readBarLine(node: BarLine, walk: Walk): void {
+export function readBarLine(node: BarLine, walk: Walk): void {
   const text = node.barline.map((token) => token.lexeme).join("").replace(/\s+/g, "");
   const meaning = barlineMeaning(text);
   const endings = (node.repeatNumbers ?? []).map((token) => parseInt(token.lexeme, 10)).filter((n) => Number.isFinite(n));
@@ -207,6 +207,11 @@ function readBarLine(node: BarLine, walk: Walk): void {
     // The span is closed, but a following ending still belongs to it,
     // which is why the owner outlives the close.
     walk.currentEnding = null;
+    // Because a repeat ends at its closing bar line, the bars after a plain `:|` belong to a new section; otherwise
+    // the repeat would swallow the rest of the tune. When endings are in play, the next ending marker still needs the section.
+    if (endings.length === 0 && walk.endingsOwner === null) {
+      closeSection(walk);
+    }
   }
 
   for (const number of endings) startEnding(walk, number);
@@ -220,23 +225,37 @@ function readBarLine(node: BarLine, walk: Walk): void {
 function readInlineField(node: Inline_field, walk: Walk, ctx: ABCContext): void {
   const key = node.field.lexeme.replace(/:$/, "");
   const value = (node.text ?? []).map((token) => token.lexeme).join("").replace(/^[A-Za-z]:/, "").trim();
+  applyField(key, value, node.field.position, walk, ctx);
+}
+
+/**
+ * Applies a part (`P:`) or meter (`M:`) field to the walk, whether it was written inline or on a line of its own.
+ */
+export function applyField(key: string, value: string, position: number, walk: Walk, ctx: ABCContext): void {
   if (key === "P") {
     flushBar(walk);
     closeSection(walk);
-    walk.pendingLabel = value;
     walk.endingsOwner = null;
+    // Because an iReal Pro section label is a single character, a longer part name ("ENDING") is kept as the
+    // text printed over the first bar of the section, which starts a new section all the same.
+    if (/^\w$/.test(value)) {
+      walk.pendingLabel = value;
+    } else if (value !== "") {
+      walk.annotations.push({ text: value, position });
+    }
     return;
   }
   if (key === "M") {
-    const meter = parseMeter(value, ctx, node.field.position);
+    const meter = parseMeter(value, ctx, position);
     if (meter === null) return;
     if (walk.open !== null && walk.open.bars.length === 0 && walk.currentEnding === null) walk.open.timeSignature = meter;
     else walk.pendingTimeSignature = meter;
   }
 }
 
-export function abcxTuneToIrealChart(tune: Tune, ctx: ABCContext): IrealChart {
-  const walk: Walk = {
+/** Creates the empty state of a walk over one tune. */
+export function createWalk(): Walk {
+  return {
     sections: [],
     navigation: { partMarkerSections: [] },
     chartAnnotations: [],
@@ -246,6 +265,10 @@ export function abcxTuneToIrealChart(tune: Tune, ctx: ABCContext): IrealChart {
     endingsOwner: null,
     currentEnding: null,
   };
+}
+
+export function abcxTuneToIrealChart(tune: Tune, ctx: ABCContext): IrealChart {
+  const walk = createWalk();
 
   for (const system of tune.tune_body?.sequence ?? []) {
     for (const node of system) {

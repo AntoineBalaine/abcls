@@ -112,7 +112,7 @@ export interface VoiceState {
   currentKey: KeySignature;
   currentClef: ClefProperties;
   currentMeter?: Meter;
-  measureAccidentals: Map<"C" | "D" | "E" | "F" | "G" | "A" | "B", AccidentalType>; // Cleared each measure
+  measureAccidentals: Map<string, AccidentalType>; // Keyed by letter and octave (see measureAccidentalKey), cleared each measure
 
   // Beam tracking (for automatic beaming)
   potentialStartBeam?: NoteElement; // First note of potential beam group
@@ -121,9 +121,13 @@ export interface VoiceState {
   // Tie tracking (for connecting same pitches across barlines)
   pendingTies: Map<number, {}>; // Map of pitch number to tie object
 
-  // Slur tracking (for phrasing marks)
-  pendingStartSlurs: { label: number; style?: SlurStyle }[]; // Slurs that need to start on next note
-  pendingEndSlurs: number[]; // Labels for slurs that need to end on next note
+  // Slur tracking (for phrasing marks). Single stack, single source of truth:
+  // a '(' token pushes an entry with startApplied false; applyStartSlurs marks
+  // the not-yet-applied entries applied (writing their label onto the next
+  // note) without removing them, since they must stay on the stack until a
+  // later ')' token pops them to set endSlur. This avoids needing two arrays
+  // kept in manual lockstep at every push/pop site.
+  openSlurs: { label: number; style?: SlurStyle; startApplied: boolean }[];
   nextSlurLabel: number; // Counter for generating unique slur labels
 
   // Tuplet tracking (for triplets, quintuplets, etc.)
@@ -181,6 +185,13 @@ export interface InterpreterState {
   currentStaffNum: number; // Which staff within the system
   currentVoiceIndex: number; // Which voice within the staff
 
+  /**
+   * True when a source line has ended since the current voice last wrote an element.
+   * Because abcjs puts the nth line of each voice into the nth system, the next element of the voice
+   * must go into the next system whose slot is free for that voice, instead of the current one.
+   */
+  lineEnded: boolean;
+
   // Output being constructed
   tune: Tune;
 
@@ -235,6 +246,7 @@ export function createInterpreterState(semanticData: Map<number, SemanticData>, 
     currentSystemNum: -1,
     currentStaffNum: -1,
     currentVoiceIndex: -1,
+    lineEnded: false,
 
     tune: createEmptyTune(),
 
@@ -311,8 +323,7 @@ export function newVxState(id: string, properties: VoiceProperties, tuneDefaults
     currentMeter: tuneDefaults.meter,
     measureAccidentals: new Map(),
     pendingTies: new Map(),
-    pendingStartSlurs: [],
-    pendingEndSlurs: [],
+    openSlurs: [],
     nextSlurLabel: 101, // abcjs starts at 101
     tupletNotesLeft: 0,
     tupletP: 0,
@@ -503,6 +514,24 @@ export function initVxSlot(state: InterpreterState, systemIdx: number, vxStaff: 
   while (staff.voices.length <= voiceIndex) {
     staff.voices.push([]);
   }
+
+  // Keep voiceIds/voiceNames in sync with vxNomenclatures, since voice slots
+  // can be lazily padded out of order (see the while loop above) before the
+  // voice that actually owns a given index has been switched to. Only stamp
+  // indices that actually exist in this system's `voices` array: a voice
+  // known globally via vxNomenclatures may not have written into this
+  // particular system yet (getSystemIdx can backfill it into an earlier
+  // one), and stamping past `voices.length` would break the parallel-array
+  // guarantee documented on Staff.
+  if (!staff.voiceIds) staff.voiceIds = [];
+  if (!staff.voiceNames) staff.voiceNames = [];
+  for (const [vid, vxNom] of state.vxNomenclatures.entries()) {
+    if (vxNom.staffNum !== staffNum) continue;
+    if (vxNom.index >= staff.voices.length) continue;
+    staff.voiceIds[vxNom.index] = vid;
+    const name = state.voices.get(vid)?.properties.name;
+    if (name !== undefined) staff.voiceNames[vxNom.index] = name;
+  }
 }
 
 /**
@@ -540,6 +569,8 @@ export function switchToVoice(state: InterpreterState, voiceID: string): void {
   state.currentStaffNum = vxNomenclature.staffNum;
   state.currentVoiceIndex = vxNomenclature.index;
   state.currentVoice = voiceID;
+  // Because the system was just chosen after any line end, the pending line end is consumed.
+  state.lineEnded = false;
   // Note: We don't update voiceCurrentSystem anymore because we always search from 0
   // This matches abcjs's setCurrentVoice behavior
 }

@@ -1,0 +1,9 @@
+npx lint-staged
+
+# Because a change can break a file that is not staged (a caller of a changed function, or another package that
+# imports it), the type check covers every TypeScript project. It only runs when TypeScript files are staged.
+# tsc --build rebuilds the referenced projects (parse, cstree, midi, editor) first, so that the packages that read
+# their types from dist see the staged changes.
+if git diff --cached --name-only --diff-filter=ACMR | grep -q '\.ts$'; then
+  npm run typecheck
+fi

@@ -42,8 +42,17 @@ abcls render myfile.abc
 Options:
 
 - `-t, --tune <numbers...>` -- render only the specified tunes by X: number (supports comma-separated, dash-separated, or repeated flags)
+- `--pages <dir>` -- write the score as A4 pages, one SVG file per page (`page-001.svg`, `page-002.svg`, and so on), into this directory, instead of printing the SVG of each tune
 - `--ignore-parse-errors` -- continue rendering even if the ABC file has parsing errors
 - `--ignore-missing-tunes` -- continue rendering even if some requested tunes are not found
+
+### Making a PDF
+
+Because `render` only writes SVG, a PDF comes from giving the pages to another tool. With `rsvg-convert` (from librsvg), the pages of every tune of the file become one PDF:
+
+```bash
+abcls render score.abc --pages pages && rsvg-convert -f pdf -o score.pdf pages/page-*.svg
+```
 
 ## abc2midi
 
@@ -72,6 +81,35 @@ Options:
 - `--title <title>` -- set the title (T: field)
 - `--composer <composer>` -- set the composer (C: field)
 
+## abc2xml
+
+Exports one tune of an ABC file as MusicXML 4.0, the exchange format that MuseScore, Finale, Sibelius, Dorico and most notation programs read.
+
+```bash
+abcls abc2xml myfile.abc -o myfile.musicxml
+```
+
+Options:
+
+- `-o, --output <file>` -- output MusicXML file path (writes to stdout if omitted)
+
+Because MusicXML holds one score per file, a file that holds several tunes stops with an error that asks you to split it first. The [MusicXML guide](/abcls/user-guide/musicxml/) lists what the export writes and what it leaves out.
+
+## xml2abc
+
+Converts a MusicXML file to ABC notation.
+
+```bash
+abcls xml2abc myscore.musicxml -o myscore.abc
+```
+
+Options:
+
+- `-o, --output <file>` -- output ABC file path (writes to stdout if omitted)
+- `--bars-per-line <n>` -- break the lines every `n` bars, instead of following the layout of the MusicXML file
+
+Because the reader only takes raw XML, a compressed file (`.mxl`) stops with an error: extract it first, and give the `.xml` or `.musicxml` file inside. The command exits with an error, and prints each reason, when the file holds something that ABC cannot express. See the [MusicXML guide](/abcls/user-guide/musicxml/) for the list.
+
 ## abcx2abc
 
 Converts an ABCx chord sheet to standard ABC notation.
@@ -83,6 +121,125 @@ abcls abcx2abc myfile.abcx -o myfile.abc
 Options:
 
 - `-o, --output <file>` -- write output to a file instead of stdout
+
+## abc2ireal
+
+Exports the chords of an ABC file, or of an ABCx chord sheet, as an iReal Pro link.
+
+```bash
+abcls abc2ireal myfile.abc -o myfile.html
+```
+
+Options:
+
+- `-o, --output <file>` -- write the link to a file (an `.html` extension writes a page that iReal Pro can open); writes to stdout if omitted
+- `-t, --tune <numbers...>` -- export only the specified tunes by X: number
+- `--voice <id>` -- ABC only: the voice that carries the chords
+- `--cells <n>` -- ABC only: the number of cells of each bar (default 4)
+- `--tempo <bpm>` -- ABC only: the tempo of the tunes that have no `Q:` line
+- `--style <name>` -- ABC only: the style of the tunes that have no `%%irealstyle` directive
+
+See the [iReal Pro export guide](/abcls/user-guide/ireal-export/) for what the export reads and for the chord spellings it accepts.
+
+## transform
+
+Runs one of the editor transforms (the same ones as the editor commands: `transpose`, `harmonizeVoicing`, `explode`, `addVoice`, `setRhythm`, and so on) on an ABC file, without a language server. See the [transforms guide](/abcls/user-guide/transforms/) for the list of transforms and what each one does.
+
+```bash
+abcls transform myfile.abc transpose 2
+abcls transform myfile.abc setRhythm 1/2 --lines 10-12
+abcls transform myfile.abc harmonizeVoicing close 4 null --voice 2 -w
+```
+
+The first argument after the file is the name of the transform. The arguments that follow are the arguments of that transform. A whole number is read as a number, `n/d` is read as a rational for `setRhythm` and `addToRhythm`, and the word `null` is read as no value. For `addVoice`, the second argument is a list such as `clef=bass,name=Bass`.
+
+Options:
+
+- `--voice <ids>` -- only transform the music of these voices (comma-separated ids)
+- `--lines <range>` -- only transform these lines, counted from 1 (for example `10` or `10-20`), or a range of text given as line:column positions, where columns also count from 1 and the end column is included (for example `10:5-12:20`)
+- `--keys` -- with `transpose`, also transpose the key signatures (the `K:` fields) so that they follow the notes
+- `--chords` -- with `transpose`, also transpose the chord symbols
+- `--as-new-tune <label>` -- apply the transform to a copy of the tune, and append that copy to the file as a new tune
+- `--tune <number>` -- with `--as-new-tune`, the `X:` number of the tune to copy (the first tune by default)
+- `-w, --write` -- write the result back to the file (otherwise prints to stdout)
+
+### Transposing a whole tune
+
+Because a transposed score also needs its key signature and its chord symbols to move, `--keys` and `--chords` rewrite them together with the notes. The flags only apply to `transpose`, and any other transform stops with an error. Notes and chords move by the same interval, so the spelling stays consistent: with a tune in C minor, a transposition down a tone gives B flat minor, and the chord `Fm` becomes `Ebm`.
+
+```bash
+abcls transform myfile.abc transpose --keys --chords -- -2
+```
+
+Because a negative number looks like an option, it is written after `--`.
+
+To keep the original tune next to its transposition (for example to write the part of a B flat clarinet), `--as-new-tune` leaves the original untouched and appends the transformed copy after a blank line. The copy gets the next free `X:` number, and its title (`T:`) gets the label in parentheses, so a tune titled `Blue Moon` and a label `Bb clarinet` give `Blue Moon (Bb clarinet)`. `--voice` and `--lines` still count the lines of the file, so they select the same text as without the flag.
+
+```bash
+abcls transform myfile.abc transpose 2 --keys --chords --as-new-tune "Bb clarinet" -w
+abcls transform myfile.abc transpose 2 --as-new-tune "Bb clarinet" --tune 3 -w
+```
+
+Without `--voice` and `--lines`, the transform applies to the whole file. The transforms that depend on the chord symbols read them by position in time, so a chord symbol written in one voice applies to the notes of every voice that sounds at the same time.
+
+## harmonize
+
+Writes harmony into new voices, using the chord symbols of the score. It has two modes, and exactly one of `--from` and `--chords-from` is required.
+
+Before running it, check that the voice you read from is written with inline voice markers at the start of its lines (`[V:1] ...`), and that the chord symbols are written in quotes in the music (`"Fm"`, `"Bb6"`).
+
+One block chord per chord symbol, which does not touch the melody:
+
+```bash
+abcls harmonize myfile.abc --chords-from 1 --into 3,4,5,6 --voicing spread -w
+```
+
+Because each chord symbol lasts until the next symbol or the end of the bar, a bar that holds `"Ab" x4 "Bb6" x4` gets two chords of half a bar each, and a bar with one symbol and a full-bar rest gets one chord. The command needs between 4 and 6 new voices, and each chord is built with that many notes.
+
+Because the chords are built under a top note, the command first chooses a top note for each chord, among its chord tones and its available tensions between E4 and G5. Only the top notes that can carry the requested voicing are considered. Two options control the choice:
+
+- `--top-note nearest` (default) takes the top note closest to the previous one, so the top line moves as little as possible.
+- `--top-note voicing` tries every top note and keeps the one whose voicing scores best: the quality of the voicing, minus the motion of the top note, plus a bonus for a preferred kind. It costs more to compute.
+- `--prefer-lead guide-tones`, `--prefer-lead tensions` or `--prefer-lead guide-tones,tensions` favors those kinds of top note (the guide tones are the 3rd and the 7th, or the sixth of a 6 chord, and the tensions are the 9th, 11th and 13th). With `nearest`, a preferred top note is taken whenever one fits. With `voicing`, it receives a bonus.
+
+When no top note can carry the requested voicing (a power chord such as `C5` has no third to build a spread voicing on), the chord gets a close voicing and the command prints a warning that names the bar.
+
+```bash
+abcls harmonize myfile.abc --chords-from 1 --into 3,4,5,6,7,8 --voicing spread --top-note voicing --prefer-lead guide-tones,tensions -w
+```
+
+Melody harmonization, with one chord under each melody note (a soli technique):
+
+```bash
+abcls harmonize myfile.abc --from 2 --into 3,4,5 -w
+```
+
+Because the highest part of each chord is the melody itself, it is not written again: with `--into 3,4,5`, the chords have four notes, and voices 3, 4 and 5 hold the three lower ones. The melody notes that are not tones of the current chord get a cluster voicing.
+
+Because a tie only joins two notes of the same pitch, a tied melody note keeps its tie in a new voice only when that voice holds the same pitch in the next chord.
+
+Options:
+
+- `--from <voice>` -- the id of the voice that holds the melody to harmonize
+- `--chords-from <voice>` -- the id of the voice that holds the chord symbols, to write one block chord per symbol
+- `--into <ids>` -- the ids of the new voices, from the highest part to the lowest
+- `--voicing <type>` -- `close` (default), `cluster` or `spread`
+- `--top-note <rule>` -- with `--chords-from`: `nearest` (default) or `voicing`
+- `--prefer-lead <kinds>` -- with `--chords-from`: `guide-tones`, `tensions`, or both, comma-separated
+- `-w, --write` -- write the result back to the file (otherwise prints to stdout)
+
+What the command changes in the file:
+
+- It adds a `V:` line for each new voice in the header. The lowest voice gets a bass clef, and the others get a treble clef.
+- It adds the new staves at the end of the `%%score` line, if there is one: the upper voices share one staff, and the lowest voice has its own.
+- It writes the new voices after the other voices of each system.
+
+Limits to know about:
+
+- The chords are built as seventh chords, so a plain major chord such as `Ab` has a major seventh (A-flat, C, E-flat, G). A `6` chord such as `Bb6` has its sixth in place of the seventh.
+- The command refuses to write into a voice id that the score already uses, so to run it again on its own output, remove the new voices first or choose other ids.
+- The time of each note is counted with its tuplet and its broken rhythm (`>`, `<`), but not through voice overlays (`&`) or `L:` and `M:` changes in the middle of the tune, so a chord change after one of those may land on the wrong note.
+- With `spread`, no two voices above the bass are more than an octave apart. The register of each voice is chosen for each chord, so the bass can go very low under a low melody and higher under a high one.
 
 ## lsp
 

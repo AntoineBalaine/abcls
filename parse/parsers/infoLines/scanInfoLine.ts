@@ -80,6 +80,20 @@ export function infoLineIdentifier(ctx: Ctx): boolean {
 }
 
 /**
+ * Scan the voice id at the start of a V: info line or inline field.
+ * Because abcjs reads the id as any text up to the first space (V:1_2, V:S1-a), the id is the whole first word, up to
+ * a space, a comment, an equals sign (a property such as clef=bass) or the closing bracket of an inline field.
+ * A plain number gives a NUMBER token, as the general number scanner would, and any other word gives an IDENTIFIER.
+ */
+export function voiceId(ctx: Ctx): boolean {
+  const match = /^[^\s%=\]]+/.exec(ctx.source.substring(ctx.current));
+  if (!match || ctx.source[ctx.current + match[0].length] === "=") return false;
+  ctx.current += match[0].length;
+  ctx.push(/^[0-9]+$/.test(match[0]) ? TT.NUMBER : TT.IDENTIFIER);
+  return true;
+}
+
+/**
  * Scan string literal: quoted text like "Allegro", "Slowly"
  * Includes the quotes in the token
  */
@@ -249,6 +263,8 @@ export function scanHistoryField(ctx: Ctx): void {
 export function scanVoiceInfoLine(ctx: Ctx): boolean {
   if (!infoHeader(ctx)) return false;
 
+  WS(ctx);
+  voiceId(ctx);
   while (!(isAtEnd(ctx) || ctx.test(pEOL) || ctx.test("%"))) {
     if (WS(ctx)) continue;
     if (infoLineIdentifier(ctx)) continue;

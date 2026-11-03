@@ -41,6 +41,12 @@ export interface ParsedChord {
   qualityExplicit: boolean;
   extension: number | null;
   alterations: ChordAlteration[];
+  /**
+   * The degrees of the tones that the chord adds without changing its quality, in the order they were written.
+   * Because "Cm(add9)" is a minor chord with an added ninth, the minor quality stays in `quality` and the 9 goes here.
+   * It is empty for a chord with no added tone.
+   */
+  addedTones: number[];
   bass: {
     root: KeyRoot;
     accidental: KeyAccidental;
@@ -59,6 +65,8 @@ export enum ChordTT {
   EXTENSION = "CHORD_EXTENSION",
   ALTERATION = "CHORD_ALTERATION",
   BASS_SLASH = "CHORD_BASS_SLASH",
+  GROUP_OPEN = "CHORD_GROUP_OPEN",
+  GROUP_CLOSE = "CHORD_GROUP_CLOSE",
 }
 
 /**

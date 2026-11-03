@@ -6,6 +6,7 @@ import { resolveMelodyPitch, PitchContext } from "abcls-parser/music-theory/pitc
 import { expect } from "chai";
 import * as fc from "fast-check";
 import { describe, it } from "mocha";
+import { interpretContext } from "../src/context/csContextInterpreter";
 import { fromAst } from "../src/csTree/fromAst";
 import { toAst } from "../src/csTree/toAst";
 import { CSNode } from "../src/csTree/types";
@@ -614,6 +615,22 @@ function runEnharmonizeToKey(input: string): string {
 }
 
 /**
+ * Runs enharmonizeToKey with snapshots from the CSTree interpreter, which is the one the
+ * language server uses, and returns the formatted result.
+ */
+function runEnharmonizeToKeyWithCsInterpreter(input: string): string {
+  const ctx = new ABCContext();
+  const ast = parse(Scanner(input, ctx), ctx);
+  const analyzer = new SemanticAnalyzer(ctx);
+  ast.accept(analyzer);
+  const snapshots = interpretContext(fromAst(ast, ctx), analyzer.data, { snapshotAccidentals: true });
+
+  const selection = createSelection(fromAst(ast, ctx));
+  enharmonizeToKey(selection, snapshots, ctx);
+  return formatSelection(selection);
+}
+
+/**
  * Gets the MIDI pitch from the first note in an ABC string, considering key signature.
  */
 function getFirstNoteMidi(source: string): number {
@@ -668,6 +685,40 @@ describe("enharmonizeToKey", () => {
       // When there's a =F earlier in the measure, the second =F should become F
       const result = runEnharmonizeToKey("X:1\nK:G\n=F =F|");
       expect(result).to.equal("X:1\nK:G\n=F F|");
+    });
+  });
+
+  describe("regressions", () => {
+    it("removes redundant sharps in voices declared before the header K:", () => {
+      const result = runEnharmonizeToKey("X:1\nV:1\nV:2\nL:1/8\nK:D\n[V:1] ^fef ^fe^f|\n[V:2] X|\n");
+      expect(result).to.equal("X:1\nV:1\nV:2\nL:1/8\nK:D\n[V:1] fef fef|\n[V:2] X|\n");
+    });
+
+    it("keeps a chromatic accidental that is repeated in the next bar", () => {
+      const result = runEnharmonizeToKey("X:1\nK:D\n^G2|^G2|\n");
+      expect(result).to.equal("X:1\nK:D\n^G2|^G2|\n");
+    });
+
+    it("keeps a chromatic accidental that is repeated on the next line", () => {
+      const result = runEnharmonizeToKey("X:1\nK:D\n^G2\n^G2|\n");
+      expect(result).to.equal("X:1\nK:D\n^G2\n^G2|\n");
+    });
+  });
+
+  describe("regressions (language server interpreter)", () => {
+    it("removes redundant sharps in voices declared before the header K:", () => {
+      const result = runEnharmonizeToKeyWithCsInterpreter("X:1\nV:1\nV:2\nL:1/8\nK:D\n[V:1] ^fef ^fe^f|\n[V:2] X|\n");
+      expect(result).to.equal("X:1\nV:1\nV:2\nL:1/8\nK:D\n[V:1] fef fef|\n[V:2] X|\n");
+    });
+
+    it("keeps a chromatic accidental that is repeated in the next bar", () => {
+      const result = runEnharmonizeToKeyWithCsInterpreter("X:1\nK:D\n^G2|^G2|\n");
+      expect(result).to.equal("X:1\nK:D\n^G2|^G2|\n");
+    });
+
+    it("keeps a chromatic accidental that is repeated on the next line", () => {
+      const result = runEnharmonizeToKeyWithCsInterpreter("X:1\nK:D\n^G2\n^G2|\n");
+      expect(result).to.equal("X:1\nK:D\n^G2\n^G2|\n");
     });
   });
 
@@ -1009,5 +1060,30 @@ describe("enharmonizeToKey", () => {
         { numRuns: 500 }
       );
     });
+  });
+});
+
+describe("enharmonizeToKey with beamed notes", () => {
+  it("keeps a natural that cancels a carried sharp, as the note it follows", () => {
+    // Because the notes are written without spaces they form one beam, and the
+    // interpreter used to skip the accidentals inside it.
+    expect(runEnharmonizeToKey("X:1\nK:Cm\n^D2z2=D,2D,2|\n")).to.contain("E2z2D,2D,2|");
+  });
+
+  it("gives the same result for spaced and beamed notes", () => {
+    const spaced = runEnharmonizeToKey("X:1\nK:Cm\n^D2 z2 =D,2 D,2|\n");
+    const beamed = runEnharmonizeToKey("X:1\nK:Cm\n^D2z2=D,2D,2|\n");
+    expect(beamed.replace(/ /g, "")).to.equal(spaced.replace(/ /g, ""));
+  });
+});
+
+describe("enharmonizeToKey with accidentals in another octave", () => {
+  it("does not let a flat on D4 change the pitch of a bare d in the same bar", () => {
+    // Because ABC applies a bar accidental only to the same octave, the d one octave above _D is D natural.
+    expect(runEnharmonizeToKey("X:1\nK:Eb\n_D d|\n")).to.contain("_D d|");
+  });
+
+  it("keeps a natural written one octave above a flat as D natural", () => {
+    expect(runEnharmonizeToKey("X:1\nK:Eb\n_D [Ac]4 d|\n")).to.contain("d|");
   });
 });

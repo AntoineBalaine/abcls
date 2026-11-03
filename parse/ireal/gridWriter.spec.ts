@@ -244,6 +244,7 @@ describe("iReal grid writer", () => {
         qualityExplicit: false,
         extension: null,
         alterations: [{ type: "flat", degree: 5 }],
+        addedTones: [],
         bass: null,
       };
       expect(write(chart).errors.join()).to.match(/does not read back as itself/);

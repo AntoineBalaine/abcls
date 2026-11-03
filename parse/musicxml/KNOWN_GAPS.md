@@ -1,0 +1,122 @@
+# Known gaps: MusicXML features with no home in AbcLs's type system
+
+This file tracks MusicXML content that opensheetmusicdisplay itself supports,
+but that types/abcjs-ast.ts has no representation for. importFromMusicSheet
+fails with an unsupported-feature message for these rather than silently
+dropping or approximating them.
+
+## Tablature staves
+
+Staff.isTab is true for a tab staff. abcjs upstream supports tablature
+rendering; AbcLs's Staff type has no isTab-equivalent field and no
+TabNote-equivalent type. A MusicXML file containing a tab staff fails to import.
+
+## Figured bass
+
+No representation in types/abcjs-ast.ts and no known equivalent in ABC
+notation itself. Because opensheetmusicdisplay's reader does not keep
+`<figured-bass>` anywhere in the MusicSheet it returns, importFromMusicSheet
+never sees it and cannot report it: the figures are dropped without an error,
+and the notes of the part are imported. The survey fixture
+74a-FiguredBass.musicxml shows this.
+
+## Microtonal and exotic accidentals
+
+AccidentalType (types/abcjs-ast.ts) covers Sharp, Flat, Natural, DblSharp,
+DblFlat, QuarterSharp, QuarterFlat. OSMD's AccidentalEnum additionally
+defines TRIPLESHARP, TRIPLEFLAT, SLASHFLAT, THREEQUARTERSSHARP,
+THREEQUARTERSFLAT, SLASHQUARTERSHARP, SLASHSHARP, DOUBLESLASHFLAT, SORI,
+and KORON, none of which have an AccidentalType equivalent. A note using
+one of these fails to import.
+
+## Key signatures beyond seven sharps or flats
+
+importFromMusicSheet reads every mode (major, minor, dorian, phrygian,
+lydian, mixolydian, locrian, and OSMD's ionian and aeolian as major and
+minor), and finds the tonic on the line of fifths from the signature and the
+mode. A key signature can hold at most seven sharps or flats, and
+KeySignature.root takes a single accidental, so a `<fifths>` value beyond -7
+or 7 (such as the -11 fifths of the survey fixture 13a-KeySignatures.musicxml)
+fails to import.
+
+## Grace notes after their main note
+
+VoiceEntry.GraceAfterMainNote marks grace notes that appear after the note
+they ornament (at the end of a measure), rather than before it. GraceNote
+in types/abcjs-ast.ts and NoteElement.gracenotes only represent grace
+notes preceding their main note, matching ABC's {..}note syntax. A
+VoiceEntry with IsGrace and GraceAfterMainNote both true fails to import.
+
+## Common/cut time symbol does not survive a re-export (phase 1 IR gap, not fixed here)
+
+importFromMusicSheet correctly reads RhythmInstruction.SymbolEnum and sets
+Meter.type to MeterType.CommonTime or MeterType.CutTime accordingly. But
+phase 1's AttributesIR (ir.ts) and normalize.ts's meterToBeatsAndType have
+no field to carry that symbol back out to MusicXML's `<time symbol="...">`
+attribute, so a Tune produced by this importer that is then re-exported
+through normalizeForMusicXML/serializeScorePartwise loses the distinction
+and comes back as a plain numeric time signature. Fixing this requires
+touching phase 1's already-committed files and is out of this plan's
+scope; flagged here since the schema round-trip test in
+importRoundtrip.spec.ts only checks XSD validity, not symbol preservation,
+so it does not catch this on its own.
+
+## Nested tuplets
+
+Note.NoteTuplets (plural) can carry more than one Tuplet for genuinely
+nested tuplet notation (a tuplet within a tuplet). NoteElement in
+types/abcjs-ast.ts only carries a single startTriplet/endTriplet/
+tripletMultiplier/tripletR set per note, matching what TuneInterpreter's
+own forward direction produces (ABC's (p:q:r notation has no nesting).
+importFromMusicSheet uses Note.NoteTuplet (singular, the innermost tuplet)
+and ignores any outer tuplets in NoteTuplets; a note with more than one
+entry in NoteTuplets fails to import, since silently dropping the outer tuplet
+would misrepresent the note's actual grouping.
+
+## Approximations in the ABC output (no error reported)
+
+The following content is imported, but written to ABC in a simplified form.
+
+- Secondary beam breaks (Beam.SecondaryBreakIndices) and beams over rests
+  are not represented, because ABC has no direct notation for them: a rest
+  closes the beam group, and a beam that crosses a bar line is split there.
+- Entries that overlap the previous entry of the same voice (which OMR
+  output can produce) are kept as they are, without padding or correction.
+- Silent stretches of a voice are padded with rests: `X` for a measure in
+  which the voice has no entry at all, `z` for a gap inside a measure.
+  Voices without any pitched note are dropped.
+- Line breaks follow `<print new-system="yes"/>` only when tuneToAbcText
+  receives TuneToAbcOptions (the xml2abc command always passes them);
+  without options each voice is written on a single line.
+- Every bar line is written as a plain `|`, so a left repeat currently
+  prints as an extra `|`.
+- Clef changes in the middle of a tune are read from the end of the
+  previous measure, where OSMD stores them. A change to a clef that AbcLs
+  cannot represent (for instance a C clef on line 2) is skipped instead of
+  failing, and clef changes in the middle of a measure are not read.
+- A measure is padded to the larger of OSMD's measure duration and the end
+  of its longest voice. Because OSMD derives the duration from the content,
+  a measure in which every voice stops early (for instance an OMR measure
+  that lost its final rest) is not padded up to the time signature.
+
+## Chord symbols
+
+Chord symbols (`<harmony>`) are imported as ABC annotations, such as
+`"Am7"`, and ABC annotations that read as chord symbols are exported as
+`<harmony>`. The following is not preserved.
+
+- opensheetmusicdisplay ignores the `text` attribute of `<kind>` and spells
+  every kind its own way, so an imported symbol always uses OSMD's spelling
+  (`Cmaj6` rather than `C6`, `Cm7` rather than `C-7`). A kind that OSMD
+  does not name (`other`, `pedal`, `Neapolitan`, `Italian`, `French`,
+  `German`, `Tristan`) imports as its root alone. Because of this, an ABC
+  symbol that exports as kind `other` (for instance `C7sus4` or `C6/9`)
+  comes back as its root alone after a round trip.
+- Fret diagrams (`<frame>`), `<offset>`, `<function>` and `<numeral>`
+  harmonies are not read; the symbol is attached to the first element of
+  its staff entry at that entry's time.
+- An ABC annotation that is not a chord symbol (a positioned annotation such
+  as `"^allegro"`, or plain text such as `"Fine"`) is not exported, because
+  it is text rather than a harmony. It would belong in `<direction><words>`.
+- An ABC annotation containing a double quote cannot be written, because
+  ABC has no escape for it, and is dropped on import.

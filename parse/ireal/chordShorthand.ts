@@ -83,6 +83,11 @@ function chordToText(chord: ParsedChord, qualityToSymbol: Record<ChordQuality, s
     }
   }
 
+  // Because iReal Pro writes an added tone as "add" followed by its degree, while the ABC chord scanner only reads it inside parentheses, the two dialects spell it differently.
+  for (const degree of chord.addedTones) {
+    text += altExtensionFirst ? "add" + String(degree) : "(add" + String(degree) + ")";
+  }
+
   for (const alt of chord.alterations) {
     text += alterationToText(alt);
   }
@@ -106,6 +111,7 @@ export function parsedChordToIrealText(chord: ParsedChord): string {
  * matching a half would leave the other half for the alteration rule,
  * which is the defect this ordering has already prevented once.
  */
+
 const QUALITY_SYMBOLS: Array<[string, ChordQuality]> = [
   ["sus2", ChordQuality.Suspended2],
   ["sus4", ChordQuality.Suspended4],
@@ -137,8 +143,21 @@ const QUALITY_COMBINATIONS: Array<[ChordQuality, ChordQuality, ChordQuality]> = 
   [ChordQuality.Diminished, ChordQuality.Major, ChordQuality.DiminishedMajor7],
 ];
 
-function combineQualities(qualities: ChordQuality[]): ChordQuality | null {
-  if (qualities.length === 0) return ChordQuality.Dominant;
+/**
+ * The quality that a chord has when no symbol names one, read from its extension.
+ *
+ * Because a chord sheet writes `C` for the major triad, `C6` for the major sixth and `C7` for the dominant seventh,
+ * the extension decides: none or a sixth is major, a fifth is a power chord, and a seventh or a higher extension
+ * is dominant. This is the same inference the ABC chord parser makes.
+ */
+export function impliedQuality(extension: number | null): ChordQuality {
+  if (extension === 5) return ChordQuality.Power;
+  if (extension === 7 || extension === 9 || extension === 11 || extension === 13) return ChordQuality.Dominant;
+  return ChordQuality.Major;
+}
+
+function combineQualities(qualities: ChordQuality[], extension: number | null): ChordQuality | null {
+  if (qualities.length === 0) return impliedQuality(extension);
   if (qualities.length === 1) return qualities[0];
   if (qualities.length > 2) return null;
   const [first, second] = qualities;
@@ -177,6 +196,7 @@ export function irealTextToParsedChord(text: string): ParsedChord | null {
 
   const qualities: ChordQuality[] = [];
   const alterations: ChordAlteration[] = [];
+  const addedTones: number[] = [];
   let extension: number | null = null;
   let bass: ParsedChord["bass"] = null;
   let firstComponent = true;
@@ -232,6 +252,19 @@ export function irealTextToParsedChord(text: string): ParsedChord | null {
       continue;
     }
 
+    // Because "add" names the quality of a bare added-tone chord ("Cadd9") when nothing else precedes it, but an added tone of
+    // the chord when a quality or an extension already stands before it ("C-add9"), we decide by what was read so far.
+    // Because iReal Pro writes the added ninth as "add2" in its current notation and as "add9" in its older one, we read both as the 9.
+    if (trimmed.startsWith("add", i) && (qualities.length > 0 || extension !== null)) {
+      const degreeDigits = /^\d+/.exec(trimmed.slice(i + 3));
+      if (!degreeDigits) return null;
+      const written = parseInt(degreeDigits[0], 10);
+      if (written !== 2 && written !== 9) return null;
+      if (!addedTones.includes(9)) addedTones.push(9);
+      i += 3 + degreeDigits[0].length;
+      continue;
+    }
+
     const symbol = QUALITY_SYMBOLS.find(([lexeme]) => trimmed.startsWith(lexeme, i));
     if (symbol) {
       qualities.push(symbol[1]);
@@ -243,8 +276,15 @@ export function irealTextToParsedChord(text: string): ParsedChord | null {
     return null;
   }
 
-  const quality = combineQualities(qualities);
+  const quality = combineQualities(qualities, extension);
   if (quality === null) return null;
+
+  // Because the chord symbol reference of iReal Pro lists one chord with an added tone on a quality, the minor chord with an
+  // added ninth ("-add9", "madd9", "-add2"), every other chord with an added tone is not a chord that we can read.
+  if (addedTones.length > 0 && !(quality === ChordQuality.Minor && extension === null && addedTones.length === 1)) return null;
+
+  // Because the current notation writes the added ninth of "add9" as "add2", the extension 2 of the add quality is the 9.
+  if (quality === ChordQuality.Add && extension === 2) extension = 9;
 
   return {
     root,
@@ -255,6 +295,7 @@ export function irealTextToParsedChord(text: string): ParsedChord | null {
     qualityExplicit: qualities.length > 0,
     extension,
     alterations,
+    addedTones,
     bass,
   };
 }
@@ -311,6 +352,8 @@ export function irealChordTextRoundTrips(chord: ParsedChord): boolean {
     a.extension === b.extension &&
     a.alterations.length === b.alterations.length &&
     a.alterations.every((alt, i) => alt.type === b.alterations[i].type && alt.degree === b.alterations[i].degree) &&
+    a.addedTones.length === b.addedTones.length &&
+    a.addedTones.every((degree, i) => degree === b.addedTones[i]) &&
     a.bass?.root === b.bass?.root &&
     a.bass?.accidental === b.bass?.accidental;
   return same(chord, reread);

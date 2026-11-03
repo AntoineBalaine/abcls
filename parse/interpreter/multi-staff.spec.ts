@@ -4,6 +4,7 @@
  * Tests to validate the multi-staff/multi-voice functionality.
  */
 
+import * as abcjs from "abcjs";
 import { expect } from "chai";
 import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
 import { ABCContext } from "../parsers/Context";
@@ -12,6 +13,22 @@ import { parse } from "../parsers/parse";
 import { Scanner } from "../parsers/scan";
 import { StaffSystem } from "../types/abcjs-ast";
 import { TuneInterpreter } from "./TuneInterpreter";
+
+/**
+ * Returns the number of staves in the first system that abcjs reads from the text.
+ */
+function abcjsFirstSystemStaffCount(abc: string): number {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (abcjs as any).parseOnly(abc)[0].lines[0].staff.length;
+}
+
+/**
+ * Describes the staves of the first system as text (key, meter and clef of each staff), so that our interpreter and abcjs can be compared.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function describeStaves(staves: any[]): string {
+  return staves.map((staff) => `${staff.key.root}${staff.key.acc}${staff.key.mode} ${staff.meter?.type} ${staff.clef?.type}`).join(" ; ");
+}
 
 describe("Multi-Staff Implementation", () => {
   function interpretABC(abc: string) {
@@ -646,6 +663,109 @@ GABA |`;
       const system1 = tune.systems[0] as StaffSystem;
       expect(system1.staff[0].clef.type).to.equal("treble");
       expect(system1.staff[1].clef.type).to.equal("bass");
+    });
+  });
+
+  describe("merge voice property", () => {
+    for (const [voiceLine, staffCount] of [
+      ["V:2 merge", 1],
+      ["V:2 merge=true", 1],
+      ["V:2 merge=1", 1],
+      ["V:2", 2],
+    ] as const) {
+      it(`puts the voices of "${voiceLine}" on ${staffCount} staff, as abcjs does`, () => {
+        const abc = `X:1\nV:1\n${voiceLine}\nK:C\nV:1\nC D |\nV:2\nE F |`;
+        const system = interpretABC(abc).systems[0] as StaffSystem;
+        expect(system.staff.length).to.equal(staffCount);
+        expect(system.staff.length).to.equal(abcjsFirstSystemStaffCount(abc));
+      });
+    }
+  });
+
+  describe("header voices take the key, the meter and the clef of the header, as abcjs does", () => {
+    const cases: Record<string, string> = {
+      "voices declared above M: and K:": "X:1\nV:1\nV:2\nL:1/8\nM:C\nK:Dm\nV:1\nD2 F2|\nV:2\nD,4|\n",
+      "voices declared below M: and K:": "X:1\nL:1/8\nM:C\nK:Dm\nV:1\nV:2\nV:1\nD2 F2|\nV:2\nD,4|\n",
+      "a voice with its own clef, above K:": "X:1\nV:1\nV:2 clef=bass\nM:3/4\nK:G\nV:1\nG2 A|\nV:2\nG,3|\n",
+      "a clef given by the header K:": "X:1\nV:1\nV:2\nM:3/4\nK:G clef=bass\nV:1\nG,2 A,|\nV:2\nG,3|\n",
+      "a clef given by the header K: and a voice with its own clef": "X:1\nV:1\nV:2 clef=treble\nM:3/4\nK:G clef=bass\nV:1\nG,2 A,|\nV:2\nG3|\n",
+    };
+    for (const [name, abc] of Object.entries(cases)) {
+      it(name, () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const theirs = describeStaves((abcjs as any).parseOnly(abc)[0].lines[0].staff);
+        expect(describeStaves((interpretABC(abc).systems[0] as StaffSystem).staff)).to.equal(theirs);
+      });
+    }
+  });
+
+  describe("voice ids, read as abcjs reads them (the whole first word)", () => {
+    for (const id of ["2", "Tenor", "S2", "1_2", "1-2", "1b"]) {
+      for (const inline of [false, true]) {
+        it(`reads ${inline ? `[V:${id}]` : `V:${id} clef=bass`} as voice "${id}"`, () => {
+          const body = inline ? `[V:1]C2 D2 E2 F2 |\n[V:${id}]E,8 |\n` : `V:1\nC2 D2 E2 F2 |\nV:${id} clef=bass\nE,8 |\n`;
+          const abc = `X:1\nV:1\nV:${id}\nL:1/8\nM:4/4\nK:C\n${body}`;
+          const system = interpretABC(abc).systems[0] as StaffSystem;
+          expect(system.staff.map((staff) => staff.voiceIds)).to.deep.equal([["1"], [id]]);
+          expect(system.staff.length).to.equal(abcjsFirstSystemStaffCount(abc));
+        });
+      }
+    }
+  });
+
+  describe("Voice identity (voiceIds/voiceNames)", () => {
+    it("records each voice's original id and declared name, indexed in parallel with voices", () => {
+      const abc = `X:1
+V:S name="Soprano"
+V:A name="Alto"
+K:C
+V:S
+C D |
+V:A
+E F |`;
+      const tune = interpretABC(abc);
+      const system = tune.systems[0] as StaffSystem;
+      expect(system.staff[0].voiceIds).to.deep.equal(["S"]);
+      expect(system.staff[1].voiceIds).to.deep.equal(["A"]);
+    });
+
+    it("indexes voiceIds in parallel with voices when two voices merge onto one staff", () => {
+      const abc = `X:1
+V:1
+V:2 merge
+K:C
+V:1
+C D |
+V:2
+E F |`;
+      const tune = interpretABC(abc);
+      const system = tune.systems[0] as StaffSystem;
+      expect(system.staff.length).to.equal(1);
+      expect(system.staff[0].voiceIds).to.deep.equal(["1", "2"]);
+      expect(system.staff[0].voices.length).to.equal(2);
+    });
+
+    it("never stamps voiceIds/voiceNames past a system's actual voices length, even when a merged voice backfills an earlier system", () => {
+      const abc = `X:1
+V:1
+V:2 merge
+K:C
+V:1
+C D |
+V:1
+C D |
+V:2
+E F |
+V:1
+C D |`;
+      const tune = interpretABC(abc);
+      for (const system of tune.systems) {
+        if (!("staff" in system)) continue;
+        for (const staff of system.staff) {
+          expect(staff.voiceIds?.length ?? 0).to.be.at.most(staff.voices.length);
+          expect(staff.voiceNames?.length ?? 0).to.be.at.most(staff.voices.length);
+        }
+      }
     });
   });
 });

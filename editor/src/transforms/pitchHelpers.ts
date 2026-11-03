@@ -1,4 +1,6 @@
-import { ABCContext, Pitch, Token, TT, Spelling, semitonesToAccidentalString, accidentalTypeToSemitones } from "abcls-parser";
+import { ABCContext, Pitch, Token, TT, Spelling, semitonesToAccidentalString, accidentalTypeToSemitones, mergeAccidentals } from "abcls-parser";
+import { measureAccidentalKey } from "abcls-parser/music-theory/pitchUtils";
+import { KeySignature } from "abcls-parser/types/abcjs-ast";
 import { NATURAL_SEMITONES } from "abcls-parser/music-theory/constants";
 import { countOctaveMarkers } from "abcls-parser/music-theory/pitchUtils";
 import { AccidentalType } from "abcls-parser/types/abcjs-ast";
@@ -66,13 +68,42 @@ export function spellingToPitch(spelling: Spelling, targetMidi: number, needsExp
  * @param measureAccidentals The map of letter to AccidentalType from ContextSnapshot
  * @returns A map of letter to semitones, or null if input is undefined
  */
-export function convertMeasureAccidentalsToSemitones(
-  measureAccidentals: Map<"C" | "D" | "E" | "F" | "G" | "A" | "B", AccidentalType> | undefined
-): Map<"C" | "D" | "E" | "F" | "G" | "A" | "B", number> | null {
+export function convertMeasureAccidentalsToSemitones(measureAccidentals: Map<string, AccidentalType> | undefined): Map<string, number> | null {
   if (!measureAccidentals) return null;
-  const result = new Map<"C" | "D" | "E" | "F" | "G" | "A" | "B", number>();
-  for (const [letter, accType] of measureAccidentals) {
-    result.set(letter, accidentalTypeToSemitones(accType));
+  const result = new Map<string, number>();
+  for (const [key, accType] of measureAccidentals) {
+    result.set(key, accidentalTypeToSemitones(accType));
+  }
+  return result;
+}
+
+/**
+ * Computes the octave in which a spelled letter sounds the given MIDI pitch.
+ *
+ * Because an enharmonic spelling such as Cb5 (MIDI 71) lives in a different octave from the MIDI octave of its pitch,
+ * we derive the octave from the letter's natural semitone, in the same way as spellingToPitch does.
+ */
+export function spellingOctave(letter: NoteLetter, midi: number): number {
+  return Math.round((midi - NATURAL_SEMITONES[letter] - 60) / 12) + 4;
+}
+
+/**
+ * Builds the alteration that is in effect for each letter, at the octave in which that letter would sound the target pitch.
+ *
+ * Because ABC applies a bar accidental only to the same letter in the same octave, the alteration in effect for a letter
+ * depends on the octave in which we intend to write it. Therefore, for each letter we look up the bar accidental stored for
+ * the octave that letter would have for the target pitch, and otherwise we fall back on the key signature.
+ *
+ * @param key The key signature in effect
+ * @param measureAccidentals The bar accidentals in semitones, keyed by letter and octave, or null when there are none
+ * @param targetMidi The MIDI pitch we intend to spell
+ */
+export function noteSpellingsForMidi(key: KeySignature, measureAccidentals: Map<string, number> | null, targetMidi: number): ReturnType<typeof mergeAccidentals> {
+  const result = mergeAccidentals(key, null);
+  if (measureAccidentals === null) return result;
+  for (const letter of Object.keys(result) as NoteLetter[]) {
+    const stored = measureAccidentals.get(measureAccidentalKey(letter, spellingOctave(letter, targetMidi)));
+    if (stored !== undefined) result[letter] = stored;
   }
   return result;
 }

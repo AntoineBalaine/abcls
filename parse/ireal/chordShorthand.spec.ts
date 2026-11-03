@@ -2,7 +2,7 @@ import { expect } from "chai";
 import fc from "fast-check";
 import { ChordQuality, ParsedChord } from "../music-theory/types";
 import { KeyAccidental, KeyRoot } from "../types/abcjs-ast";
-import { irealTextToParsedChord, parsedChordToAbcxText, parsedChordToIrealText } from "./chordShorthand";
+import { irealChordTextRoundTrips, irealTextToParsedChord, parsedChordToAbcxText, parsedChordToIrealText } from "./chordShorthand";
 
 function chord(partial: Partial<ParsedChord>): ParsedChord {
   return {
@@ -12,6 +12,7 @@ function chord(partial: Partial<ParsedChord>): ParsedChord {
     qualityExplicit: false,
     extension: null,
     alterations: [],
+    addedTones: [],
     bass: null,
     ...partial,
   };
@@ -132,6 +133,7 @@ describe("iReal chord shorthand", () => {
           ...r,
           qualityExplicit: true,
           alterations: [],
+          addedTones: [],
         })
       );
 
@@ -148,8 +150,10 @@ describe("iReal chord shorthand", () => {
           const normalized: ParsedChord =
             c.quality === ChordQuality.Suspended2 || c.quality === ChordQuality.Suspended4
               ? { ...c, extension: null }
-              : c.quality === ChordQuality.Dominant && c.extension === 5
-                ? { ...c, extension: 7 }
+              : c.quality === ChordQuality.Dominant && (c.extension === null || ![7, 9, 11, 13].includes(c.extension))
+                ? // Because bare text reads as the quality its extension implies, a dominant is only
+                  // representable with a seventh or a higher extension.
+                  { ...c, extension: 7 }
                 : c;
           const text = parsedChordToIrealText(normalized);
           const reparsed = irealTextToParsedChord(text);
@@ -157,6 +161,19 @@ describe("iReal chord shorthand", () => {
           expect(reparsed).to.deep.equal(expected);
         })
       );
+    });
+  });
+
+  describe("quality implied by the extension", () => {
+    it("reads a bare root as a major triad", () => {
+      expect(irealTextToParsedChord("G")!.quality).to.equal(ChordQuality.Major);
+    });
+
+    it("reads a sixth as a major sixth chord, a seventh as a dominant, and a fifth as a power chord", () => {
+      expect(irealTextToParsedChord("C6")!.quality).to.equal(ChordQuality.Major);
+      expect(irealTextToParsedChord("C7")!.quality).to.equal(ChordQuality.Dominant);
+      expect(irealTextToParsedChord("C13")!.quality).to.equal(ChordQuality.Dominant);
+      expect(irealTextToParsedChord("C5")!.quality).to.equal(ChordQuality.Power);
     });
   });
 
@@ -178,6 +195,7 @@ describe("iReal chord shorthand", () => {
         qualityExplicit: true,
         extension: null,
         alterations: [],
+        addedTones: [],
         bass: null,
       });
     });
@@ -190,6 +208,7 @@ describe("iReal chord shorthand", () => {
         qualityExplicit: true,
         extension: 7,
         alterations: [],
+        addedTones: [],
         bass: null,
       });
       expect(irealTextToParsedChord("A9sus")?.extension).to.equal(9);
@@ -324,5 +343,45 @@ describe("iReal chord shorthand", () => {
       const abcxText = parsedChordToAbcxText(parsed);
       expect(abcxText).to.equal("C-^7");
     });
+  });
+});
+
+describe("added tones in the chord shorthand", () => {
+  it('writes a minor chord with an added ninth as "-add9" for iReal Pro and as "m(add9)" for ABCx', () => {
+    const minorAdd = chord({ quality: ChordQuality.Minor, qualityExplicit: true, addedTones: [9] });
+    expect(parsedChordToIrealText(minorAdd)).to.equal("C-add9");
+    expect(parsedChordToAbcxText(minorAdd)).to.equal("Cm(add9)");
+  });
+
+  it('reads "C-add9", "Cmadd9" and the current notation "C-add2" as a minor chord with an added ninth', () => {
+    for (const text of ["C-add9", "C-add2"]) {
+      const parsed = irealTextToParsedChord(text);
+      expect(parsed!.quality, text).to.equal(ChordQuality.Minor);
+      expect(parsed!.addedTones, text).to.deep.equal([9]);
+    }
+  });
+
+  it('reads "Cadd9" and the current notation "Cadd2" as the add quality with the extension 9', () => {
+    for (const text of ["Cadd9", "Cadd2"]) {
+      const parsed = irealTextToParsedChord(text);
+      expect(parsed!.quality, text).to.equal(ChordQuality.Add);
+      expect(parsed!.extension, text).to.equal(9);
+      expect(parsed!.addedTones, text).to.deep.equal([]);
+    }
+  });
+
+  it('refuses the added tones that the chord symbol reference of iReal Pro does not list: "C7add13", "C-7add9", "C-add11" and "C-add"', () => {
+    for (const text of ["C7add13", "C-7add9", "C-add11", "C-add"]) {
+      expect(irealTextToParsedChord(text), text).to.equal(null);
+    }
+  });
+
+  it("does not round-trip a dominant seventh with an added thirteenth, so that the writer reports it", () => {
+    const dominantAdd = chord({ quality: ChordQuality.Dominant, extension: 7, addedTones: [13] });
+    expect(irealChordTextRoundTrips(dominantAdd)).to.equal(false);
+  });
+
+  it("round-trips a minor chord with an added ninth", () => {
+    expect(irealChordTextRoundTrips(chord({ quality: ChordQuality.Minor, qualityExplicit: true, addedTones: [9] }))).to.equal(true);
   });
 });

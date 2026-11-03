@@ -28,7 +28,16 @@ export { fromAst } from "./csTree/fromAst";
 export { toAst } from "./csTree/toAst";
 
 // Selectors
-export { selectChords, selectNotes, selectNonChordNotes, selectChordNotes, selectRests, selectRhythm, selectRhythmParent } from "./selectors/typeSelectors";
+export {
+  selectChords,
+  selectNotes,
+  selectNonChordNotes,
+  selectChordNotes,
+  selectRests,
+  selectRhythm,
+  selectRhythmParent,
+  selectAnnotations,
+} from "./selectors/typeSelectors";
 export { selectTune } from "./selectors/structureSelectors";
 export { selectTop, selectBottom, selectNthFromTop, selectAllButTop, selectAllButBottom } from "./selectors/chordSelectors";
 export {
@@ -136,3 +145,13 @@ export { buildMap, init, finalize, BarMap, BarEntry, BarMapState } from "./conte
 // Utils
 export { diffChars, Change } from "./utils/diffToPatches";
 export { computeNodeRange, rangesOverlap } from "./utils/rangeUtils";
+
+// Transform runner (shared by the language server and the CLI)
+export { lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "./runner/transformLookup";
+export { serializeCSTree } from "./runner/csTreeSerializer";
+export { GROUPED_CURSOR_TRANSFORMS, POSITION_BASED_TRANSFORMS, TRANSFORM_NODE_TAGS } from "./runner/transformConstants";
+export { findNodesInRange, findNotesAndChordsInRange, resolveRanges, resolveSelectionRanges, resolveContiguousRanges } from "./runner/selectionRangeResolver";
+export { runTransform, rangesOfVoices, TransformRequest, RunnerResult } from "./runner/runTransform";
+export { harmonizeVoices, HarmonizeVoicesOptions } from "./runner/harmonizeVoices";
+export { blockChords, BlockChordsOptions } from "./runner/blockChords";
+export { TopNoteRule, LeadKind } from "./runner/blockChords";

@@ -18,6 +18,8 @@ Before: K:C  C D E F
 After (transpose +2): K:C  D E ^F G
 ```
 
+From the command line, `abcls transform` also moves the key signatures (`--keys`) and the chord symbols (`--chords`) with the notes, and `--as-new-tune` keeps the original tune and appends the transposed copy as a new tune. See the [CLI reference](/abcls/cli-reference/#transposing-a-whole-tune).
+
 ### enharmonize
 
 Cycles through the enharmonic spellings of selected notes.
@@ -48,6 +50,10 @@ Advances the accidental state of selected notes one step toward flat. A natural 
 This is an EXPERIMENTAL series of harmonization capabilities based off arranging techniques from the Berklee college. The goal is to provide some helpers to aid in arranging scores.
 
 Expect bugs while using.
+
+The harmonization transforms can also be run from the command line, without an editor: `abcls transform` runs any transform on a file, and `abcls harmonize` builds whole voices of block chords from the chord symbols. See the [CLI reference](/abcls/cli-reference/).
+
+Chord symbols apply by position in time to every voice, so the chord symbols can be written in a voice of their own and the notes in another.
 
 ### harmonize
 

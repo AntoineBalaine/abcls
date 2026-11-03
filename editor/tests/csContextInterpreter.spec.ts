@@ -195,6 +195,23 @@ K:C
     });
   });
 
+  describe("header key and meter with voices declared in the header", () => {
+    it("applies the header K: and M: to the voices declared before it", () => {
+      const input = "X:1\nV:1\nV:2\nM:6/8\nK:D\n[V:1] F|\n[V:2] F|\n";
+      const { csTree, semanticData } = parseToCSTree(input);
+      const result = interpretContext(csTree, semanticData);
+
+      const voice1Snapshot = getSnapshotAtPosition(result, encode(5, 7));
+      expect(voice1Snapshot.voiceId).to.equal("1");
+      expect(voice1Snapshot.key.root).to.equal("D");
+      expect(voice1Snapshot.meter.value?.[0]).to.deep.equal({ numerator: 6, denominator: 8 });
+
+      const voice2Snapshot = getSnapshotAtPosition(result, encode(6, 7));
+      expect(voice2Snapshot.voiceId).to.equal("2");
+      expect(voice2Snapshot.key.root).to.equal("D");
+    });
+  });
+
   describe("voice context in snapshots", () => {
     it("should track voice switches via voiceId field", () => {
       const input = `X:1
