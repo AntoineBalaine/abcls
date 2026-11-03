@@ -57,7 +57,35 @@ function scanQuality(ctx: ChordScanCtx): boolean {
   // The triangles ("▵", "△" and the Greek capital delta) are the jazz symbol of the major seventh chord.
   // Because the minor chord with a major seventh is written "mM7", "mMaj7", "m^7", "-M7" and "-Maj7", these spellings come
   // before "maj", "min", "m" and "-", which would otherwise take their first letters and leave the rest unread.
-  const qualities = ["mMaj", "mM", "m^", "-Maj", "-M", "Maj", "maj", "min", "dim", "aug", "sus4", "sus2", "sus", "add", "alt", "-^", "o^", "M", "m", "+", "-", "°", "ø", "Ø", "▵", "△", "Δ"];
+  const qualities = [
+    "mMaj",
+    "mM",
+    "m^",
+    "-Maj",
+    "-M",
+    "Maj",
+    "maj",
+    "min",
+    "dim",
+    "aug",
+    "sus4",
+    "sus2",
+    "sus",
+    "add",
+    "alt",
+    "-^",
+    "o^",
+    "M",
+    "m",
+    "+",
+    "-",
+    "°",
+    "ø",
+    "Ø",
+    "▵",
+    "△",
+    "Δ",
+  ];
   for (const q of qualities) {
     if (remaining.startsWith(q)) {
       pushToken(ctx, ChordTT.QUALITY, q);
@@ -94,6 +122,65 @@ function scanAlteration(ctx: ChordScanCtx): boolean {
     ctx.current += match[0].length;
     return true;
   }
+  return false;
+}
+
+/** The patterns of one item inside a parenthesised group: an alteration ("b9"), an added tone ("add9"), or a major seventh marker with its optional number ("Maj7"). */
+const GROUP_ALTERATION = /^[#b][0-9⁰¹²³⁴⁵⁶⁷⁸⁹]+/;
+const GROUP_ADDED_TONE = /^add[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]+/;
+const GROUP_MAJOR_MARKER = /^(?:Maj|maj|M|▵|△|Δ)(?:[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]+)?/;
+
+/**
+ * Scans a parenthesised group such as "(b9)", "(#11,b13)", "(add9)" or "(Maj7)", which surrounds the symbols that follow a quality or an extension.
+ *
+ * Because a group that is only partly understood would leave text that still looks like a chord, the group is read whole or not at all:
+ * when any item inside it is unknown, or when the closing parenthesis is missing, we roll back and the chord ends before the opening parenthesis.
+ */
+function scanGroup(ctx: ChordScanCtx): boolean {
+  if (ctx.source[ctx.current] !== "(") return false;
+  const start = ctx.current;
+  const tokenCount = ctx.tokens.length;
+  pushToken(ctx, ChordTT.GROUP_OPEN, "(");
+  ctx.current += 1;
+
+  let itemCount = 0;
+  while (ctx.current < ctx.source.length) {
+    const remaining = ctx.source.substring(ctx.current);
+    const alteration = GROUP_ALTERATION.exec(remaining);
+    const addedTone = alteration === null ? GROUP_ADDED_TONE.exec(remaining) : null;
+    const marker = alteration === null && addedTone === null ? GROUP_MAJOR_MARKER.exec(remaining) : null;
+    if (alteration !== null) {
+      pushToken(ctx, ChordTT.ALTERATION, toPlainDigits(alteration[0]));
+      ctx.current += alteration[0].length;
+    } else if (addedTone !== null) {
+      pushToken(ctx, ChordTT.QUALITY, "add");
+      pushToken(ctx, ChordTT.EXTENSION, toPlainDigits(addedTone[0].slice(3)));
+      ctx.current += addedTone[0].length;
+    } else if (marker !== null) {
+      const digits = /[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]+$/.exec(marker[0]);
+      const word = digits === null ? marker[0] : marker[0].slice(0, marker[0].length - digits[0].length);
+      pushToken(ctx, ChordTT.QUALITY, word);
+      if (digits !== null) pushToken(ctx, ChordTT.EXTENSION, toPlainDigits(digits[0]));
+      ctx.current += marker[0].length;
+    } else {
+      break;
+    }
+    itemCount += 1;
+
+    if (ctx.source[ctx.current] === ",") {
+      ctx.current += 1;
+      continue;
+    }
+    if (ctx.source[ctx.current] === ")") {
+      pushToken(ctx, ChordTT.GROUP_CLOSE, ")");
+      ctx.current += 1;
+      return itemCount > 0;
+    }
+    break;
+  }
+
+  ctx.tokens.length = tokenCount;
+  ctx.current = start;
   return false;
 }
 
@@ -140,9 +227,9 @@ export function scanChordSymbol(input: string): ScanResult | null {
   // 4. Extension number (optional)
   scanExtension(ctx);
 
-  // 5. Alterations (optional, repeatable)
-  while (scanAlteration(ctx)) {
-    // continue scanning alterations
+  // 5. Alterations and parenthesised groups (optional, repeatable)
+  while (scanAlteration(ctx) || scanGroup(ctx)) {
+    // continue scanning alterations and parenthesised groups
   }
 
   // 6. Bass note (optional)

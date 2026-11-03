@@ -4,6 +4,9 @@ import { ChordToken, ChordTT, ChordQuality, ChordAlteration, ParsedChord } from 
 
 const VALID_EXTENSIONS = new Set([5, 6, 7, 9, 11, 13, 69]);
 
+/** The degrees that a chord may add with "add", as in "Cm(add9)". */
+const VALID_ADDED_TONES = new Set([2, 4, 6, 9, 11, 13]);
+
 function parseQuality(lexeme: string): ChordQuality {
   switch (lexeme) {
     case "maj":
@@ -76,6 +79,52 @@ function applyQualityInference(result: ParsedChord): ParsedChord {
 }
 
 /**
+ * Reads a parenthesised group, which starts at the index of its opening token, and applies it to the chord.
+ *
+ * Because a major seventh marker inside the group ("Maj7") changes the seventh of the chord, a minor chord becomes a
+ * minor chord with a major seventh, a diminished chord becomes a diminished chord with a major seventh, and any other
+ * chord becomes a major seventh chord. Because the marker then names the chord's quality, the quality counts as explicit.
+ * An alteration inside the group is added to the chord's alterations, as if it were written outside the parentheses.
+ * An added tone inside the group ("add9") is added to the chord's added tones, and it leaves the quality as it is.
+ *
+ * @returns The index of the token that follows the closing token, or null when the group is malformed
+ */
+function parseGroup(tokens: ChordToken[], openIndex: number, result: ParsedChord): number | null {
+  let index = openIndex + 1;
+  while (index < tokens.length && tokens[index].type !== ChordTT.GROUP_CLOSE) {
+    const token = tokens[index];
+    if (token.type === ChordTT.ALTERATION) {
+      result.alterations.push(parseAlteration(token.lexeme));
+      index += 1;
+    } else if (token.type === ChordTT.QUALITY && token.lexeme === "add") {
+      const degreeToken = tokens[index + 1];
+      if (degreeToken === undefined || degreeToken.type !== ChordTT.EXTENSION) return null;
+      const degree = parseInt(degreeToken.lexeme, 10);
+      if (!VALID_ADDED_TONES.has(degree)) return null;
+      if (!result.addedTones.includes(degree)) result.addedTones.push(degree);
+      index += 2;
+    } else if (token.type === ChordTT.QUALITY) {
+      index += 1;
+      let extension = 7;
+      if (index < tokens.length && tokens[index].type === ChordTT.EXTENSION) {
+        extension = parseInt(tokens[index].lexeme, 10);
+        index += 1;
+      }
+      if (!VALID_EXTENSIONS.has(extension)) return null;
+      if (result.quality === ChordQuality.Minor) result.quality = ChordQuality.MinorMajor7;
+      else if (result.quality === ChordQuality.Diminished) result.quality = ChordQuality.DiminishedMajor7;
+      else result.quality = ChordQuality.Major;
+      result.extension = extension;
+      result.qualityExplicit = true;
+    } else {
+      return null;
+    }
+  }
+  if (index >= tokens.length) return null;
+  return index + 1;
+}
+
+/**
  * Parses chord tokens into a ParsedChord structure.
  * Returns null if the tokens do not represent a valid chord.
  */
@@ -92,6 +141,7 @@ export function parseChordSymbol(tokens: ChordToken[]): ParsedChord | null {
     qualityExplicit: false,
     extension: null,
     alterations: [],
+    addedTones: [],
     bass: null,
   };
 
@@ -138,11 +188,27 @@ export function parseChordSymbol(tokens: ChordToken[]): ParsedChord | null {
 
   result.qualityExplicit = qualityExplicit;
 
-  // 6. Alterations (optional, repeatable)
-  while (index < tokens.length && tokens[index].type === ChordTT.ALTERATION) {
-    const alteration = parseAlteration(tokens[index].lexeme);
-    result.alterations.push(alteration);
-    index += 1;
+  // 6. Alterations and parenthesised groups (optional, repeatable)
+  while (index < tokens.length) {
+    if (tokens[index].type === ChordTT.ALTERATION) {
+      result.alterations.push(parseAlteration(tokens[index].lexeme));
+      index += 1;
+    } else if (tokens[index].type === ChordTT.GROUP_OPEN) {
+      const next = parseGroup(tokens, index, result);
+      if (next === null) return null;
+      index = next;
+    } else {
+      break;
+    }
+  }
+
+  // Because "C(add9)" and "Cadd9" name the same notes, a major triad with one added ninth, eleventh or thirteenth is the add quality.
+  const soleAddedTone = result.addedTones.length === 1 ? result.addedTones[0] : null;
+  if (result.quality === ChordQuality.Major && result.extension === null && (soleAddedTone === 9 || soleAddedTone === 11 || soleAddedTone === 13)) {
+    result.quality = ChordQuality.Add;
+    result.extension = soleAddedTone;
+    result.addedTones = [];
+    result.qualityExplicit = true;
   }
 
   // 7. Bass (optional)

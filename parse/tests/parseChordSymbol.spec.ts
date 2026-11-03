@@ -21,6 +21,26 @@ describe("parseChordSymbol", () => {
       }
     });
 
+    it('parses "Cm(Maj7)" and its other parenthesised spellings as the minor-major seventh chord', () => {
+      for (const text of ["Cm(Maj7)", "Cm(maj7)", "Cm(M7)", "C-(Maj7)", "C-(maj7)", "C-(M7)", "Cmin(Maj7)"]) {
+        const result = parse(text);
+        expect(result!.quality, text).to.equal(ChordQuality.MinorMajor7);
+        expect(result!.extension, text).to.equal(7);
+      }
+    });
+
+    it('parses "Cdim(Maj7)" as the diminished chord with a major seventh and "C(Maj7)" as the major seventh chord', () => {
+      expect(parse("Cdim(Maj7)")!.quality).to.equal(ChordQuality.DiminishedMajor7);
+      const major = parse("C(Maj7)");
+      expect(major!.quality).to.equal(ChordQuality.Major);
+      expect(major!.extension).to.equal(7);
+      expect(major!.qualityExplicit).to.equal(true);
+    });
+
+    it('parses "Cm(Maj7)/G" with its bass, because the group is part of the chord', () => {
+      expect(parse("Cm(Maj7)/G")!.bass).to.not.equal(null);
+    });
+
     it('parses "CmM" as the minor-major seventh chord, because the major seventh is implied', () => {
       expect(parse("CmM")!.extension).to.equal(7);
     });
@@ -29,6 +49,62 @@ describe("parseChordSymbol", () => {
       const result = parse("BbMaj7");
       expect(result!.quality).to.equal(ChordQuality.Major);
       expect(result!.extension).to.equal(7);
+    });
+  });
+
+  describe("parenthesised alterations", () => {
+    it('parses "C7(b9)" like "C7b9"', () => {
+      expect(parse("C7(b9)")).to.deep.equal(parse("C7b9"));
+    });
+
+    it('parses "C7(b9,#11)" and "C7(b9)(#11)" like "C7b9#11"', () => {
+      expect(parse("C7(b9,#11)")).to.deep.equal(parse("C7b9#11"));
+      expect(parse("C7(b9)(#11)")).to.deep.equal(parse("C7b9#11"));
+    });
+
+    it('keeps the dominant quality of "C7(#11)", because the group holds no major seventh marker', () => {
+      expect(parse("C7(#11)")!.quality).to.equal(ChordQuality.Dominant);
+    });
+
+    it('parses "Cmaj7(#11)" as a major seventh chord with a sharp eleventh', () => {
+      const result = parse("Cmaj7(#11)");
+      expect(result!.quality).to.equal(ChordQuality.Major);
+      expect(result!.alterations).to.deep.equal([{ type: "sharp", degree: 11 }]);
+    });
+  });
+
+  describe("added tones", () => {
+    it('parses "Cm(add9)" as a minor chord with an added ninth, and keeps the minor quality', () => {
+      const result = parse("Cm(add9)");
+      expect(result!.quality).to.equal(ChordQuality.Minor);
+      expect(result!.extension).to.equal(null);
+      expect(result!.addedTones).to.deep.equal([9]);
+    });
+
+    it('parses "C7(add13)" with its dominant seventh and "Cmaj7(add13,b9)" with its alteration', () => {
+      expect(parse("C7(add13)")!.quality).to.equal(ChordQuality.Dominant);
+      expect(parse("C7(add13)")!.addedTones).to.deep.equal([13]);
+      const result = parse("Cmaj7(add13,b9)");
+      expect(result!.addedTones).to.deep.equal([13]);
+      expect(result!.alterations).to.deep.equal([{ type: "flat", degree: 9 }]);
+    });
+
+    it('keeps the order of "Cm(add9)(add11)" and drops the duplicate of "Cm(add9,add9)"', () => {
+      expect(parse("Cm(add9)(add11)")!.addedTones).to.deep.equal([9, 11]);
+      expect(parse("Cm(add9,add9)")!.addedTones).to.deep.equal([9]);
+    });
+
+    it('refuses "Cm(add8)", because 8 is not a degree that a chord adds', () => {
+      expect(parse("Cm(add8)")).to.equal(null);
+    });
+
+    it('parses "C(add9)" like "Cadd9", because a major triad with an added ninth is the add quality', () => {
+      expect(parse("C(add9)")).to.deep.equal(parse("Cadd9"));
+      expect(parse("C(add9)")!.quality).to.equal(ChordQuality.Add);
+    });
+
+    it("leaves the added tones of a chord with none empty", () => {
+      expect(parse("Cm7")!.addedTones).to.deep.equal([]);
     });
   });
 
@@ -51,7 +127,11 @@ describe("parseChordSymbol", () => {
     });
 
     it('parses "C⁹", "C¹¹" and "C¹³" as dominant chords with that extension', () => {
-      for (const [text, extension] of [["C⁹", 9], ["C¹¹", 11], ["C¹³", 13]] as const) {
+      for (const [text, extension] of [
+        ["C⁹", 9],
+        ["C¹¹", 11],
+        ["C¹³", 13],
+      ] as const) {
         const result = parse(text);
         expect(result!.quality).to.equal(ChordQuality.Dominant);
         expect(result!.extension).to.equal(extension);

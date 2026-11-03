@@ -84,6 +84,25 @@ Options:
 
 - `-o, --output <file>` -- write output to a file instead of stdout
 
+## abc2ireal
+
+Exports the chords of an ABC file, or of an ABCx chord sheet, as an iReal Pro link.
+
+```bash
+abcls abc2ireal myfile.abc -o myfile.html
+```
+
+Options:
+
+- `-o, --output <file>` -- write the link to a file (an `.html` extension writes a page that iReal Pro can open); writes to stdout if omitted
+- `-t, --tune <numbers...>` -- export only the specified tunes by X: number
+- `--voice <id>` -- ABC only: the voice that carries the chords
+- `--cells <n>` -- ABC only: the number of cells of each bar (default 4)
+- `--tempo <bpm>` -- ABC only: the tempo of the tunes that have no `Q:` line
+- `--style <name>` -- ABC only: the style of the tunes that have no `%%irealstyle` directive
+
+See the [iReal Pro export guide](/abcls/user-guide/ireal-export/) for what the export reads and for the chord spellings it accepts.
+
 ## transform
 
 Runs one of the editor transforms (the same ones as the editor commands: `transpose`, `harmonizeVoicing`, `explode`, `addVoice`, `setRhythm`, and so on) on an ABC file, without a language server. See the [transforms guide](/abcls/user-guide/transforms/) for the list of transforms and what each one does.

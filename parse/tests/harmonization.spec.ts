@@ -65,6 +65,7 @@ function makeChord(
     qualityExplicit: true,
     extension,
     alterations,
+    addedTones: [],
     bass: null,
   };
 }

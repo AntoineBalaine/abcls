@@ -17,6 +17,14 @@ function EXTENSION(lexeme: string) {
 function ALTERATION(lexeme: string) {
   return { type: ChordTT.ALTERATION, lexeme };
 }
+function GROUP_OPEN() {
+  return { type: ChordTT.GROUP_OPEN, lexeme: "(" };
+}
+
+function GROUP_CLOSE() {
+  return { type: ChordTT.GROUP_CLOSE, lexeme: ")" };
+}
+
 function BASS_SLASH() {
   return { type: ChordTT.BASS_SLASH, lexeme: "/" };
 }
@@ -27,6 +35,45 @@ describe("scanChordSymbol", () => {
       for (const text of ["EbmM7", "EbmMaj7", "Ebm^7", "Eb-M7", "Eb-Maj7"]) {
         expect(scanChordSymbol(text)!.consumed, text).to.equal(text.length);
       }
+    });
+
+    it('scans "Cm(Maj7)" as the quality "m" followed by a group that holds the marker "Maj" and the extension 7', () => {
+      expect(scanChordSymbol("Cm(Maj7)")).to.deep.equal({
+        tokens: [ROOT("C"), QUALITY("m"), GROUP_OPEN(), QUALITY("Maj"), EXTENSION("7"), GROUP_CLOSE()],
+        consumed: 8,
+      });
+    });
+
+    it('scans "C7(b9)", "C7(b9,#11)", "Cmaj7(#11)(b13)" and "C(M7)" whole', () => {
+      for (const text of ["C7(b9)", "C7(b9,#11)", "Cmaj7(#11)(b13)", "C(M7)", "Cm(maj7)", "C-(Maj7)", "C7(b9)/G"]) {
+        expect(scanChordSymbol(text)!.consumed, text).to.equal(text.length);
+      }
+    });
+
+    it('scans "Cm(add9)" as the quality "m" followed by a group that holds the added tone 9', () => {
+      expect(scanChordSymbol("Cm(add9)")).to.deep.equal({
+        tokens: [ROOT("C"), QUALITY("m"), GROUP_OPEN(), QUALITY("add"), EXTENSION("9"), GROUP_CLOSE()],
+        consumed: 8,
+      });
+    });
+
+    it('scans "C7(add13,b9)" and "Cm(add9,Maj7)" whole, because a group may mix its items', () => {
+      for (const text of ["C7(add13,b9)", "Cm(add9,Maj7)"]) {
+        expect(scanChordSymbol(text)!.consumed, text).to.equal(text.length);
+      }
+    });
+
+    it('stops before the group of "Cm(add)", because an added tone needs its degree', () => {
+      expect(scanChordSymbol("Cm(add)")!.consumed).to.equal(2);
+    });
+
+    it('stops before the group of "C7(b9", because the parenthesis is never closed', () => {
+      expect(scanChordSymbol("C7(b9")).to.deep.equal({ tokens: [ROOT("C"), EXTENSION("7")], consumed: 2 });
+    });
+
+    it('stops before the group of "C7(foo)" and "C7()", because the group holds nothing that we know', () => {
+      expect(scanChordSymbol("C7(foo)")!.consumed).to.equal(2);
+      expect(scanChordSymbol("C7()")!.consumed).to.equal(2);
     });
 
     it('still scans "Cm7", "Cmaj7" and "Cmin7" as before', () => {

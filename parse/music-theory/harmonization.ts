@@ -1521,6 +1521,7 @@ export function deriveDiatonicChord(rootLetter: "C" | "D" | "E" | "F" | "G" | "A
     qualityExplicit: true,
     extension: chordType.extension,
     alterations: [],
+    addedTones: [],
     bass: null,
   };
 }

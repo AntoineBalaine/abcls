@@ -1,0 +1,95 @@
+---
+title: iReal Pro Export
+---
+
+abcls turns the chord symbols of an ABC score, or of an ABCx chord sheet, into an `irealb://` link that iReal Pro opens as a song.
+
+## Usage
+
+```bash
+abcls abc2ireal myfile.abc
+abcls abc2ireal myfile.abc -o myfile.html
+abcls abc2ireal chart.abcx -o chart.txt
+```
+
+Because iReal Pro imports a link when it opens it, an output file with the `.html` extension holds a small page with an "Open in iReal Pro" link. Any other output file holds the link itself, and the link goes to the standard output when there is no output file.
+
+Options:
+
+- `-o, --output <file>` -- write the link to this file
+- `-t, --tune <numbers...>` -- export only the tunes with these `X:` numbers (comma-separated, dash-separated or repeated flags)
+- `--voice <id>` -- ABC only: the voice that carries the chords
+- `--cells <n>` -- ABC only: the number of iReal Pro cells that each bar gets (default 4, so that four bars fill a row of 16 cells)
+- `--tempo <bpm>` -- ABC only: the tempo that applies to the tunes that have no `Q:` line
+- `--style <name>` -- ABC only: the iReal Pro style that applies to the tunes that have no `%%irealstyle` directive
+
+Because the export reports what it could not express instead of failing, it prints each such condition as a warning on the standard error and still writes the link. It only fails when no tune can be exported.
+
+## What the export reads
+
+From the tune header:
+
+- `T:` is the title, and `C:` is the composer.
+- `K:` is the key. Because the export keeps the key as it is written, the song is exported in the key of the score.
+- `Q:` is the tempo, written either as `1/4=120` or as a bare number.
+- `%%irealstyle <name>` is the iReal Pro style, for instance `%%irealstyle Bossa Nova`.
+- `%%irealgroove <name>` is the iReal Pro groove, and `%%irealrepeats <n>` is the repeats value.
+
+From the tune body:
+
+- Chord symbols, in the spellings that the section below lists.
+- Repeat bar lines (`|:`, `:|` and `::`) and numbered endings (`[1`, `[2`).
+- Section labels, from `P:` fields (inline or on their own line). Because an iReal Pro label has one character, a longer part name is printed as text above the first bar of the section.
+- Time signatures, from `M:` fields and `[M:3/4]` inline fields.
+- Annotations, written as quoted text. The annotations `"^segno"` and `"^coda"` become the navigation markers of iReal Pro.
+- A double bar line, or a bracketed one, ends a section; a plain `|` only ends a bar.
+
+When the file is an ABC score, the chords come from a single voice: the one that `--voice` names, or else the voice with the most chord symbols. The notes of that voice tell which bars exist, with these consequences:
+
+- A bar that holds notes but names no chord repeats the previous chord.
+- A bar that names no chord in the chord voice, but names one in the voice written just before it, takes that chord.
+- A chord written after the last bar line of a line, with no music after it, belongs to no bar, so the export reports it and leaves it out.
+- A chord symbol that cannot be read is exported as text and reported.
+
+## Chord spellings
+
+The chord symbol is a root (`A` to `G`), an optional accidental (`#` or `b`), an optional quality, an optional extension number, optional alterations (`b9`, `#11`) and an optional bass (`/G`). Superscript digits are accepted in the extension and in the alterations, so `A⁷` and `C⁷b⁹` read as `A7` and `C7b9`.
+
+These are the spellings of each quality:
+
+| Chord                           | Spellings                                                                  |
+| ------------------------------- | -------------------------------------------------------------------------- |
+| Major                           | no quality, `M`, `Maj`, `maj`                                              |
+| Major seventh                   | `maj7`, `Maj7`, `M7`, `▵`, `△`, `Δ` (a triangle alone implies the seventh) |
+| Minor                           | `m`, `min`, `-`                                                            |
+| Minor with a major seventh      | `mM7`, `mMaj7`, `m^7`, `-M7`, `-Maj7`, `-^7`, `m(Maj7)`                    |
+| Diminished                      | `dim`, `°`                                                                 |
+| Diminished with a major seventh | `o^7`                                                                      |
+| Half diminished                 | `ø`, `Ø`                                                                   |
+| Augmented                       | `aug`, `+`                                                                 |
+| Suspended                       | `sus`, `sus4`, `sus2`                                                      |
+| Added tone                      | `add` (`Cadd9`), or `(add9)` in a group (`Cm(add9)`)                       |
+| Altered                         | `alt`                                                                      |
+
+For the minor chord with a major seventh, the extension 7 is implied when none follows, so `CmM` and `Cm^` read as `Cm(Maj7)`.
+
+## Parenthesised groups
+
+A parenthesised group may follow the quality, the extension or an alteration. It surrounds the symbols that modify the chord, and it holds one or more items separated by commas:
+
+- An alteration, so that `C7(b9)` reads as `C7b9`, `C7(b9,#11)` and `C7(b9)(#11)` read as `C7b9#11`, and `Cmaj7(#11)` is a major seventh chord with a sharp eleventh.
+- An added tone (`add2`, `add4`, `add6`, `add9`, `add11` or `add13`), which adds a note to the chord and leaves its quality as it is. Because of this, `Cm(add9)` is a minor triad with an added ninth, and `C7(add13)` is a dominant seventh with an added thirteenth. A major triad with one added ninth, eleventh or thirteenth (`C(add9)`) is the same chord as `Cadd9`.
+- A major seventh marker (`Maj7`, `maj7`, `M7`, or a triangle), which sets the seventh of the chord to a major seventh. Because of this, `Cm(Maj7)` is a minor chord with a major seventh, `Cdim(Maj7)` is a diminished chord with a major seventh, and `C(Maj7)` is a major seventh chord.
+
+Because a group that is only partly understood would leave text that still looks like a chord, the group is read whole or not at all. When a group holds anything else (`C7(foo)`, `C7()`), or when it never closes (`C7(b9`), the chord ends before the opening parenthesis, and the export reports the symbol and prints it as text.
+
+Because iReal Pro has no chord quality for most added tones, the export only expresses two of them: the minor chord with an added ninth (`Cm(add9)`, written `C-add9` in the link) and the major triad with an added ninth (`C(add9)`, written `Cadd9`). For any other chord with an added tone, such as `C7(add13)`, the export prints the chord as text and reports that it could not write it as a chord.
+
+## ABCx chord sheets
+
+An `.abcx` file exports the same way, with the whole body read as the chord voice. See the [ABCx chord sheets](/abcls/user-guide/abcx-chord-sheets/) guide for the syntax. Because ABCx has no decoration syntax, a segno or a coda is written as the annotations `"^segno"` and `"^coda"`.
+
+## Limits
+
+- Only the chords and the structure of the chart are exported. The notes and the lyrics do not appear in the iReal Pro song.
+- The meaning of two protocol fields of the link (the transpose field, and the difference between the style and the groove) was not confirmed against several real links. `parse/ireal/KNOWN_GAPS.md` lists the gaps that are still open.

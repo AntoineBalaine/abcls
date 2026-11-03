@@ -23,7 +23,7 @@ function transposeWithKeys(abc: string, semitones: number, changeChords = false)
   const root = fromAst(ast, ctx);
   const notes = findByTag(root, TAGS.Note);
   transpose({ root, cursors: [new Set(notes.map((n) => n.id))] }, semitones, ctx, snapshots, true, changeChords);
-  return serializeCSTree(root);
+  return serializeCSTree(root, ctx);
 }
 
 describe("transposeKeySignature", () => {
@@ -65,7 +65,7 @@ function transposeLinesWithKeys(abc: string, semitones: number, linePrefix: stri
   const lines = abc.split("\n");
   const notes = findByTag(root, TAGS.Note).filter((note) => lines[getNodeLineAndChar(note).line].startsWith(linePrefix));
   transpose({ root, cursors: [new Set(notes.map((n) => n.id))] }, semitones, ctx, snapshots, true, false);
-  return serializeCSTree(root);
+  return serializeCSTree(root, ctx);
 }
 
 describe("transpose with changeKey: the key of each field", () => {
@@ -142,7 +142,7 @@ describe("transpose with changeKey", () => {
     const root = fromAst(ast, ctx);
     const notes = findByTag(root, TAGS.Note);
     transpose({ root, cursors: [new Set(notes.map((n) => n.id))] }, -2, ctx, snapshots);
-    expect(serializeCSTree(root)).to.contain("K:D");
+    expect(serializeCSTree(root, ctx)).to.contain("K:D");
   });
 
   it("keeps the key when the transposition is a whole number of octaves", () => {
