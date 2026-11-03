@@ -62,6 +62,7 @@ const DOCUMENTED_GAPS: Record<string, string> = {
   "01h-Pitches-TurkishPersian.musicxml": "accidental enum value",
   "23d-Tuplets-Nested.musicxml": "nested tuplets",
   "71e-TabStaves.musicxml": "TAB clef",
+  "13a-KeySignatures.musicxml": "key with -11 fifths",
 };
 
 function extractNoteSequence(tune: Tune): Array<{ pitches: number[]; duration: string; isRest: boolean }> {
@@ -117,14 +118,11 @@ describe("MusicXML Test Suite survey", () => {
 
   describe("clean pass: schema validity and semantic content preserved", () => {
     const gapFiles = new Set(Object.keys(DOCUMENTED_GAPS));
-    // Fixtures needing a human decision (see report); excluded from the
-    // blanket clean-pass loop below and listed individually as skipped.
-    const needsDecision = new Set(["13a-KeySignatures.musicxml", "74a-FiguredBass.musicxml"]);
-    const cleanPassFixtures = allFixtures.filter((f) => !EXCLUDED_MALFORMED.has(f) && !gapFiles.has(f) && !needsDecision.has(f));
+    const cleanPassFixtures = allFixtures.filter((f) => !EXCLUDED_MALFORMED.has(f) && !gapFiles.has(f));
 
     it("sanity: the clean-pass set is the expected size", () => {
-      // 181 vendored - 3 .invalid. - 1 non-.invalid. malformed (41h) - 5 documented gaps - 2 needs-decision = 170
-      expect(cleanPassFixtures.length).to.equal(170);
+      // 181 vendored - 3 .invalid. - 1 non-.invalid. malformed (41h) - 6 documented gaps = 171
+      expect(cleanPassFixtures.length).to.equal(171);
     });
 
     for (const file of cleanPassFixtures) {
@@ -143,9 +141,16 @@ describe("MusicXML Test Suite survey", () => {
     }
   });
 
-  describe("needs a decision (not a clean pass, not an existing documented gap)", () => {
-    it.skip("13a-KeySignatures.musicxml: throws 'key with -11 fifths' — MusicXML's fifths attribute is not documented in KNOWN_GAPS.md as bounded; unclear whether extreme fifths counts (beyond the traditional ±7) should be supported with a real key-spelling table or added as a new documented gap. See survey report.", () => {});
-    it.skip("74a-FiguredBass.musicxml: contains real <figured-bass> content but silently completes instead of throwing, contradicting KNOWN_GAPS.md's 'throws unconditionally' claim. Root cause: opensheetmusicdisplay's own parser does not expose figured bass anywhere in its shipped types, so importFromMusicSheet(sheet: MusicSheet) structurally cannot detect it from the object it receives — enforcing the documented policy would require importFromMusicSheet to also accept raw XML text, a public API change beyond this survey's scope. See survey report.", () => {});
-    it.skip("41g-PartNoId.invalid.musicxml and 41h-TooManyParts.musicxml: both throw a raw TypeError ('Cannot read properties of undefined (reading Instruments)') instead of a clean, named error. Excluded from the must-round-trip bar since both are deliberately malformed, but a cleaner rejection would be a small future robustness improvement. See survey report.", () => {});
+  describe("parts that the part-list does not declare", () => {
+    const cases: [string, string][] = [
+      ["41g-PartNoId.invalid.musicxml", "MusicXML <part> number 1 has no id attribute"],
+      ["41h-TooManyParts.musicxml", 'MusicXML <part id="P3"> has no <score-part id="P3">'],
+    ];
+    for (const [file, message] of cases) {
+      it(`rejects ${file} with a message that names the part`, () => {
+        const xml = fs.readFileSync(path.join(FIXTURE_DIR, file), "utf8");
+        expect(() => parseMusicXmlToSheet(xml)).to.throw(Error, message);
+      });
+    }
   });
 });

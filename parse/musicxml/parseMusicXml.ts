@@ -9,6 +9,10 @@ import { IXmlElement, MusicSheetReader } from "opensheetmusicdisplay";
  * not enough on their own outside a browser; they must be installed onto
  * Node.js's global object first. This mirrors what packages like
  * jsdom-global automate, done here directly to avoid an extra dependency.
+ *
+ * Because OSMD fails with a TypeError on a <part> that the <part-list> does
+ * not declare, the parts are checked first, and such a document throws an
+ * Error that names the part.
  */
 export function parseMusicXmlToSheet(xml: string) {
   const dom = new JSDOM();
@@ -21,6 +25,8 @@ export function parseMusicXmlToSheet(xml: string) {
   }
   try {
     const doc = new dom.window.DOMParser().parseFromString(xml, "text/xml");
+    const mismatch = findUndeclaredPart(doc);
+    if (mismatch !== null) throw new Error(mismatch);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const root = new IXmlElement(doc.documentElement as any);
     const reader = new MusicSheetReader();
@@ -30,4 +36,23 @@ export function parseMusicXmlToSheet(xml: string) {
       g[name] = previous[name];
     }
   }
+}
+
+/**
+ * Returns a message for the first <part> that has no id, or whose id no <score-part> of the <part-list> declares,
+ * or null when every part is declared. MusicXML links each part to its declaration through that id.
+ */
+export function findUndeclaredPart(doc: Document): string | null {
+  const declared = new Set<string>();
+  for (const scorePart of Array.from(doc.getElementsByTagName("score-part"))) {
+    const id = scorePart.getAttribute("id");
+    if (id !== null) declared.add(id);
+  }
+  const parts = Array.from(doc.getElementsByTagName("part"));
+  for (let index = 0; index < parts.length; index++) {
+    const id = parts[index].getAttribute("id");
+    if (id === null) return `MusicXML <part> number ${index + 1} has no id attribute, so it cannot be matched to a <score-part> of the <part-list>.`;
+    if (!declared.has(id)) return `MusicXML <part id="${id}"> has no <score-part id="${id}"> in the <part-list>.`;
+  }
+  return null;
 }

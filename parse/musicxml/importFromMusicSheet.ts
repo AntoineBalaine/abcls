@@ -32,6 +32,7 @@ import {
   Beam,
 } from "opensheetmusicdisplay";
 import { createEmptyTune } from "../interpreter/InterpreterState";
+import { MODE_FIFTH_OFFSET } from "../music-theory/constants";
 import { getKeyAccidentalFor } from "../music-theory/harmonization";
 import {
   Staff,
@@ -164,71 +165,66 @@ function clefInstructionToType(clef: ClefInstruction, errors: string[]): ClefTyp
 }
 
 /**
- * Inverse of normalize.ts's MAJOR_FIFTHS/MINOR_FIFTHS tables, built once at
- * module load. Only major and minor are supported for this version; see
- * KNOWN_GAPS.md for the other modes.
+ * The mode of each OSMD key mode. Because MusicXML writes ionian and aeolian as names of their own,
+ * and "none" for a key signature without a mode, those three read as major and minor.
  */
-const MAJOR_FIFTHS_TO_ROOT: Record<number, { root: KeyRoot; acc: KeyAccidental }> = {
-  0: { root: KeyRoot.C, acc: KeyAccidental.None },
-  1: { root: KeyRoot.G, acc: KeyAccidental.None },
-  2: { root: KeyRoot.D, acc: KeyAccidental.None },
-  3: { root: KeyRoot.A, acc: KeyAccidental.None },
-  4: { root: KeyRoot.E, acc: KeyAccidental.None },
-  5: { root: KeyRoot.B, acc: KeyAccidental.None },
-  6: { root: KeyRoot.F, acc: KeyAccidental.Sharp },
-  7: { root: KeyRoot.C, acc: KeyAccidental.Sharp },
-  [-1]: { root: KeyRoot.F, acc: KeyAccidental.None },
-  [-2]: { root: KeyRoot.B, acc: KeyAccidental.Flat },
-  [-3]: { root: KeyRoot.E, acc: KeyAccidental.Flat },
-  [-4]: { root: KeyRoot.A, acc: KeyAccidental.Flat },
-  [-5]: { root: KeyRoot.D, acc: KeyAccidental.Flat },
-  [-6]: { root: KeyRoot.G, acc: KeyAccidental.Flat },
-  [-7]: { root: KeyRoot.C, acc: KeyAccidental.Flat },
+const MODE_BY_KEY_ENUM: Partial<Record<KeyEnum, Mode>> = {
+  [KeyEnum.major]: Mode.Major,
+  [KeyEnum.ionian]: Mode.Major,
+  [KeyEnum.none]: Mode.Major,
+  [KeyEnum.minor]: Mode.Minor,
+  [KeyEnum.aeolian]: Mode.Minor,
+  [KeyEnum.dorian]: Mode.Dorian,
+  [KeyEnum.phrygian]: Mode.Phrygian,
+  [KeyEnum.lydian]: Mode.Lydian,
+  [KeyEnum.mixolydian]: Mode.Mixolydian,
+  [KeyEnum.locrian]: Mode.Locrian,
 };
 
-const MINOR_FIFTHS_TO_ROOT: Record<number, { root: KeyRoot; acc: KeyAccidental }> = {
-  0: { root: KeyRoot.A, acc: KeyAccidental.None },
-  1: { root: KeyRoot.E, acc: KeyAccidental.None },
-  2: { root: KeyRoot.B, acc: KeyAccidental.None },
-  3: { root: KeyRoot.F, acc: KeyAccidental.Sharp },
-  4: { root: KeyRoot.C, acc: KeyAccidental.Sharp },
-  5: { root: KeyRoot.G, acc: KeyAccidental.Sharp },
-  6: { root: KeyRoot.D, acc: KeyAccidental.Sharp },
-  7: { root: KeyRoot.A, acc: KeyAccidental.Sharp },
-  [-1]: { root: KeyRoot.D, acc: KeyAccidental.None },
-  [-2]: { root: KeyRoot.G, acc: KeyAccidental.None },
-  [-3]: { root: KeyRoot.C, acc: KeyAccidental.None },
-  [-4]: { root: KeyRoot.F, acc: KeyAccidental.None },
-  [-5]: { root: KeyRoot.B, acc: KeyAccidental.Flat },
-  [-6]: { root: KeyRoot.E, acc: KeyAccidental.Flat },
-  [-7]: { root: KeyRoot.A, acc: KeyAccidental.Flat },
-};
+/** The letters of the line of fifths, starting from F, the position just before C. */
+const LINE_OF_FIFTHS_LETTERS: KeyRoot[] = [KeyRoot.F, KeyRoot.C, KeyRoot.G, KeyRoot.D, KeyRoot.A, KeyRoot.E, KeyRoot.B];
+
+/** The largest number of sharps or flats that a key signature can hold. */
+const MAX_KEY_FIFTHS = 7;
+
+/**
+ * Returns the note at a position of the line of fifths, where C is 0, G is 1 and F is -1.
+ * Because every seven fifths add a sharp (F, then F# seven fifths later), the letter repeats every seven positions
+ * and the accidental counts how many times the line went around. A tonic that would need a double sharp or a
+ * double flat gives null, because KeySignature only holds a single accidental.
+ */
+export function noteOnLineOfFifths(position: number): { root: KeyRoot; acc: KeyAccidental } | null {
+  const fromF = position + 1;
+  const root = LINE_OF_FIFTHS_LETTERS[((fromF % 7) + 7) % 7];
+  const turns = Math.floor(fromF / 7);
+  if (turns === 0) return { root, acc: KeyAccidental.None };
+  if (turns === 1) return { root, acc: KeyAccidental.Sharp };
+  if (turns === -1) return { root, acc: KeyAccidental.Flat };
+  return null;
+}
 
 const C_MAJOR: KeySignature = { root: KeyRoot.C, acc: KeyAccidental.None, mode: Mode.Major, accidentals: [] };
 
 /**
  * Converts a key instruction. A key that AbcLs cannot represent is recorded in `errors`, and C major stands in for it,
  * so that the import can go on and report every unsupported feature at once.
+ *
+ * Because MusicXML gives the signature (the number of fifths) and the mode, but not the tonic, the tonic is found on the
+ * line of fifths: a mode moves the tonic away from the major tonic of the same signature by MODE_FIFTH_OFFSET fifths
+ * (D dorian has the signature of C major, two fifths below D major), so the tonic sits at fifths - offset.
  */
 function keyInstructionToSignature(key: KeyInstruction, errors: string[]): KeySignature {
-  if (key.Mode === KeyEnum.major || key.Mode === KeyEnum.ionian || key.Mode === KeyEnum.none) {
-    const found = MAJOR_FIFTHS_TO_ROOT[key.Key];
-    if (!found) {
-      errors.push(unsupportedFeature(`key with ${key.Key} fifths`));
-      return { ...C_MAJOR };
-    }
-    return { root: found.root, acc: found.acc, mode: Mode.Major, accidentals: [] };
+  const mode = MODE_BY_KEY_ENUM[key.Mode];
+  if (mode === undefined) {
+    errors.push(unsupportedFeature(`key mode ${KeyEnum[key.Mode] ?? key.Mode}`));
+    return { ...C_MAJOR };
   }
-  if (key.Mode === KeyEnum.minor || key.Mode === KeyEnum.aeolian) {
-    const found = MINOR_FIFTHS_TO_ROOT[key.Key];
-    if (!found) {
-      errors.push(unsupportedFeature(`key with ${key.Key} fifths`));
-      return { ...C_MAJOR };
-    }
-    return { root: found.root, acc: found.acc, mode: Mode.Minor, accidentals: [] };
+  const tonic = Math.abs(key.Key) <= MAX_KEY_FIFTHS ? noteOnLineOfFifths(key.Key - MODE_FIFTH_OFFSET[mode]) : null;
+  if (tonic === null) {
+    errors.push(unsupportedFeature(`key with ${key.Key} fifths`));
+    return { ...C_MAJOR };
   }
-  errors.push(unsupportedFeature(`modal key signature (${KeyEnum[key.Mode] ?? key.Mode})`));
-  return { ...C_MAJOR };
+  return { root: tonic.root, acc: tonic.acc, mode, accidentals: [] };
 }
 
 function rhythmInstructionToMeter(rhythm: RhythmInstruction): Meter {

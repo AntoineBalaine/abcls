@@ -14,7 +14,11 @@ TabNote-equivalent type. A MusicXML file containing a tab staff fails to import.
 ## Figured bass
 
 No representation in types/abcjs-ast.ts and no known equivalent in ABC
-notation itself. Fails unconditionally.
+notation itself. Because opensheetmusicdisplay's reader does not keep
+`<figured-bass>` anywhere in the MusicSheet it returns, importFromMusicSheet
+never sees it and cannot report it: the figures are dropped without an error,
+and the notes of the part are imported. The survey fixture
+74a-FiguredBass.musicxml shows this.
 
 ## Microtonal and exotic accidentals
 
@@ -25,20 +29,15 @@ THREEQUARTERSFLAT, SLASHQUARTERSHARP, SLASHSHARP, DOUBLESLASHFLAT, SORI,
 and KORON, none of which have an AccidentalType equivalent. A note using
 one of these fails to import.
 
-## Modal key signatures (dorian, phrygian, lydian, mixolydian, locrian)
+## Key signatures beyond seven sharps or flats
 
-KeySignature.root is a single KeyRoot letter (A-G) with a single
-KeyAccidental (# or b, not a double accidental), and reconstructing the
-correct diatonic spelling of a modal tonic from OSMD's KeyInstruction.Key
-(fifths, relative to the major/minor-equivalent key sharing that
-signature) plus KeyInstruction.Mode requires walking that major key's
-actual 7-note spelled scale to find the mode's tonic degree and its
-correct letter/accidental, not just a semitone shift. That spelling table
-was not built for this version, given the plan's scope target of lead
-sheets and small ensemble scores, where major and minor are overwhelmingly
-the common case. importFromMusicSheet supports major and minor (including
-OSMD's separate ionian/aeolian mode values, treated as major/minor) and
-fails for dorian, phrygian, lydian, mixolydian, and locrian.
+importFromMusicSheet reads every mode (major, minor, dorian, phrygian,
+lydian, mixolydian, locrian, and OSMD's ionian and aeolian as major and
+minor), and finds the tonic on the line of fifths from the signature and the
+mode. A key signature can hold at most seven sharps or flats, and
+KeySignature.root takes a single accidental, so a `<fifths>` value beyond -7
+or 7 (such as the -11 fifths of the survey fixture 13a-KeySignatures.musicxml)
+fails to import.
 
 ## Grace notes after their main note
 
