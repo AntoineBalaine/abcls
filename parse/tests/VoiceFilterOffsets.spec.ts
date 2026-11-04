@@ -41,13 +41,13 @@ const ALWAYS_WITH_ME = [
 
 describe("filterVoicesInAbcWithDeletions", () => {
   describe("Example-based tests", () => {
-    it("removes the directive, the declarations and the lines of the hidden voices, and nothing else", () => {
+    it("removes the directive, the declarations, the lines of the hidden voices, and the hidden voices of the %%score line", () => {
       const { text } = filter(ALWAYS_WITH_ME);
       expect(text).to.equal(
         [
           "X:1",
           "T:Always With Me",
-          "%%score ( C 1 ) | ( 2 5 6 ) | ( 6b 5b )",
+          "%%score ( C 1 ) | ( 2 )",
           'V:C name="Chords"',
           "V:1",
           "V:2",
@@ -185,6 +185,52 @@ describe("filterVoicesInAbcWithDeletions", () => {
       const source = ["%%abcls-voices hide 2", "X:1", "V:1", "V:2", "K:C", "[V:2] GABc |", "P:B", "%%text A free text line", "[V:1] CDEF |"].join("\n");
       const { text } = filter(source);
       expect(text).to.equal(["X:1", "V:1", "K:C", "P:B", "%%text A free text line", "[V:1] CDEF |"].join("\n"));
+    });
+
+    it("shows a voice whose id starts with a digit and ends with a letter, such as 6b", () => {
+      const source = ["%%abcls-voices show 6b", "X:1", "V:5b", "V:6b", "K:C", "[V:5b] CDEF |", "[V:6b] GABc |"].join("\n");
+      const { text } = filter(source);
+      expect(text).to.equal(["X:1", "V:6b", "K:C", "[V:6b] GABc |"].join("\n"));
+    });
+
+    it("takes the hidden voices out of the %%score line, so that the first staff still has a voice", () => {
+      const source = [
+        "%%abcls-voices show 5",
+        "X:1",
+        "%%score ( 1 2 ) | ( 5 6 ) | ( 5b 6b )",
+        "V:1",
+        "V:2",
+        "V:5",
+        "V:6",
+        "V:5b",
+        "V:6b",
+        "K:C",
+        "[V:1] CDEF |",
+        "[V:5] GABc |",
+        "",
+      ].join("\n");
+      const { text } = filter(source);
+      expect(text).to.equal(["X:1", "%%score ( 5 )", "V:5", "K:C", "[V:5] GABc |", ""].join("\n"));
+    });
+
+    it("takes the whole %%score line out when no voice stays, and keeps the voices that are shown in a group with others", () => {
+      const none = ["%%abcls-voices show 9", "X:1", "%%score ( 1 2 ) | 3", "V:1", "K:C", "[V:1] C |", ""].join("\n");
+      expect(filter(none).text).to.equal(["X:1", "K:C", ""].join("\n"));
+
+      const some = ["%%abcls-voices hide 2", "X:1", "%%staves { ( 1 2 ) | 3 }", "V:1", "V:2", "V:3", "K:C", "[V:1] C |", ""].join("\n");
+      expect(filter(some).text).to.equal(["X:1", "%%staves { ( 1 ) | 3 }", "V:1", "V:3", "K:C", "[V:1] C |", ""].join("\n"));
+    });
+
+    it("follows the filter of the file for a %%score line of the file header", () => {
+      const source = ["%%abcls-voices show 1", "%%score ( 1 2 ) | 3", "", "X:1", "V:1", "V:2", "K:C", "[V:1] C |", ""].join("\n");
+      expect(filter(source).text).to.contain("%%score ( 1 )");
+    });
+
+    it("leaves a %%score line without trailing spaces, and the other lines untouched", () => {
+      const source = ["%%abcls-voices show 5", "X:1", "T:Title", "%%score ( 1 2 ) | ( 5 6 ) | ( 5b 6b )", "V:5", "K:C", "[V:5] GABc |", ""].join("\n");
+      const lines = filter(source).text.split("\n");
+      expect(lines).to.deep.equal(["X:1", "T:Title", "%%score ( 5 )", "V:5", "K:C", "[V:5] GABc |", ""]);
+      expect(lines.some((l) => l.endsWith(" "))).to.equal(false);
     });
 
     it("leaves a text without directive as it is, with no deletion", () => {

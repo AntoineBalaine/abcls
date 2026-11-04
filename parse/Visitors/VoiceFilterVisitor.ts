@@ -44,11 +44,15 @@ import {
 } from "../types/Expr";
 import { AbcFormatter } from "./Formatter";
 import { applyDeletions, joinRangesAcrossBlanks, lineColumnToOffset, lineStartOffsets, mergeOffsetRanges, OffsetRange } from "./OffsetDeletionMap";
+import { filterScoreDirective } from "./ScoreDirectiveFilter";
 
 /**
  * The directives whose text is printed on the score between the systems, whatever the voice that comes before them.
  */
 const SCORE_LEVEL_DIRECTIVES = new Set(["text", "center", "begintext"]);
+
+/** The directives that lay the voices out on staves, and so name voices. */
+const STAFF_LAYOUT_DIRECTIVES = new Set(["score", "staves"]);
 
 /**
  * Tells whether an element of the tune body belongs to the score and not to a voice.
@@ -115,7 +119,7 @@ function voiceIsIncluded(voiceId: string, state: VoiceFilterState): boolean {
  *   field: "V:", text: ["V:", "melody"]
  *   (note: text[0] duplicates the field key)
  */
-function extractVoiceIdFromMarker(line: Info_line | Inline_field): string | null {
+export function extractVoiceIdFromMarker(line: Info_line | Inline_field): string | null {
   if (line instanceof Info_line) {
     const key = line.key.lexeme.trim().toUpperCase();
     if (key === "V:") {
@@ -241,6 +245,11 @@ export class VoiceFilterVisitor {
    * every node that the filter drops is recorded here, in the order in which it was visited.
    */
   removedNodes: Array<Expr | Token> = [];
+  /**
+   * The tokens that were taken out of a %%score or %%staves directive that stays. Because such a token is one of several
+   * on its line, the blanks that follow it are removed with it, so that the directive does not keep stray spaces.
+   */
+  layoutTokens: Set<Token> = new Set();
 
   constructor(context: ABCContext, filterContext: FilterContext) {
     this.context = context;
@@ -274,15 +283,48 @@ export class VoiceFilterVisitor {
     return this.filterContext.fileDefault;
   }
 
+  /**
+   * Takes the hidden voices out of a %%score or %%staves directive.
+   *
+   * Because the directive names the voices that make the staves, a name that the filter removed made abcjs fail on
+   * the first staff and the preview showed nothing new. The groups that hold no voice any more go as well.
+   * Returns the directive itself when nothing changes, a new directive without the hidden voices, or null when no voice stays.
+   */
+  filterLayoutDirective(directive: Directive, filterState: VoiceFilterState): Directive | null {
+    if (filterState.mode === null || !STAFF_LAYOUT_DIRECTIVES.has(directive.key.lexeme.toLowerCase())) {
+      return directive;
+    }
+    const result = filterScoreDirective(directive.values, (voiceId) => !voiceIsIncluded(voiceId, filterState));
+    if (result === null || result.removed.length === 0) {
+      return directive;
+    }
+    if (result.allRemoved) {
+      this.removedNodes.push(directive);
+      return null;
+    }
+    for (const token of result.removed) {
+      this.removedNodes.push(token);
+      this.layoutTokens.add(token);
+    }
+    return new Directive(this.context.generateId(), directive.key, result.kept);
+  }
+
   filterFileHeader(header: File_header): File_header {
     // Remove %%abcls-voices directives from file header
-    const filteredContents = header.contents.filter((item) => {
+    const filteredContents: typeof header.contents = [];
+    for (const item of header.contents) {
       if (item instanceof Directive && item.key.lexeme.toLowerCase() === "abcls-voices") {
         this.removedNodes.push(item);
-        return false;
+        continue;
       }
-      return true;
-    });
+      if (item instanceof Directive) {
+        // Because the file header applies to every tune, its layout directive follows the filter of the file.
+        const layout = this.filterLayoutDirective(item, this.filterContext.fileDefault);
+        if (layout !== null) filteredContents.push(layout);
+        continue;
+      }
+      filteredContents.push(item);
+    }
 
     return new File_header(this.context.generateId(), filteredContents);
   }
@@ -307,6 +349,13 @@ export class VoiceFilterVisitor {
       // Remove %%abcls-voices directives
       if (item instanceof Directive && item.key.lexeme.toLowerCase() === "abcls-voices") {
         this.removedNodes.push(item);
+        continue;
+      }
+
+      // Take the hidden voices out of the %%score and %%staves directives
+      if (item instanceof Directive) {
+        const layout = this.filterLayoutDirective(item, filterState);
+        if (layout !== null) filteredInfoLines.push(layout);
         continue;
       }
 
@@ -497,8 +546,9 @@ export function collectTokens(node: Expr | Token, found: Token[] = []): Token[] 
  * whereas the ranges that RangeVisitor gives leave out some punctuation (for example the brackets of a chord).
  * Because a directive does not keep its leading `%%` as a token, we take the `%%` that precedes its key,
  * so that deleting the directive does not leave those two characters behind.
+ * The tokens of `withFollowingBlanks` take the spaces and tabs that follow them.
  */
-export function removedNodeRanges(original: string, removed: ReadonlyArray<Expr | Token>): OffsetRange[] {
+export function removedNodeRanges(original: string, removed: ReadonlyArray<Expr | Token>, withFollowingBlanks: ReadonlySet<Token> = new Set()): OffsetRange[] {
   const lineStarts = lineStartOffsets(original);
   const ranges: OffsetRange[] = [];
   for (const node of removed) {
@@ -507,10 +557,30 @@ export function removedNodeRanges(original: string, removed: ReadonlyArray<Expr 
       if (node instanceof Directive && token === node.key && original.slice(start - 2, start) === "%%") {
         start -= 2;
       }
-      ranges.push({ start, end: lineColumnToOffset(lineStarts, token.line, token.position) + token.lexeme.length });
+      let end = lineColumnToOffset(lineStarts, token.line, token.position) + token.lexeme.length;
+      // A token that was taken out of a directive that stays takes the blanks that follow it, so that no gap is left.
+      if (withFollowingBlanks.has(token)) {
+        while (end < original.length && (original[end] === " " || original[end] === "\t")) end++;
+      }
+      ranges.push({ start, end });
     }
   }
   return ranges;
+}
+
+/**
+ * When a removed range reaches the end of its line, the blanks that come before it would stay as trailing spaces,
+ * so the range takes them. Because only the last range of a line can reach its end, nothing else is affected.
+ */
+export function trimBlanksBeforeLineEnd(text: string, ranges: readonly OffsetRange[]): OffsetRange[] {
+  return ranges.map((range) => {
+    let lineEnd = range.end;
+    while (lineEnd < text.length && text[lineEnd] !== "\n") lineEnd++;
+    if (text.slice(range.end, lineEnd).trim() !== "") return range;
+    let start = range.start;
+    while (start > 0 && (text[start - 1] === " " || text[start - 1] === "\t")) start--;
+    return { start, end: lineEnd };
+  });
 }
 
 /**
@@ -552,8 +622,9 @@ export function filterVoicesInAbcWithDeletions(abc: string, context: ABCContext)
   const visitor = new VoiceFilterVisitor(context, filterContext);
   visitor.filter(ast);
 
-  const ranges = joinRangesAcrossBlanks(abc, mergeOffsetRanges(removedNodeRanges(abc, visitor.removedNodes)));
-  const deletions = mergeOffsetRanges(widenToWholeLines(abc, ranges));
+  const removedRanges = removedNodeRanges(abc, visitor.removedNodes, visitor.layoutTokens);
+  const ranges = joinRangesAcrossBlanks(abc, mergeOffsetRanges(removedRanges));
+  const deletions = mergeOffsetRanges(widenToWholeLines(abc, trimBlanksBeforeLineEnd(abc, ranges)));
   return { text: applyDeletions(abc, deletions), deletions };
 }
 
