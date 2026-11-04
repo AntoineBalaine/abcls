@@ -1,6 +1,6 @@
 {
   "name": "abcls-native",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Native binding for MuseSampler audio library",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

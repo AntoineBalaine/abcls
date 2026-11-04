@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.3.2 (2026-11-04)
+
+### voice filter
+
+- take the hidden voices out of the `%%score` and `%%staves` directives of a filtered score, together with the groups that then hold no voice and the separators that are left. Because abcjs fails when the first staff of `%%score` has no voice that has music, `%%abcls-voices show 5` with `%%score ( 1 2 ) | ( 5 6 ) | ( 5b 6b )` could not be drawn, and the preview kept showing its previous drawing, with the voice that was supposed to be hidden
+- keep the `P:` lines and the `%%text`, `%%center` and `%%begintext` directives of a filtered score. They do not belong to a voice, and were removed with the lines of the hidden voice that came before them
+- scan the voice ids of `%%abcls-voices`, `%%score` and `%%staves` as one identifier, whatever they look like: `6b`, `6_2`, `1a`, `C`, `B`. `%%abcls-voices show 6b` was scanned as the number 6 and the unit `b`, and a voice named `C` in `%%score` as a note, so the staves of the directive were not grouped
+
+### transform
+
+- add `joinSystems`, the inverse of `splitSystems`: each voice line of the system that follows the one under the cursor is appended to the line of the same voice, and the voice marker that the split added is dropped. `P:` and `%%text` lines are kept, and the cursor goes to the first note that was appended
+- add `interleaveVoices`, which rewrites a tune whose voices are written one after the other (deferred mode) as systems that hold all the voices. Every voice is cut every N bars, so that the lines of a system have the same number of bars whatever the lines of the source were, and the formatter can then align them. Tunes in linear mode, with fewer than two voices, or with lines of lyrics are left as they are
+- put the cursor of the editor where `splitSystems` and `joinSystems` leave it. Because the tokens of a node keep their position in the old text, the cursor went back to the position that the node had before the split, or to the top of the file for a node that the transform created
+- bound the memory of the text diff that the language server computes after a transform. Its table had (m+1)*(n+1) cells, over a billion for a score of 34,000 characters, so the server ran out of memory and died on any transform that changed such a score, and the editor reported "Pending response rejected since connection got disposed"
+
+### vscode-extension
+
+- add the commands "ABC: Join System with Next" and "ABC: Interleave Voices", which asks for the number of bars per system
+- map a click in the preview, and the cursor of the editor, through the voice filter. When voices were hidden with `%%abcls-voices`, the preview showed a text that was shorter than the document, so a click moved the cursor to the wrong place
+- highlight the notes of every cursor and selection in the preview, and not only those of the first one
+
+### build
+
+- point the `main` of the `editor` and `cstree` packages inside the packages, which now build into their own `dist` like `parse` and `midi`. Because Node resolves `main` against the symlink in `node_modules`, `../out/...` pointed at `node_modules/out`, and `abcls` did not start from `out/abc-cli/abcls-cli.js`. The published bundles are not affected, because they are made from the source of these two packages, which are not published on their own
+
+### docs
+
+- document how the voice filter treats `%%score` and `%%staves`, the ids that it accepts, the lines that it always keeps, and how the preview behaves with several cursors and with hidden voices
+- document `joinSystems` and `interleaveVoices`, and fix the description of `splitSystems`, which said that it also joins
+
 ## 0.3.1 (2026-11-03)
 
 ### transform

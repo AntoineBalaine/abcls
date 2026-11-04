@@ -2,6 +2,20 @@
 
 All notable changes to the AbcLsp extension will be documented in this file.
 
+## [0.3.2] - 2026-11-04
+
+### Added
+- `ABC: Join System with Next`: the inverse of `Split System at Cursor`. It appends each voice line of the next system to the line of the same voice, and the cursor goes to where they were joined
+- `ABC: Interleave Voices`: rewrites a tune whose voices are written one after the other as systems that hold all the voices, with the same number of bars in every line of a system. It asks for the number of bars per system. Run the formatter afterwards to align the bars
+- The preview highlights the notes of every cursor and selection, and not only those of the first one
+
+### Fixed
+- Clicking a note in the preview moved the cursor to the wrong place when voices were hidden with `%%abcls-voices`, and a selection in a hidden voice was not handled. The preview now maps the click and the cursor through the filter
+- With `%%abcls-voices show 5` and a `%%score` line that named hidden voices, the preview kept showing its previous drawing, because the score could not be drawn. The hidden voices are now taken out of `%%score` and `%%staves`, and `P:` lines and `%%text` stay visible
+- `%%abcls-voices show 6b` highlighted `6b` as two tokens, and voice ids such as `C` or `B` in `%%score` were read as notes
+- After `Split System at Cursor`, the cursor went back to the top of the file or to its old position. It now goes to the start of the new system
+- A transform on a large score could stop the language server with an out of memory error, and the editor reported "Pending response rejected since connection got disposed"
+
 ## [0.3.1] - 2026-11-03
 
 ### Added

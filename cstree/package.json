@@ -1,6 +1,6 @@
 {
   "name": "abcls-cstree",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "main": "./dist/src/cstree.js",
   "types": "./dist/src/cstree.d.ts",

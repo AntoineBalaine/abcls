@@ -1,6 +1,6 @@
 {
   "name": "abcls-editor",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",

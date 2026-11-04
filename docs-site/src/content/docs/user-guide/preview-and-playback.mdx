@@ -13,8 +13,9 @@ The preview opens as a side panel in VS Code. Use the command palette or the edi
 
 The preview and the editor follow each other:
 
-- The notes under the cursor, or under the selection, of the editor are highlighted in the score. When the first highlighted note is outside the visible part of the preview, the preview scrolls to it.
+- The notes under the cursor, or under the selection, of the editor are highlighted in the score. With several cursors or selections, the notes of every one of them are highlighted. When the first highlighted note is outside the visible part of the preview, the preview scrolls to it.
 - Clicking a note in the score selects its text in the editor and gives the focus back to the editor, so that you can type right away.
+- When some voices are hidden with `%%abcls-voices`, clicking a note still selects that note in the editor, and a cursor or a selection inside a hidden voice highlights nothing.
 - Because the score is drawn again after each edit, the preview keeps its scroll position while you edit, and only moves when the highlighted note is out of view.
 
 ### Kakoune

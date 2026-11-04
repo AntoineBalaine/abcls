@@ -90,6 +90,31 @@ Includes only the listed voices in the rendered output. All other voices are exc
 
 Excludes the listed voices from the rendered output. All other voices are included.
 
+### Voice ids
+
+The ids are written as they are in the `V:` lines, and may start with a digit or look like a note: `6b`, `5_2`, `1a`, `C` and `B` are all voice ids, and are read as such in `%%abcls-voices`, `%%score` and `%%staves`.
+
+### The staves of the score
+
+The voices that are hidden are also taken out of the `%%score` and `%%staves` directives. A group that then holds no voice is dropped with its brackets, and the bar line separators that are left first, last or doubled are removed. Because the staves are drawn from these directives, a directive that still named a hidden voice would leave a staff for it, or stop the score from being drawn at all.
+
+```
+%%abcls-voices show 5
+%%score ( 1 2 ) | ( 5 6 ) | ( 5b 6b )
+```
+
+is drawn as if it were:
+
+```
+%%score ( 5 )
+```
+
+A directive that no shown voice remains in is dropped.
+
+### What is always shown
+
+A part label (`P:`) and the text that is printed between the systems (`%%text`, `%%center` and `%%begintext`) do not belong to a voice, so they stay in the output whatever the voice that comes before them.
+
 ## abcls-parse
 
 Controls how the parser processes the ABC file.
