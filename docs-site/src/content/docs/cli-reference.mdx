@@ -159,6 +159,7 @@ Options:
 - `--lines <range>` -- only transform these lines, counted from 1 (for example `10` or `10-20`), or a range of text given as line:column positions, where columns also count from 1 and the end column is included (for example `10:5-12:20`)
 - `--keys` -- with `transpose`, also transpose the key signatures (the `K:` fields) so that they follow the notes
 - `--chords` -- with `transpose`, also transpose the chord symbols
+- `--rebar` -- with `multiplyRhythm` or `divideRhythm`, also re-bar: multiplying cuts each bar into bars of the length of the meter (with ties), and dividing merges the bars again
 - `--as-new-tune <label>` -- apply the transform to a copy of the tune, and append that copy to the file as a new tune
 - `--tune <number>` -- with `--as-new-tune`, the `X:` number of the tune to copy (the first tune by default)
 - `-w, --write` -- write the result back to the file (otherwise prints to stdout)
@@ -179,6 +180,23 @@ To keep the original tune next to its transposition (for example to write the pa
 abcls transform myfile.abc transpose 2 --keys --chords --as-new-tune "Bb clarinet" -w
 abcls transform myfile.abc transpose 2 --as-new-tune "Bb clarinet" --tune 3 -w
 ```
+
+### Changing the length of a section
+
+Because `multiplyRhythm` and `divideRhythm` only change the numbers of the notes, the bars no longer match the meter afterwards. With `--rebar`, the bars follow: a multiplication cuts every bar into bars of the length of the meter, with ties where a note crosses the new bar line, and a division merges the bars again. A bar of rest (`X`) is repeated or merged with the rest, and `"Gm" x4 "Dm" x4` becomes `"Gm" x8 | "Dm" x8`. The [transforms guide](/abcls/user-guide/transforms/#multiplyrhythmrebar-and-dividerhythmrebar) lists what it keeps and what it refuses.
+
+```bash
+abcls transform myfile.abc multiplyRhythm 2 --rebar --lines 10-20 -w
+abcls transform myfile.abc divideRhythm 2 --rebar --voice 1 -w
+```
+
+To write a cut-time version of a tune next to the original, with one command:
+
+```bash
+abcls transform myfile.abc multiplyRhythm 2 --rebar --as-new-tune "cut time" -w
+```
+
+Because the new tune keeps the `M:` line of the original, change it to the cut-time meter (`M:C|`, which has the same bar length) in the copy.
 
 Without `--voice` and `--lines`, the transform applies to the whole file. The transforms that depend on the chord symbols read them by position in time, so a chord symbol written in one voice applies to the notes of every voice that sounds at the same time.
 

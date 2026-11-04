@@ -135,6 +135,29 @@ Before: C2 D2 E2 F2
 After (divideRhythm 2): C D E F
 ```
 
+### multiplyRhythmRebar and divideRhythmRebar
+
+Because multiplyRhythm and divideRhythm only change the numbers, the music then no longer fits its bars: after a multiplication every bar holds two bars of music. These two transforms change the lengths and the bars together. They appear in VS Code as the commands "ABC: Double Rhythm Length and Re-bar" and "ABC: Halve Rhythm Length and Re-bar", and on the command line as the `--rebar` flag of `multiplyRhythm` and `divideRhythm`. Select whole bars before running them.
+
+```
+Before:                    C2 D2 E2 F2 | G4 A4 |
+After (multiplyRhythmRebar 2): C4 D4 | E4 F4 | G8 | A8 |
+```
+
+- When multiplying, each bar that holds a selected note is cut into bars of the length of the meter. A note that crosses a new bar line is cut in two and tied (`C6 D2- | D4 E4`), a chord keeps its notes together (`[CEG]-`), and a rest is cut without a tie.
+- A bar of rest written as `X` becomes as many bars of `X` as the factor says, and a chord symbol before it stays on the first one. A chord change that took half a bar (`"Gm" x4 "Dm" x4`) takes a whole bar each (`"Gm" x8 | "Dm" x8`).
+- When dividing, every group of as many bars as the factor says becomes one bar, and notes that were tied across a removed bar line become one note again. Multiplying and then dividing gives back the original music.
+- The factor must be a whole number of at least 2.
+- Because the meter and the default note length (`M:` and `L:`) stay as they are, a cut-time copy of a tune in 4/4 also needs its `M:` line changed (to `M:C|`, which has the same bar length).
+
+Some music cannot be re-barred, and the transform then stops with a message and changes nothing:
+
+- A new bar line that would fall inside a tuplet, or inside a note that belongs to a broken rhythm (`A>F`).
+- Bars of rest that carry different chord symbols, when dividing.
+- A multi-measure rest of more than one bar (`X2`), when multiplying.
+
+When dividing, a group of bars is left as it is if it is shorter than the factor, if it holds a repeat sign or an ending, or if it spans two lines.
+
 ## Conversion
 
 ### toRest
