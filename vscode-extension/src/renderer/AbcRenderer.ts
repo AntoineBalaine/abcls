@@ -6,10 +6,10 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { pathToFileURL } from "url";
-import { ABCContext, AbcErrorReporter, filterVoicesInAbc } from "abcls-parser";
+import { ABCContext, AbcErrorReporter, filterVoicesInAbcWithDeletions } from "abcls-parser";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
-import { createPreviewSyncState, PreviewSyncState, previewRangeForSelection } from "./cursorSync";
+import { createPreviewSyncState, documentRangeForPreviewClick, FilteredPreview, PreviewSyncState, previewRangeForSelection } from "./cursorSync";
 
 let panel: vscode.WebviewPanel | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -290,11 +290,11 @@ async function getCurrentEditorContent(): Promise<string> {
     // its version and text are read before the request.
     const version = editor.document.version;
     const documentText = editor.document.getText();
-    let content = await getPreviewContent(uri);
+    const serverContent = await getPreviewContent(uri);
     // Apply voice filter if %%abcls-voices directive is present
-    content = applyVoiceFilter(content);
-    previewSyncState = createPreviewSyncState(uri, version, documentText, content);
-    return content;
+    const filtered = applyVoiceFilter(serverContent);
+    previewSyncState = createPreviewSyncState(uri, version, documentText, serverContent, filtered ?? undefined);
+    return filtered?.text ?? serverContent;
   }
 
   return "";
@@ -304,22 +304,26 @@ async function getCurrentEditorContent(): Promise<string> {
  * Apply voice filter to ABC content based on %%abcls-voices directives.
  * Because the directive is embedded in the ABC content, we process it here
  * to filter out voices before rendering.
+ *
+ * Because a click in the preview must land on the same note in the editor, the result also holds the ranges
+ * that the filter removed. It is null when there is nothing to filter, or when the filter failed,
+ * in which case the content is shown as it is.
  */
-function applyVoiceFilter(content: string): string {
+function applyVoiceFilter(content: string): FilteredPreview | null {
   // Quick check: only process if %%abcls-voices directive is present
   if (!content.includes("%%abcls-voices")) {
-    return content;
+    return null;
   }
 
   try {
     const errorReporter = new AbcErrorReporter();
     const ctx = new ABCContext(errorReporter);
-    return filterVoicesInAbc(content, ctx);
+    return filterVoicesInAbcWithDeletions(content, ctx);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     outputChannel.appendLine(`Voice filter error: ${message}`);
-    // Return original content if filter fails
-    return content;
+    // Show the original content if the filter fails
+    return null;
   }
 }
 
@@ -361,8 +365,10 @@ async function select(start: number, end: number) {
   const editor = getPreviewedEditor();
   if (!editor) return;
 
-  const startPos = editor.document.positionAt(start);
-  const endPos = editor.document.positionAt(end);
+  // Because the preview may show the document without its hidden voices, the offsets of the click are converted first.
+  const range = documentRangeForPreviewClick(previewSyncState, start, end);
+  const startPos = editor.document.positionAt(range.start);
+  const endPos = editor.document.positionAt(range.end);
   const selection = new vscode.Selection(startPos, endPos);
 
   const focused = await vscode.window.showTextDocument(editor.document, { viewColumn: editor.viewColumn, preserveFocus: false, selection });

@@ -14,6 +14,7 @@ export * from "./Visitors/RangeVisitor";
 export * from "./Visitors/RhythmTransform";
 export * from "./Visitors/Transposer";
 export * from "./Visitors/VoiceFilterVisitor";
+export * from "./Visitors/OffsetDeletionMap";
 export {
   IRational,
   createRational,

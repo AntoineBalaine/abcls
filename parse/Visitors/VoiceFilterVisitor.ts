@@ -22,6 +22,7 @@
 
 import { analyzeDirective } from "../analyzers/directive-analyzer";
 import { SemanticAnalyzer } from "../analyzers/semantic-analyzer";
+import { isToken } from "../helpers";
 import { ABCContext } from "../parsers/Context";
 import { parse } from "../parsers/parse";
 import { Token } from "../parsers/scan";
@@ -29,6 +30,7 @@ import { Scanner } from "../parsers/scan";
 import { AbclsVoicesDirectiveData } from "../types/directive-specs";
 import {
   Directive,
+  Expr,
   File_header,
   File_structure,
   Info_line,
@@ -41,6 +43,7 @@ import {
   System,
 } from "../types/Expr";
 import { AbcFormatter } from "./Formatter";
+import { applyDeletions, joinRangesAcrossBlanks, lineColumnToOffset, lineStartOffsets, mergeOffsetRanges, OffsetRange } from "./OffsetDeletionMap";
 
 /**
  * Filter state for a single scope (file or tune)
@@ -212,6 +215,11 @@ export class VoiceFilterCollector {
 export class VoiceFilterVisitor {
   context: ABCContext;
   filterContext: FilterContext;
+  /**
+   * Because the preview needs to convert offsets of the filtered text back to the original text,
+   * every node that the filter drops is recorded here, in the order in which it was visited.
+   */
+  removedNodes: Array<Expr | Token> = [];
 
   constructor(context: ABCContext, filterContext: FilterContext) {
     this.context = context;
@@ -249,6 +257,7 @@ export class VoiceFilterVisitor {
     // Remove %%abcls-voices directives from file header
     const filteredContents = header.contents.filter((item) => {
       if (item instanceof Directive && item.key.lexeme.toLowerCase() === "abcls-voices") {
+        this.removedNodes.push(item);
         return false;
       }
       return true;
@@ -276,6 +285,7 @@ export class VoiceFilterVisitor {
     for (const item of header.info_lines) {
       // Remove %%abcls-voices directives
       if (item instanceof Directive && item.key.lexeme.toLowerCase() === "abcls-voices") {
+        this.removedNodes.push(item);
         continue;
       }
 
@@ -284,6 +294,7 @@ export class VoiceFilterVisitor {
         const voiceId = extractVoiceIdFromMarker(item);
         if (voiceId !== null) {
           if (!voiceIsIncluded(voiceId, filterState)) {
+            this.removedNodes.push(item);
             continue;
           }
         }
@@ -349,6 +360,8 @@ export class VoiceFilterVisitor {
           // Include the V: line only if the voice is included
           if (currentVoiceIncluded) {
             filteredElements.push(element);
+          } else {
+            this.removedNodes.push(element);
           }
           continue;
         }
@@ -363,6 +376,8 @@ export class VoiceFilterVisitor {
           // Include the inline field only if the voice is included
           if (currentVoiceIncluded) {
             filteredElements.push(element);
+          } else {
+            this.removedNodes.push(element);
           }
           continue;
         }
@@ -372,6 +387,8 @@ export class VoiceFilterVisitor {
       if (element instanceof Voice_overlay) {
         if (currentVoiceIncluded) {
           filteredElements.push(element);
+        } else {
+          this.removedNodes.push(element);
         }
         continue;
       }
@@ -379,6 +396,8 @@ export class VoiceFilterVisitor {
       // Include other elements only if current voice is included
       if (currentVoiceIncluded) {
         filteredElements.push(element);
+      } else {
+        this.removedNodes.push(element);
       }
     }
 
@@ -401,6 +420,105 @@ export function filterVoiceInAst(ast: File_structure, context: ABCContext): File
   // Pass 2: Filter the AST (will also remove %%abcls-voices directives regardless of filtering mode)
   const visitor = new VoiceFilterVisitor(context, filterContext);
   return visitor.filter(ast);
+}
+
+/**
+ * The result of filtering an ABC string, with the deletions that turn the original text into the filtered text.
+ */
+export interface FilteredAbc {
+  /** The original text without the hidden voices. It is never printed again, so every character of it comes from the original text. */
+  text: string;
+  /** The ranges of the original text that were removed, merged and in order. */
+  deletions: OffsetRange[];
+}
+
+/**
+ * Collects the tokens that a node holds, at any depth.
+ *
+ * Because a node holds its tokens as properties, directly or inside other nodes or arrays, we walk the properties,
+ * and we do not depend on one visit method per node type.
+ */
+export function collectTokens(node: Expr | Token, found: Token[] = []): Token[] {
+  if (isToken(node)) {
+    found.push(node);
+    return found;
+  }
+  for (const value of Object.values(node)) {
+    const children: unknown[] = Array.isArray(value) ? value : [value];
+    for (const child of children) {
+      if (isToken(child) || child instanceof Expr) {
+        collectTokens(child, found);
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * Gives the ranges of the original text that the removed nodes cover, as offsets.
+ *
+ * Because every token knows the line and the column where it starts in the original text, the ranges are exact,
+ * whereas the ranges that RangeVisitor gives leave out some punctuation (for example the brackets of a chord).
+ * Because a directive does not keep its leading `%%` as a token, we take the `%%` that precedes its key,
+ * so that deleting the directive does not leave those two characters behind.
+ */
+export function removedNodeRanges(original: string, removed: ReadonlyArray<Expr | Token>): OffsetRange[] {
+  const lineStarts = lineStartOffsets(original);
+  const ranges: OffsetRange[] = [];
+  for (const node of removed) {
+    for (const token of collectTokens(node)) {
+      let start = lineColumnToOffset(lineStarts, token.line, token.position);
+      if (node instanceof Directive && token === node.key && original.slice(start - 2, start) === "%%") {
+        start -= 2;
+      }
+      ranges.push({ start, end: lineColumnToOffset(lineStarts, token.line, token.position) + token.lexeme.length });
+    }
+  }
+  return ranges;
+}
+
+/**
+ * When a removed range leaves only blanks on its line, the whole line is gone, so we widen the range to take its newline too.
+ * Because a blank line ends a tune in ABC, a removed line must not leave an empty one behind.
+ * The newline that follows the line is taken, or the one that precedes it when the line is the last of the text.
+ */
+export function widenToWholeLines(text: string, ranges: readonly OffsetRange[]): OffsetRange[] {
+  return ranges.map((range) => {
+    let lineStart = range.start;
+    while (lineStart > 0 && text[lineStart - 1] !== "\n") lineStart--;
+    let lineEnd = range.end;
+    while (lineEnd < text.length && text[lineEnd] !== "\n") lineEnd++;
+    const before = text.slice(lineStart, range.start);
+    const after = text.slice(range.end, lineEnd);
+    if (before.trim() !== "" || after.trim() !== "") {
+      return range;
+    }
+    if (lineEnd < text.length) {
+      return { start: lineStart, end: lineEnd + 1 };
+    }
+    return { start: Math.max(lineStart - 1, 0), end: lineEnd };
+  });
+}
+
+/**
+ * Filters voices from an ABC string, and gives the filtered text together with the deletions that relate it to the original text.
+ *
+ * Because the text is the original one with spans cut out, and is never printed again, a character offset in the
+ * filtered text can be converted to the original text and back (see OffsetDeletionMap.ts). The printed text that
+ * `filterVoicesInAbc` returns cannot give that, because the printer also adds text of its own, such as separator comments.
+ */
+export function filterVoicesInAbcWithDeletions(abc: string, context: ABCContext): FilteredAbc {
+  const tokens = Scanner(abc, context);
+  const ast = parse(tokens, context);
+
+  const collector = new VoiceFilterCollector(context);
+  const filterContext = collector.collect(ast);
+  const visitor = new VoiceFilterVisitor(context, filterContext);
+  visitor.filter(ast);
+
+  const ranges = joinRangesAcrossBlanks(abc, mergeOffsetRanges(removedNodeRanges(abc, visitor.removedNodes)));
+  const deletions = mergeOffsetRanges(widenToWholeLines(abc, ranges));
+  return { text: applyDeletions(abc, deletions), deletions };
 }
 
 /**
