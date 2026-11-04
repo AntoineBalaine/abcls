@@ -26,7 +26,7 @@ import { isToken } from "../helpers";
 import { ABCContext } from "../parsers/Context";
 import { parse } from "../parsers/parse";
 import { Token } from "../parsers/scan";
-import { Scanner } from "../parsers/scan";
+import { Scanner, TT } from "../parsers/scan";
 import { AbclsVoicesDirectiveData } from "../types/directive-specs";
 import {
   Directive,
@@ -44,6 +44,27 @@ import {
 } from "../types/Expr";
 import { AbcFormatter } from "./Formatter";
 import { applyDeletions, joinRangesAcrossBlanks, lineColumnToOffset, lineStartOffsets, mergeOffsetRanges, OffsetRange } from "./OffsetDeletionMap";
+
+/**
+ * The directives whose text is printed on the score between the systems, whatever the voice that comes before them.
+ */
+const SCORE_LEVEL_DIRECTIVES = new Set(["text", "center", "begintext"]);
+
+/**
+ * Tells whether an element of the tune body belongs to the score and not to a voice.
+ *
+ * Because a part label (`P:`) and the text that is printed between the systems (`%%text`, `%%center` and
+ * `%%begintext`) are not music of a voice, the voice that happens to come before them must not hide them.
+ */
+export function isScoreLevelElement(element: tune_body_code): boolean {
+  if (element instanceof Info_line) {
+    return element.key.lexeme === "P:";
+  }
+  if (element instanceof Directive) {
+    return SCORE_LEVEL_DIRECTIVES.has(element.key.lexeme.toLowerCase());
+  }
+  return false;
+}
 
 /**
  * Filter state for a single scope (file or tune)
@@ -349,8 +370,23 @@ export class VoiceFilterVisitor {
     currentVoiceIncluded: boolean
   ): { filteredElements: System; currentVoice: string; currentVoiceIncluded: boolean } {
     const filteredElements: tune_body_code[] = [];
+    // Because a score-level element ends its line with a newline token of its own, we keep that newline with it.
+    let keepLineEnd = false;
 
     for (const element of system) {
+      if (isScoreLevelElement(element)) {
+        filteredElements.push(element);
+        keepLineEnd = true;
+        continue;
+      }
+      if (keepLineEnd) {
+        keepLineEnd = false;
+        if (isToken(element) && element.type === TT.EOL) {
+          filteredElements.push(element);
+          continue;
+        }
+      }
+
       // Check for voice switches
       if (element instanceof Info_line) {
         const voiceId = extractVoiceIdFromMarker(element);

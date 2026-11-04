@@ -132,6 +132,61 @@ describe("filterVoicesInAbcWithDeletions", () => {
       expect(text).to.equal(["X:1", "V:1", "K:C", "[V:1] CDEF |"].join("\n"));
     });
 
+    it("keeps the P: lines, even when they follow the lines of a hidden voice", () => {
+      const source = ["%%abcls-voices show 1", "X:1", "V:1", "V:2", "K:C", "[V:1] CDEF |", "[V:2] GABc |", "P:B", "[V:1] cBAG |", "[V:2] FEDC |"].join("\n");
+      const { text } = filter(source);
+      expect(text).to.equal(["X:1", "V:1", "K:C", "[V:1] CDEF |", "P:B", "[V:1] cBAG |"].join("\n"));
+    });
+
+    it("keeps the %%text, %%center and %%begintext directives, even when they follow the lines of a hidden voice", () => {
+      const source = [
+        "%%abcls-voices show 1",
+        "X:1",
+        "V:1",
+        "V:2",
+        "K:C",
+        "[V:1] CDEF |",
+        "[V:2] GABc |",
+        "%%text A free text line",
+        "[V:2] FEDC |",
+        "%%center Centered",
+        "[V:2] CDEF |",
+        "%%begintext",
+        "two lines",
+        "of text",
+        "%%endtext",
+        "[V:1] cBAG |",
+      ].join("\n");
+      const { text } = filter(source);
+      expect(text).to.equal(
+        [
+          "X:1",
+          "V:1",
+          "K:C",
+          "[V:1] CDEF |",
+          "%%text A free text line",
+          "%%center Centered",
+          "%%begintext",
+          "two lines",
+          "of text",
+          "%%endtext",
+          "[V:1] cBAG |",
+        ].join("\n")
+      );
+    });
+
+    it("keeps a P: line that is the last line of the text, and removes the lines of a hidden voice before it", () => {
+      const source = ["%%abcls-voices show 1", "X:1", "V:1", "V:2", "K:C", "[V:1] CDEF |", "[V:2] GABc |", "P:End"].join("\n");
+      const { text } = filter(source);
+      expect(text).to.equal(["X:1", "V:1", "K:C", "[V:1] CDEF |", "P:End"].join("\n"));
+    });
+
+    it("keeps the score-level lines in the hide mode too", () => {
+      const source = ["%%abcls-voices hide 2", "X:1", "V:1", "V:2", "K:C", "[V:2] GABc |", "P:B", "%%text A free text line", "[V:1] CDEF |"].join("\n");
+      const { text } = filter(source);
+      expect(text).to.equal(["X:1", "V:1", "K:C", "P:B", "%%text A free text line", "[V:1] CDEF |"].join("\n"));
+    });
+
     it("leaves a text without directive as it is, with no deletion", () => {
       const source = ["X:1", "V:1", "K:C", "[V:1] CDEF |"].join("\n");
       const { text, deletions } = filter(source);
@@ -152,6 +207,7 @@ describe("filterVoicesInAbcWithDeletions", () => {
       mode: "show" | "hide";
       listed: string[];
       shown: string[];
+      scoreLevelLines: string[];
     }
 
     const ALL_VOICES = ["1", "2", "3", "C"];
@@ -164,20 +220,26 @@ describe("filterVoicesInAbcWithDeletions", () => {
         style: fc.constantFrom("inline", "info-line"),
         systems: fc.array(fc.array(fc.tuple(fc.constantFrom(...ALL_VOICES), musicLine), { minLength: 1, maxLength: 4 }), { minLength: 1, maxLength: 4 }),
         directiveAtTop: fc.boolean(),
+        scoreLevel: fc.array(fc.tuple(fc.nat({ max: 20 }), fc.constantFrom("P:A", "P:Coda", "%%text some words", "%%center a title")), { maxLength: 3 }),
       })
-      .map(({ mode, listed, style, systems, directiveAtTop }) => {
+      .map(({ mode, listed, style, systems, directiveAtTop, scoreLevel }) => {
         const directive = `%%abcls-voices ${mode} ${listed.join(" ")}`;
         const body = systems.flatMap((system) => system.map(([id, music]) => (style === "inline" ? `[V:${id}] ${music}` : `V:${id}\n${music}`)));
+        // Because the lines of the info-line style hold a voice line and its music, the score-level lines go between the entries of the body.
+        const entries = [...body];
+        for (const [at, line] of scoreLevel) {
+          entries.splice(Math.min(at, entries.length), 0, line);
+        }
         const lines = [
           ...(directiveAtTop ? [directive] : []),
           "X:1",
           ...(directiveAtTop ? [] : [directive]),
           ...ALL_VOICES.map((id) => `V:${id}`),
           "K:C",
-          ...body,
+          ...entries,
         ];
         const shown = ALL_VOICES.filter((id) => (mode === "show" ? listed.includes(id) : !listed.includes(id)));
-        return { source: lines.join("\n"), mode, listed, shown };
+        return { source: lines.join("\n"), mode, listed, shown, scoreLevelLines: scoreLevel.map(([, line]) => line) };
       });
 
     it("property: the filtered text is the original text with the deletions cut out", () => {
@@ -207,6 +269,16 @@ describe("filterVoicesInAbcWithDeletions", () => {
           const { text } = filter(source);
           const used = [...text.matchAll(/^\[?V:(\w+)/gm)].map((m) => m[1]);
           return used.every((id) => shown.includes(id));
+        })
+      );
+    });
+
+    it("property: every P: line and text directive of the score is kept", () => {
+      fc.assert(
+        fc.property(generatedScore, ({ source, scoreLevelLines }) => {
+          const { text } = filter(source);
+          const kept = text.split("\n").filter((line) => line.startsWith("P:") || line.startsWith("%%text") || line.startsWith("%%center"));
+          return [...kept].sort().join("|") === [...scoreLevelLines].sort().join("|");
         })
       );
     });
