@@ -2,7 +2,7 @@
  * Copyright (c) Microsoft Corporation. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
-import { fromAst, createSelection, Selection, CSNode, TAGS, selectRange, GROUPED_CURSOR_TRANSFORMS, POSITION_BASED_TRANSFORMS, TRANSFORM_NODE_TAGS, serializeCSTree, findNodesInRange, resolveRanges, resolveSelectionRanges, lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "abcls-editor";
+import { fromAst, createSelection, Selection, CSNode, TAGS, selectRange, GROUPED_CURSOR_TRANSFORMS, POSITION_BASED_TRANSFORMS, TRANSFORM_NODE_TAGS, serializeCSTree, findNodesInRange, resolveRanges, resolveSelectionRanges, resolveSelectionRangesInText, lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "abcls-editor";
 import { File_structure, Scanner, parse, ABCContext, SemanticAnalyzer } from "abcls-parser";
 import { ChordPositionCollector } from "abcls-parser/interpreter/ChordPositionCollector";
 import {
@@ -391,8 +391,9 @@ function handlePositionBasedTransform(
   const oldText = doc.document.getText();
   const textEdits = computeTextEditsFromDiff(oldText, newText);
 
-  // Position-based transforms populate cursors correctly
-  const cursorRanges = resolveSelectionRanges(newSelection);
+  // Because the tokens of a node keep their position in the old text, the ranges are read from the new text,
+  // where the transform put them. The old way is the fallback for the rare case that the new text cannot be marked.
+  const cursorRanges = resolveSelectionRangesInText(newSelection, doc.ctx, newText) ?? resolveSelectionRanges(newSelection);
 
   return { textEdits, cursorRanges };
 }

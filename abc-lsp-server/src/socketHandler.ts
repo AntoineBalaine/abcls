@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as net from "net";
 import * as path from "path";
 import * as readline from "readline";
-import { fromAst, createSelection, Selection, selectRange, CSNode, TAGS, GROUPED_CURSOR_TRANSFORMS, TRANSFORM_NODE_TAGS, POSITION_BASED_TRANSFORMS, serializeCSTree, findNodesInRange, resolveRanges, resolveSelectionRanges, lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "abcls-editor";
+import { fromAst, createSelection, Selection, selectRange, CSNode, TAGS, GROUPED_CURSOR_TRANSFORMS, TRANSFORM_NODE_TAGS, POSITION_BASED_TRANSFORMS, serializeCSTree, findNodesInRange, resolveRanges, resolveSelectionRanges, resolveSelectionRangesInText, lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "abcls-editor";
 import { File_structure, ABCContext, Scanner, parse, SemanticAnalyzer } from "abcls-parser";
 import { ChordPositionCollector } from "abcls-parser/interpreter/ChordPositionCollector";
 import { AbcDocument } from "./AbcDocument";
@@ -640,9 +640,10 @@ function handlePositionBasedTransform(
     newText: edit.newText,
   }));
 
-  // Position-based transforms populate selection.cursors with result node IDs
-  // Use resolveSelectionRanges for direct range computation
-  const cursorRanges = resolveSelectionRanges(newSelection);
+  // Position-based transforms populate selection.cursors with result node IDs.
+  // Because the tokens of a node keep their position in the old text, the ranges are read from the new text,
+  // where the transform put them. The old way is the fallback for the rare case that the new text cannot be marked.
+  const cursorRanges = resolveSelectionRangesInText(newSelection, doc.ctx, newText) ?? resolveSelectionRanges(newSelection);
 
   return { edits, cursorRanges };
 }

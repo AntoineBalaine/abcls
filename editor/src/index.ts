@@ -155,5 +155,6 @@ export { GROUPED_CURSOR_TRANSFORMS, POSITION_BASED_TRANSFORMS, TRANSFORM_NODE_TA
 export { findNodesInRange, findNotesAndChordsInRange, resolveRanges, resolveSelectionRanges, resolveContiguousRanges } from "./runner/selectionRangeResolver";
 export { runTransform, rangesOfVoices, TransformRequest, RunnerResult } from "./runner/runTransform";
 export { harmonizeVoices, HarmonizeVoicesOptions } from "./runner/harmonizeVoices";
+export { resolveSelectionRangesInText } from "./runner/cursorPositions";
 export { blockChords, BlockChordsOptions } from "./runner/blockChords";
 export { TopNoteRule, LeadKind } from "./runner/blockChords";

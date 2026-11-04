@@ -513,6 +513,55 @@ describe("Socket Handler", () => {
       });
     });
 
+    describe("abc.applyTransform with a position-based transform", () => {
+      interface TransformResponse {
+        id: number | string;
+        result?: { edits: Array<{ range: LSPRange; newText: string }>; cursorRanges: LSPRange[] };
+        error?: { code: number; message: string };
+      }
+
+      it("puts the cursor where the split moved it in the new text, and not at the position that it had before", async () => {
+        const source = "X:1\nK:C\nC D E F|G A B c|\nC D E F|G A B c|\n";
+        documents.set("file:///path/to/file.abc", createMockAbcDocument(source));
+
+        const response = await sendRequest<TransformResponse>({
+          id: 1,
+          method: "abc.applyTransform",
+          params: {
+            uri: "file:///path/to/file.abc",
+            transform: "splitSystems",
+            args: [],
+            ranges: [{ start: { line: 3, character: 4 }, end: { line: 3, character: 4 } }],
+          },
+        });
+
+        expect(response).to.have.property("result");
+        // The split puts E on a new line, so the cursor goes to the start of line 4. The old position was 3:4.
+        expect(response.result!.cursorRanges).to.have.length(1);
+        expect(response.result!.cursorRanges[0].start).to.deep.equal({ line: 4, character: 0 });
+      });
+
+      it("never puts the cursor at the top of the file for a split of a multi-voice system", async () => {
+        const source = ["X:1", "V:1", "V:2", "K:C", "[V:1] C D E F | G A B c |", "[V:2] c B A G | F E D C |", ""].join("\n");
+        documents.set("file:///path/to/file.abc", createMockAbcDocument(source));
+
+        const response = await sendRequest<TransformResponse>({
+          id: 1,
+          method: "abc.applyTransform",
+          params: {
+            uri: "file:///path/to/file.abc",
+            transform: "splitSystems",
+            args: [],
+            ranges: [{ start: { line: 4, character: 15 }, end: { line: 4, character: 15 } }],
+          },
+        });
+
+        expect(response).to.have.property("result");
+        expect(response.result!.cursorRanges).to.have.length(1);
+        expect(response.result!.cursorRanges[0].start.line).to.be.greaterThan(4);
+      });
+    });
+
     describe("abc.importMidi dispatch", () => {
       beforeEach(() => {
         handler.setImportMidi((midiBase64, options) => {

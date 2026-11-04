@@ -14,9 +14,10 @@ export const GROUPED_CURSOR_TRANSFORMS = new Set(["legato", "consolidateRests", 
  * operating on nodes identified by selection.cursors.
  *
  * Output contract: These transforms MUST populate selection.cursors with the
- * node IDs of result nodes. The cursor nodes will have valid token positions
- * from the original source, allowing direct range computation via
- * resolveSelectionRanges() without ordinal mapping.
+ * node IDs of result nodes. Because the tokens of a node keep the line and the column
+ * that they had in the text that was parsed, and a transform moves nodes and creates new ones,
+ * the ranges of the cursors are read from the text that the tree serializes to
+ * (resolveSelectionRangesInText), and not from the positions of the tokens.
  */
 export const POSITION_BASED_TRANSFORMS = new Set(["splitSystems"]);
 
