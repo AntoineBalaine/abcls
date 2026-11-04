@@ -133,6 +133,11 @@ describe("AbcFormatter", () => {
         assert.equal(fmt, "X:1\n%%score 1\nCDEF |");
       });
 
+      it("keeps voice ids that start with a digit whole in %%score", () => {
+        const fmt = format("X:1\n%%score {(1 2) | (6_2 5_2)}\nCDEF|", ctx, formatter);
+        assert.equal(fmt, "X:1\n%%score { ( 1 2 ) | ( 6_2 5_2 ) }\nCDEF |");
+      });
+
       it("preserves empty lines", () => {
         assert.equal(format("X:1\nCDEF|\nGABG|", ctx, formatter), "X:1\nCDEF |\nGABG |");
       });

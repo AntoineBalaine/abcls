@@ -590,4 +590,47 @@ describe("Directive Scanner Tests", () => {
       expect(contentTokens.map((t) => t.lexeme)).to.deep.equal(["abcls-voices", "show", "B"]);
     });
   });
+  describe("Voice ids that start with a digit in %%score and %%staves", () => {
+    function lexemesOf(source: string): string[] {
+      const ctx = createCtx(source);
+      scanDirective(ctx);
+      return ctx.tokens.slice(2).map((t) => t.lexeme);
+    }
+
+    it("scans 6_2 as one identifier in %%score", () => {
+      const ctx = createCtx("%%score { ( 1 2 ) | ( 6_2 5_2) }");
+      scanDirective(ctx);
+      const ids = ctx.tokens.filter((t) => t.type === TT.IDENTIFIER).map((t) => t.lexeme);
+      expect(ids).to.deep.equal(["score", "6_2", "5_2"]);
+      expect(ctx.tokens.filter((t) => t.type === TT.NUMBER).map((t) => t.lexeme)).to.deep.equal(["1", "2"]);
+    });
+
+    it("scans 1a as one identifier in %%staves, instead of a number and a unit", () => {
+      const ctx = createCtx("%%staves 1a 2b");
+      scanDirective(ctx);
+      expect(ctx.tokens.filter((t) => t.type === TT.MEASUREMENT_UNIT)).to.have.length(0);
+      expect(ctx.tokens.filter((t) => t.type === TT.IDENTIFIER).map((t) => t.lexeme)).to.deep.equal(["staves", "1a", "2b"]);
+    });
+
+    it("keeps plain numeric voice ids as numbers", () => {
+      const ctx = createCtx("%%score 1 2 3");
+      scanDirective(ctx);
+      expect(ctx.tokens.filter((t) => t.type === TT.NUMBER).map((t) => t.lexeme)).to.deep.equal(["1", "2", "3"]);
+    });
+
+    it("does not change how other directives scan a number followed by a unit", () => {
+      const ctx = createCtx("%%pagewidth 21cm");
+      scanDirective(ctx);
+      expect(ctx.tokens.map((t) => t.type)).to.include(TT.MEASUREMENT_UNIT);
+    });
+
+    it("property: any digit-led id made of digits, an underscore, and digits is a single token", () => {
+      fc.assert(
+        fc.property(fc.nat({ max: 99 }), fc.nat({ max: 99 }), (a, b) => {
+          const id = `${a}_${b}`;
+          expect(lexemesOf(`%%score (${id})`)).to.deep.equal(["(", id, ")"]);
+        })
+      );
+    });
+  });
 });

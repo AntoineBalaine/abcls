@@ -34,7 +34,12 @@ export function scanDirective(ctx: Ctx): boolean {
   // identifiers only, so its content must never be scanned as a pitch.
   const isVoicesDirective = ctx.test(/abcls-voices\b/i);
 
+  // Because the voice ids of %%score and %%staves can start with a digit (such as "6_2" or "1a"),
+  // we must scan them as a whole before the number scanners split them into a number and a remainder.
+  const isStaffLayoutDirective = ctx.test(/(score|staves)\b/i);
+
   while (!(isAtEnd(ctx) || ctx.test(pEOL) || ctx.test("%"))) {
+    if (isStaffLayoutDirective && digitLedVoiceId(ctx)) continue; // voice ids such as 6_2
     if (numberWithUnit(ctx)) continue; // number + unit (must come before number)
     if (!isVoicesDirective && tuneBodyPitch(ctx)) continue; // ABC pitches (^c, _b, =f)
 
@@ -61,6 +66,20 @@ export function scanDirective(ctx: Ctx): boolean {
 function tuneBodyPitch(ctx: Ctx): boolean {
   if (!ctx.test(new RegExp(`^${pPitch.source}([%\n \t]|$)`))) return false;
   return pitch(ctx);
+}
+
+/**
+ * Scan a voice id that starts with digits and continues with a letter or an underscore, such as "6_2" or "1a".
+ * Plain numbers such as "1" are left to the number scanner.
+ *
+ * Produces: TT.IDENTIFIER
+ */
+function digitLedVoiceId(ctx: Ctx): boolean {
+  const match = /^[0-9]+[a-zA-Z_][-a-zA-Z0-9_]*/.exec(ctx.source.substring(ctx.current));
+  if (!match) return false;
+  ctx.current += match[0].length;
+  ctx.push(TT.IDENTIFIER);
+  return true;
 }
 
 /**
