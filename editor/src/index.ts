@@ -135,6 +135,8 @@ export {
   ParallelMode,
   splitSystem,
   splitSystems,
+  joinSystems,
+  interleaveVoices,
   SplitMetadata,
   explosion,
 } from "./transforms";
@@ -153,8 +155,8 @@ export { lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "./runner/transformLoo
 export { serializeCSTree } from "./runner/csTreeSerializer";
 export { GROUPED_CURSOR_TRANSFORMS, POSITION_BASED_TRANSFORMS, TRANSFORM_NODE_TAGS } from "./runner/transformConstants";
 export { findNodesInRange, findNotesAndChordsInRange, resolveRanges, resolveSelectionRanges, resolveContiguousRanges } from "./runner/selectionRangeResolver";
+export { resolveSelectionRangesInText } from "./runner/cursorPositions";
 export { runTransform, rangesOfVoices, TransformRequest, RunnerResult } from "./runner/runTransform";
 export { harmonizeVoices, HarmonizeVoicesOptions } from "./runner/harmonizeVoices";
-export { resolveSelectionRangesInText } from "./runner/cursorPositions";
 export { blockChords, BlockChordsOptions } from "./runner/blockChords";
 export { TopNoteRule, LeadKind } from "./runner/blockChords";

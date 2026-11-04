@@ -62,7 +62,7 @@ function cursorIsBefore(cursor: Position, pos: Position): boolean {
 }
 
 // Rationalize cursors: sort descending by position, deduplicate
-function rationalizeCursors(cursors: Position[]): Position[] {
+export function rationalizeCursors(cursors: Position[]): Position[] {
   const sorted = [...cursors].sort((a, b) => {
     if (a.line !== b.line) return b.line - a.line;
     return b.character - a.character;
@@ -83,7 +83,7 @@ function rationalizeCursors(cursors: Position[]): Position[] {
 }
 
 // Convert System CSNode to AST array
-function systemNodeToAst(systemNode: CSNode): SystemAst {
+export function systemNodeToAst(systemNode: CSNode): SystemAst {
   const children = collectChildren(systemNode);
   return children.map((child) => toAst(child) as Expr | Token);
 }

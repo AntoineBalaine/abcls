@@ -324,55 +324,123 @@ export function registerTransformCommands(context: vscode.ExtensionContext, clie
   // rather than requiring a selection of notes/chords
   context.subscriptions.push(
     vscode.commands.registerCommand("abc.splitSystem", async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor || editor.document.languageId !== "abc") return;
-
-      const uri = editor.document.uri.toString();
-
-      // Convert VSCode selections to LSP ranges (using cursor positions)
-      // For position-based transforms, we use the cursor position (active) rather than the full selection
-      const ranges = editor.selections.map((sel) => ({
-        start: { line: sel.active.line, character: sel.active.character },
-        end: { line: sel.active.line, character: sel.active.character },
-      }));
-
-      try {
-        const result = await client.sendRequest<ApplyTransformResult>("abc.applyTransform", {
-          uri,
-          transform: "splitSystems",
-          args: [],
-          selections: ranges,
-        });
-
-        // Apply text edits
-        if (result.textEdits.length > 0) {
-          const workspaceEdit = new vscode.WorkspaceEdit();
-          for (const edit of result.textEdits) {
-            const range = new vscode.Range(edit.range.start.line, edit.range.start.character, edit.range.end.line, edit.range.end.character);
-            workspaceEdit.replace(editor.document.uri, range, edit.newText);
-          }
-
-          const editSuccess = await vscode.workspace.applyEdit(workspaceEdit);
-          if (!editSuccess) {
-            vscode.window.showErrorMessage("Failed to apply split system edits");
-            return;
-          }
-        }
-
-        // Update cursor positions to new system starts
-        if (result.cursorRanges.length > 0) {
-          editor.selections = result.cursorRanges.map((r) => {
-            const pos = new vscode.Position(r.start.line, r.start.character);
-            return new vscode.Selection(pos, pos);
-          });
-          statusBarItem.text = `$(split-horizontal) Split complete`;
-          statusBarItem.show();
-        }
-      } catch (error) {
-        vscode.window.showErrorMessage(`Split system failed: ${error}`);
-      }
+      await applyPositionBasedTransform(client, "splitSystems", statusBarItem, {
+        icon: "split-horizontal",
+        done: "Split complete",
+        editFailure: "Failed to apply split system edits",
+        failure: "Split system failed",
+      });
     })
   );
+
+  // Interleave the voices of the tune under the cursor, so that every system has the same number of bars in all the voices
+  context.subscriptions.push(
+    vscode.commands.registerCommand("abc.interleaveVoices", async () => {
+      const input = await vscode.window.showInputBox({
+        prompt: "Bars per system",
+        value: "4",
+        validateInput: (v) => (/^[1-9]\d*$/.test(v.trim()) ? null : "Must be a whole number of bars, at least 1"),
+      });
+      if (input === undefined) return;
+      await applyPositionBasedTransform(
+        client,
+        "interleaveVoices",
+        statusBarItem,
+        {
+          icon: "list-flat",
+          done: "Voices interleaved",
+          editFailure: "Failed to apply the interleaved voices",
+          failure: "Interleave voices failed",
+        },
+        [Number(input.trim())]
+      );
+    })
+  );
+
+  // Join the system under the cursor with the next system (the inverse of splitting a system)
+  context.subscriptions.push(
+    vscode.commands.registerCommand("abc.joinSystems", async () => {
+      await applyPositionBasedTransform(client, "joinSystems", statusBarItem, {
+        icon: "merge",
+        done: "Join complete",
+        editFailure: "Failed to apply join systems edits",
+        failure: "Join systems failed",
+      });
+    })
+  );
+}
+
+/** The texts that a position-based transform shows to the user. */
+interface PositionBasedTransformLabels {
+  /** The name of the codicon that the status bar shows after the transform, without the `$(` and `)`. */
+  icon: string;
+  /** The text of the status bar after the transform. */
+  done: string;
+  /** The message of the error when the edits cannot be applied. */
+  editFailure: string;
+  /** The beginning of the message of the error when the request fails. */
+  failure: string;
+}
+
+/**
+ * Applies a transform that works on the positions of the cursors and not on selected notes, such as splitting
+ * or joining systems: it sends the position of every cursor, applies the edits that come back, and puts the cursors
+ * where the language server says that the transform left them.
+ */
+async function applyPositionBasedTransform(
+  client: LanguageClient,
+  transform: string,
+  statusBarItem: vscode.StatusBarItem,
+  labels: PositionBasedTransformLabels,
+  args: unknown[] = []
+): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== "abc") return;
+
+  const uri = editor.document.uri.toString();
+
+  // Convert VSCode selections to LSP ranges (using cursor positions)
+  // For position-based transforms, we use the cursor position (active) rather than the full selection
+  const ranges = editor.selections.map((sel) => ({
+    start: { line: sel.active.line, character: sel.active.character },
+    end: { line: sel.active.line, character: sel.active.character },
+  }));
+
+  try {
+    const result = await client.sendRequest<ApplyTransformResult>("abc.applyTransform", {
+      uri,
+      transform,
+      args,
+      selections: ranges,
+    });
+
+    // Apply text edits
+    if (result.textEdits.length > 0) {
+      const workspaceEdit = new vscode.WorkspaceEdit();
+      for (const edit of result.textEdits) {
+        const range = new vscode.Range(edit.range.start.line, edit.range.start.character, edit.range.end.line, edit.range.end.character);
+        workspaceEdit.replace(editor.document.uri, range, edit.newText);
+      }
+
+      const editSuccess = await vscode.workspace.applyEdit(workspaceEdit);
+      if (!editSuccess) {
+        vscode.window.showErrorMessage(labels.editFailure);
+        return;
+      }
+    }
+
+    // Update cursor positions to where the transform left them
+    if (result.cursorRanges.length > 0) {
+      editor.selections = result.cursorRanges.map((r) => {
+        const pos = new vscode.Position(r.start.line, r.start.character);
+        return new vscode.Selection(pos, pos);
+      });
+      statusBarItem.text = `$(${labels.icon}) ${labels.done}`;
+      statusBarItem.show();
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage(`${labels.failure}: ${error}`);
+  }
 }
 
 async function applyTransform(client: LanguageClient, transform: string, args: unknown[], statusBarItem: vscode.StatusBarItem): Promise<void> {

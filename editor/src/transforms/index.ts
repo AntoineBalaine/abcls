@@ -41,4 +41,6 @@ export { legato } from "./legato";
 export { toSlashNotation } from "./toSlashNotation";
 export { parallelVoicing, parallelDiatonic, parallelChromatic, ParallelDirection, ParallelMode } from "./parallel";
 export { splitSystem, splitSystems, SplitMetadata } from "./splitSystem";
+export { joinSystems } from "./joinSystems";
+export { interleaveVoices } from "./interleaveVoices";
 export { explosion } from "./explosionTimed";

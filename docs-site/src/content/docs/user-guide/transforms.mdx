@@ -232,7 +232,35 @@ Time-aware chord explosion: distributes chord notes into separate voice lines sy
 
 ### splitSystems
 
-Splits or joins system line breaks at the given cursor positions. Context-aware.
+Splits the system under each cursor into two systems, at the position of the cursor. In a score with several voices, every voice is split at the same musical time, and the voice markers that the new lines need are added. The cursor goes to the start of the new system. Context-aware.
+
+### joinSystems
+
+Joins the system under each cursor with the system that follows it. It is the inverse of `splitSystems`: each voice line of the next system is appended to the line of the same voice, and the voice marker that the split had added is dropped. Lines such as `P:` or `%%text` are kept. Nothing happens when the cursor is in the last system. The cursor goes to the first note that was appended.
+
+In Visual Studio Code, the command is "ABC: Join System with Next".
+
+### interleaveVoices
+
+Takes a tune whose voices are written one after the other, in deferred mode, and rewrites it as systems that hold all the voices: every voice is cut every N bars, and the n-th pieces of all the voices make the n-th system, one line per voice, in the order in which the voices first appear. Because the cuts are made at bar numbers and not at the lines of the source, the lines of a system have the same number of bars. A voice that has fewer bars stops appearing in the last systems.
+
+```
+Before (N = 2):
+V:1
+C | D | E | F |
+V:2
+c | d | e | f |
+
+After:
+[V:1] C | D |
+[V:2] c | d |
+[V:1] E | F |
+[V:2] e | f |
+```
+
+Run the formatter afterwards to align the bars of the voices. The empty `%` comment lines that separated systems are dropped, because the formatter writes its own. A tune is left as it is when it has fewer than two voices, is in linear mode, or has lines of lyrics (`w:`). The bars are matched by their number, so the voices must start together.
+
+In Visual Studio Code, the command is "ABC: Interleave Voices", and it asks for the number of bars per system.
 
 ## Voice
 

@@ -8,6 +8,9 @@
  * from the ContextInterpreter. These are identified by CONTEXT_AWARE_TRANSFORMS.
  */
 
+import { ABCContext, IRational, Position } from "abcls-parser";
+import { ChordPosition } from "abcls-parser/interpreter/ChordPositionCollector";
+import { DocumentSnapshots } from "abcls-parser/interpreter/ContextInterpreter";
 import {
   Selection,
   transpose,
@@ -43,13 +46,12 @@ import {
   ParallelDirection,
   ParallelMode,
   splitSystems,
+  joinSystems,
+  interleaveVoices,
   explosion,
   dropVoicing,
   DropVoicing,
 } from "../index";
-import { ABCContext, IRational, Position } from "abcls-parser";
-import { ChordPosition } from "abcls-parser/interpreter/ChordPositionCollector";
-import { DocumentSnapshots } from "abcls-parser/interpreter/ContextInterpreter";
 
 export type TransformFn = (selection: Selection, ctx: ABCContext, ...args: unknown[]) => Selection;
 
@@ -106,6 +108,12 @@ const TRANSFORM_MAP: Record<string, TransformFn> = {
     const positions = args[1] as Position[];
     return splitSystems(sel, positions, ctx, snapshots);
   },
+  // For joinSystems, args are: [positions]
+  // This is a position-based transform that needs no snapshots, so the positions come first.
+  joinSystems: (sel, ctx, ...args) => joinSystems(sel, args[0] as Position[], ctx),
+  // For interleaveVoices, args are: [positions, barsPerSystem]
+  // This is a position-based transform that needs no snapshots, so the positions come first.
+  interleaveVoices: (sel, ctx, ...args) => interleaveVoices(sel, args[0] as Position[], Number(args[1] ?? 4), ctx),
   // For dropVoicing, args are: [snapshots, voicing]
   dropVoicing: (sel, ctx, ...args) => dropVoicing(sel, args[1] as DropVoicing, ctx, args[0] as DocumentSnapshots),
   // For explosion, args are: [snapshots, targetVoiceIds]

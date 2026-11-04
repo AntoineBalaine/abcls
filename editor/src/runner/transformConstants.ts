@@ -19,7 +19,7 @@ export const GROUPED_CURSOR_TRANSFORMS = new Set(["legato", "consolidateRests", 
  * the ranges of the cursors are read from the text that the tree serializes to
  * (resolveSelectionRangesInText), and not from the positions of the tokens.
  */
-export const POSITION_BASED_TRANSFORMS = new Set(["splitSystems"]);
+export const POSITION_BASED_TRANSFORMS = new Set(["splitSystems", "joinSystems", "interleaveVoices"]);
 
 // ============================================================================
 // Transform Node Tags Mapping

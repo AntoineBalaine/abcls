@@ -541,6 +541,51 @@ describe("Socket Handler", () => {
         expect(response.result!.cursorRanges[0].start).to.deep.equal({ line: 4, character: 0 });
       });
 
+      it("joins the system under the cursor with the next one, and puts the cursor where they were joined", async () => {
+        const source = "X:1\nK:C\nC D E F|\nG A B c|\n";
+        documents.set("file:///path/to/file.abc", createMockAbcDocument(source));
+
+        const response = await sendRequest<TransformResponse>({
+          id: 1,
+          method: "abc.applyTransform",
+          params: {
+            uri: "file:///path/to/file.abc",
+            transform: "joinSystems",
+            args: [],
+            ranges: [{ start: { line: 2, character: 2 }, end: { line: 2, character: 2 } }],
+          },
+        });
+
+        expect(response).to.have.property("result");
+        // The second line is appended to the first one, so the edits remove the newline between them.
+        expect(response.result!.edits).to.have.length.greaterThan(0);
+        // G, the first note that was appended, is at column 8 of the joined line: "C D E F|" has 8 characters.
+        expect(response.result!.cursorRanges).to.have.length(1);
+        expect(response.result!.cursorRanges[0].start).to.deep.equal({ line: 2, character: 8 });
+      });
+
+      it("interleaves the voices of a tune, with the number of bars per system that the request gives", async () => {
+        const source = ["X:1", "V:1", "V:2", "K:C", "[V:1] C | D | E | F |", "[V:2] c | d | e | f |", ""].join("\n");
+        documents.set("file:///path/to/file.abc", createMockAbcDocument(source));
+
+        const response = await sendRequest<TransformResponse>({
+          id: 1,
+          method: "abc.applyTransform",
+          params: {
+            uri: "file:///path/to/file.abc",
+            transform: "interleaveVoices",
+            args: [2],
+            ranges: [{ start: { line: 4, character: 0 }, end: { line: 4, character: 0 } }],
+          },
+        });
+
+        expect(response).to.have.property("result");
+        expect(response.result!.edits).to.have.length.greaterThan(0);
+        // The cursor goes to the start of the first system.
+        expect(response.result!.cursorRanges).to.have.length(1);
+        expect(response.result!.cursorRanges[0].start).to.deep.equal({ line: 4, character: 0 });
+      });
+
       it("never puts the cursor at the top of the file for a split of a multi-voice system", async () => {
         const source = ["X:1", "V:1", "V:2", "K:C", "[V:1] C D E F | G A B c |", "[V:2] c B A G | F E D C |", ""].join("\n");
         documents.set("file:///path/to/file.abc", createMockAbcDocument(source));

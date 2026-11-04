@@ -467,6 +467,16 @@
         "category": "ABC"
       },
       {
+        "command": "abc.joinSystems",
+        "title": "ABC: Join System with Next",
+        "category": "ABC"
+      },
+      {
+        "command": "abc.interleaveVoices",
+        "title": "ABC: Interleave Voices",
+        "category": "ABC"
+      },
+      {
         "command": "abc.exportToMidi",
         "title": "ABC: Export to MIDI",
         "category": "ABC"
@@ -761,6 +771,14 @@
         },
         {
           "command": "abc.splitSystem",
+          "when": "editorLangId == abc"
+        },
+        {
+          "command": "abc.joinSystems",
+          "when": "editorLangId == abc"
+        },
+        {
+          "command": "abc.interleaveVoices",
           "when": "editorLangId == abc"
         },
         {
