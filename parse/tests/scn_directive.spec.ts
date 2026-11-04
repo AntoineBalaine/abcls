@@ -612,6 +612,31 @@ describe("Directive Scanner Tests", () => {
       expect(ctx.tokens.filter((t) => t.type === TT.IDENTIFIER).map((t) => t.lexeme)).to.deep.equal(["staves", "1a", "2b"]);
     });
 
+    it("scans 6b as one identifier in %%abcls-voices, instead of the number 6 and the unit b", () => {
+      const ctx = createCtx("%%abcls-voices show 6b");
+      scanDirective(ctx);
+      expect(ctx.tokens.filter((t) => t.type === TT.MEASUREMENT_UNIT)).to.have.length(0);
+      expect(ctx.tokens.filter((t) => t.type === TT.IDENTIFIER).map((t) => t.lexeme)).to.deep.equal(["abcls-voices", "show", "6b"]);
+    });
+
+    it("scans a list of voice ids of %%abcls-voices whole, whatever they look like", () => {
+      const ctx = createCtx("%%abcls-voices hide 5b 6_2 C 1a 3");
+      scanDirective(ctx);
+      expect(ctx.tokens.slice(2).map((t) => t.lexeme)).to.deep.equal(["hide", "5b", "6_2", "C", "1a", "3"]);
+      expect(ctx.tokens.slice(2).map((t) => t.type)).to.deep.equal([TT.IDENTIFIER, TT.IDENTIFIER, TT.IDENTIFIER, TT.IDENTIFIER, TT.IDENTIFIER, TT.NUMBER]);
+    });
+
+    it("scans a voice id that looks like a pitch as an identifier in %%score and %%staves", () => {
+      for (const source of ["%%score ( C 1 ) | B", "%%staves [ B C ] 1"]) {
+        const ctx = createCtx(source);
+        scanDirective(ctx);
+        expect(ctx.tokens.filter((t) => t.type === TT.NOTE_LETTER)).to.have.length(0);
+      }
+      const ctx = createCtx("%%score ( C 1 ) | B");
+      scanDirective(ctx);
+      expect(ctx.tokens.filter((t) => t.type === TT.IDENTIFIER).map((t) => t.lexeme)).to.deep.equal(["score", "C", "B"]);
+    });
+
     it("keeps plain numeric voice ids as numbers", () => {
       const ctx = createCtx("%%score 1 2 3");
       scanDirective(ctx);

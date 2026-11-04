@@ -30,18 +30,16 @@ export function scanDirective(ctx: Ctx): boolean {
   advance(ctx, 2);
   ctx.push(TT.STYLESHEET_DIRECTIVE);
 
-  // Voice IDs (e.g. "B") can look like ABC pitches; abcls-voices takes plain
-  // identifiers only, so its content must never be scanned as a pitch.
-  const isVoicesDirective = ctx.test(/abcls-voices\b/i);
-
-  // Because the voice ids of %%score and %%staves can start with a digit (such as "6_2" or "1a"),
-  // we must scan them as a whole before the number scanners split them into a number and a remainder.
-  const isStaffLayoutDirective = ctx.test(/(score|staves)\b/i);
+  // Because %%abcls-voices, %%score and %%staves hold voice ids and nothing else:
+  // - an id such as "B" or "C" looks like an ABC pitch, but must never be scanned as one, and
+  // - an id can start with a digit (such as "6b", "1a" or "6_2"), so we must scan it as a whole before the number
+  //   scanners split it into a number and a remainder (for "6b", the number 6 and the unit b).
+  const namesVoices = ctx.test(/(abcls-voices|score|staves)\b/i);
 
   while (!(isAtEnd(ctx) || ctx.test(pEOL) || ctx.test("%"))) {
-    if (isStaffLayoutDirective && digitLedVoiceId(ctx)) continue; // voice ids such as 6_2
+    if (namesVoices && digitLedVoiceId(ctx)) continue; // voice ids such as 6b or 6_2
     if (numberWithUnit(ctx)) continue; // number + unit (must come before number)
-    if (!isVoicesDirective && tuneBodyPitch(ctx)) continue; // ABC pitches (^c, _b, =f)
+    if (!namesVoices && tuneBodyPitch(ctx)) continue; // ABC pitches (^c, _b, =f)
 
     // Score/staves directive grouping symbols (check BEFORE identifier)
     if (singleChar(ctx, "(", TT.LPAREN)) continue;
