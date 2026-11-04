@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.1 (2026-11-03)
+
+### transform
+
+- add `multiplyRhythmRebar` and `divideRhythmRebar`, which change the lengths of the selected notes and re-bar the music: multiplying cuts each bar into bars of the meter's length (a note that crosses a new bar line is cut in two and tied, a bar of rest `X` is repeated, and a chord change of half a bar takes a whole bar), and dividing merges the bars again and joins the notes that were tied across the removed bar line
+- add `--rebar` to `abcls transform` for `multiplyRhythm` and `divideRhythm`, so that one command writes a cut-time copy of a tune: `abcls transform file.abc multiplyRhythm 2 --rebar --as-new-tune "cut time" -w`
+- stop with a message when a new bar line would fall inside a tuplet or a broken rhythm, when bars of rest carry different chord symbols, or when the factor is not a whole number
+
+### vscode-extension
+
+- add the commands "ABC: Double Rhythm Length and Re-bar" and "ABC: Halve Rhythm Length and Re-bar"
+
+### docs
+
+- describe the re-barring transforms and the `--rebar` flag in the transforms guide and the CLI reference
+
 ## 0.3.0 (2026-11-03)
 
 ### musicxml

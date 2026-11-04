@@ -1,6 +1,6 @@
 {
   "name": "abcls-cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Command-line tool for ABC music notation",
   "main": "../out/abc-cli/abcls-cli.js",
   "bin": {

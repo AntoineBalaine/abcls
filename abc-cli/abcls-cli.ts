@@ -21,7 +21,7 @@ import { xml2abcCommand } from "./commands/xml2abc";
 
 const program = new Command();
 
-program.name("abcls").description("ABC notation language server and CLI tools").version("0.3.0");
+program.name("abcls").description("ABC notation language server and CLI tools").version("0.3.1");
 
 // Add commands
 program.addCommand(formatCommand);

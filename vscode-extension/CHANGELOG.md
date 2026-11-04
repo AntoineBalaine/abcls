@@ -2,6 +2,11 @@
 
 All notable changes to the AbcLsp extension will be documented in this file.
 
+## [0.3.1] - 2026-11-03
+
+### Added
+- `ABC: Double Rhythm Length and Re-bar` and `ABC: Halve Rhythm Length and Re-bar`: like `Double Rhythm Length` and `Halve Rhythm Length`, but the bars follow. Doubling cuts each bar of the selection into bars of the meter's length (with ties where a note crosses a new bar line), and halving merges the bars again. Select whole bars before running them
+
 ## [0.3.0] - 2026-11-03
 
 ### Added
