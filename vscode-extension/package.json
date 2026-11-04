@@ -377,6 +377,16 @@
         "category": "ABC"
       },
       {
+        "command": "abc.multiplyRhythmRebar",
+        "title": "ABC: Double Rhythm Length and Re-bar",
+        "category": "ABC"
+      },
+      {
+        "command": "abc.divideRhythmRebar",
+        "title": "ABC: Halve Rhythm Length and Re-bar",
+        "category": "ABC"
+      },
+      {
         "command": "abc.addSharp",
         "title": "ABC: Add Sharp",
         "category": "ABC"
@@ -679,6 +689,14 @@
         },
         {
           "command": "abc.divideRhythm",
+          "when": "editorLangId == abc"
+        },
+        {
+          "command": "abc.multiplyRhythmRebar",
+          "when": "editorLangId == abc"
+        },
+        {
+          "command": "abc.divideRhythmRebar",
           "when": "editorLangId == abc"
         },
         {
