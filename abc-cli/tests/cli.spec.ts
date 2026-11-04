@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { expect } from "chai";
-import { clipRangesToLines, coerceArgs, parseLineRange } from "../commands/transform";
+import { clipRangesToLines, coerceArgs, parseLineRange, rebarTransformName } from "../commands/transform";
 
 /**
  * The CLI bundle that `npm test` builds with esbuild before the specs run.
@@ -94,6 +94,17 @@ describe("abcls CLI", () => {
     });
   });
 
+  describe("rebarTransformName", () => {
+    it("gives the re-barring version of multiplyRhythm and divideRhythm", () => {
+      expect(rebarTransformName("multiplyRhythm")).to.equal("multiplyRhythmRebar");
+      expect(rebarTransformName("divideRhythm")).to.equal("divideRhythmRebar");
+    });
+
+    it("refuses every other transform", () => {
+      expect(() => rebarTransformName("transpose")).to.throw(/only applies to/);
+    });
+  });
+
   describe("commands, run from the built bundle", () => {
     it("prints its help", () => {
       expect(runCli(["--help"])).to.include("Usage");
@@ -180,6 +191,26 @@ describe("abcls CLI", () => {
 
     it("transposes only the text between the line:column positions that --lines gives", () => {
       expect(musicLinesOf(runCli(["transform", LINES, "transpose", "2", "--voice", "1", "--lines", "6:3-7:3"]))).to.equal("C D E F| C E ^F G| D E E F|");
+    });
+
+    it("cuts each bar of the selected line into two bars of the doubled length with --rebar", () => {
+      expect(musicLinesOf(runCli(["transform", LINES, "multiplyRhythm", "2", "--rebar", "--lines", "6"]))).to.equal("C D E F| C2 D2| E2 F2| C D E F|");
+    });
+
+    it("merges the bars again when --rebar goes with divideRhythm", () => {
+      const doubled = runCli(["transform", LINES, "multiplyRhythm", "2", "--rebar", "--lines", "6"]);
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "abcls-rebar-"));
+      try {
+        const file = path.join(dir, "doubled.abc");
+        fs.writeFileSync(file, doubled);
+        expect(musicLinesOf(runCli(["transform", file, "divideRhythm", "2", "--rebar", "--lines", "6"]))).to.equal("C D E F| C D E F| C D E F|");
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses --rebar with a transform that does not change the rhythm", () => {
+      expect(failingCliErrors(["transform", LINES, "transpose", "2", "--rebar"])).to.include("The --rebar flag only applies to");
     });
 
     it("fails on an invalid --lines range", () => {

@@ -48,6 +48,16 @@ export function coerceArgs(transform: string, rawArgs: string[]): unknown[] {
 }
 
 /**
+ * Gives the name of the transform that re-bars, for the --rebar flag.
+ * Because only a multiplication or a division of the rhythm changes how many bars the music takes, no other transform has a re-barring version.
+ */
+export function rebarTransformName(name: string): string {
+  if (name === "multiplyRhythm") return "multiplyRhythmRebar";
+  if (name === "divideRhythm") return "divideRhythmRebar";
+  throw new Error('The --rebar flag only applies to the "multiplyRhythm" and "divideRhythm" transforms.');
+}
+
+/**
  * Converts a "from-to" pair of 1-indexed positions into a range. Each position is a line ("10"), which covers the whole
  * line, or a line and a column ("10:5"), where columns also count from 1 and the end column is included.
  * So "10-20" covers lines 10 to 20, and "10:5-12:20" goes from the 5th character of line 10 to the 20th of line 12.
@@ -187,6 +197,10 @@ export const transformCommand = new Command("transform")
   .option("--lines <range>", "Only transform these lines, or this text range (1-indexed, e.g. 10-20 or 10:5-12:20)")
   .option("--keys", "With transpose, also transpose the key signatures (the K: fields) so they follow the notes")
   .option("--chords", "With transpose, also transpose the chord symbols")
+  .option(
+    "--rebar",
+    "With multiplyRhythm or divideRhythm, also re-bar: multiplying cuts each bar into bars of the meter's length (with ties), dividing merges the bars again"
+  )
   .option("--as-new-tune <label>", 'Apply the transform to a copy of the tune, and append that copy to the file as a new tune titled "<title> (<label>)"')
   .option("--tune <number>", "With --as-new-tune, the X: number of the tune to copy (default: the first tune)")
   .option("-w, --write", "Write the result back to the file")
@@ -196,7 +210,7 @@ export const transformCommand = new Command("transform")
       file: string,
       name: string,
       args: string[],
-      options: { voice?: string; lines?: string; write?: boolean; keys?: boolean; chords?: boolean; asNewTune?: string; tune?: string }
+      options: { voice?: string; lines?: string; write?: boolean; keys?: boolean; chords?: boolean; rebar?: boolean; asNewTune?: string; tune?: string }
     ) => {
       const source = readAbcFile(file);
 
@@ -214,7 +228,8 @@ export const transformCommand = new Command("transform")
         const copy = options.asNewTune !== undefined ? copyTune(source, options.asNewTune, options.tune) : null;
         const target = copy === null ? source : copy.text;
         const ranges = selectedRanges(target, options.voice, options.lines, copy === null ? 0 : copy.lineOffset);
-        const transformed = runTransform({ source: target, transform: name, args: transformArgs, ranges });
+        const transformName = options.rebar ? rebarTransformName(name) : name;
+        const transformed = runTransform({ source: target, transform: transformName, args: transformArgs, ranges });
         if (!transformed.ok) throw new Error(transformed.error);
         const result = copy === null ? transformed.value : appendTune(source, transformed.value);
 
