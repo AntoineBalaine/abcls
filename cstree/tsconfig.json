@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
-    "outDir": "../out/cstree",
+    "outDir": "./dist",
     "rootDir": ".",
     "composite": true,
     "strict": true,

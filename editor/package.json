@@ -2,8 +2,8 @@
   "name": "abcls-editor",
   "version": "0.3.1",
   "private": true,
-  "main": "../out/editor/src/index.js",
-  "types": "../out/editor/src/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "dependencies": {
     "abcls-parser": "*",
     "abcls-cstree": "*"
