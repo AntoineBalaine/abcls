@@ -99,10 +99,10 @@
 
       var abc = `{editorContent}`;
 
-      // The tunes returned by the last render, and the editor's last selection
-      // (character offsets), kept so that the highlight survives a re-render.
+      // The tunes returned by the last render, and the editor's last selections
+      // (ranges of character offsets), kept so that the highlight survives a re-render.
       var renderedTunes = [];
-      var cursorRange = null;
+      var cursorRanges = [];
 
       function optionChanged() {
         drawTune(abc);
@@ -120,7 +120,7 @@
         var scrollY = window.scrollY;
         renderedTunes = ABCJS.renderAbc("paper", abcCode, options);
         window.scrollTo(scrollX, scrollY);
-        highlightCursorRange();
+        highlightCursorRanges();
 
         const showSource = options.showTransposedSource;
         const source = document.getElementById("source");
@@ -180,16 +180,33 @@
       }
 
       /**
-       * Highlights the notes covered by the editor's selection, and scrolls the
+       * Highlights the notes covered by every selection of the editor, and scrolls the
        * first of them into view when it is off screen. abcjs matches a collapsed
        * cursor against the element that ends at the cursor, the way its own
        * editor does.
+       *
+       * Because each call of rangeHighlight clears what the previous call highlighted, a single call can show only
+       * one range. We call it once per range to find the elements of that range, collect them all, highlight them
+       * together, and record them in the engraver's list of selected elements, so that the next call clears them all.
        */
-      function highlightCursorRange() {
+      function highlightCursorRanges() {
         var tune = renderedTunes[0];
-        if (!cursorRange || !tune || !tune.engraver) return;
-        tune.engraver.rangeHighlight(cursorRange.start, cursorRange.end);
-        var first = tune.engraver.selected && tune.engraver.selected[0];
+        if (!cursorRanges.length || !tune || !tune.engraver) return;
+        var engraver = tune.engraver;
+        var collected = [];
+        for (var i = 0; i < cursorRanges.length; i++) {
+          engraver.rangeHighlight(cursorRanges[i].start, cursorRanges[i].end);
+          for (var j = 0; j < engraver.selected.length; j++) {
+            if (collected.indexOf(engraver.selected[j]) === -1) {
+              collected.push(engraver.selected[j]);
+            }
+          }
+        }
+        for (var k = 0; k < collected.length; k++) {
+          collected[k].highlight(undefined, engraver.selectionColor);
+        }
+        engraver.selected = collected;
+        var first = collected[0];
         var element = first && first.elemset && first.elemset[0];
         if (element && element.scrollIntoView) {
           element.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -233,8 +250,8 @@
             break;
 
           case "cursorMove":
-            cursorRange = { start: message.start, end: message.end };
-            highlightCursorRange();
+            cursorRanges = message.ranges || [];
+            highlightCursorRanges();
             break;
 
           case "setTheme":

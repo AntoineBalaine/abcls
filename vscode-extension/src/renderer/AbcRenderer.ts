@@ -9,7 +9,7 @@ import { pathToFileURL } from "url";
 import { ABCContext, AbcErrorReporter, filterVoicesInAbcWithDeletions } from "abcls-parser";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
-import { createPreviewSyncState, documentRangeForPreviewClick, FilteredPreview, PreviewSyncState, previewRangeForSelection } from "./cursorSync";
+import { createPreviewSyncState, documentRangeForPreviewClick, FilteredPreview, PreviewSyncState, previewRangesForSelections } from "./cursorSync";
 
 let panel: vscode.WebviewPanel | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -253,23 +253,22 @@ async function updatePreview(eventArgs: vscode.TextEditor | vscode.TextDocumentC
 }
 
 /**
- * Sends the editor's selection to the preview, which highlights the notes it
- * covers. Nothing is sent when the preview's offsets do not match the
- * document's, so that a highlight made by clicking in the preview is kept.
+ * Sends the editor's selections to the preview, which highlights the notes they
+ * cover. Because an editor can hold several cursors, every selection is sent, and not only the first one.
+ * Nothing is sent when the preview's offsets do not match the document's, or when
+ * no selection lies in a shown voice, so that a highlight made by clicking in the preview is kept.
  */
 async function postCursorPosition(editor: vscode.TextEditor | undefined) {
   if (!panel || !editor) return;
   const document = editor.document;
-  const selection = editor.selection;
-  const range = previewRangeForSelection(
+  const ranges = previewRangesForSelections(
     previewSyncState,
     document.uri.toString(),
     document.version,
-    document.offsetAt(selection.anchor),
-    document.offsetAt(selection.active)
+    editor.selections.map((selection) => ({ anchor: document.offsetAt(selection.anchor), active: document.offsetAt(selection.active) }))
   );
-  if (!range) return;
-  await panel.webview.postMessage({ command: "cursorMove", start: range.start, end: range.end });
+  if (!ranges || ranges.length === 0) return;
+  await panel.webview.postMessage({ command: "cursorMove", ranges });
 }
 
 /**

@@ -82,6 +82,37 @@ export function previewRangeForSelection(
   return originalRangeToFiltered(start, end, state.deletions);
 }
 
+/** One editor selection, as the offsets of its two ends. The anchor may come after the active end. */
+export interface SelectionOffsets {
+  anchor: number;
+  active: number;
+}
+
+/**
+ * Returns the ranges that the preview should highlight for all the selections of the editor, in the order of the selections.
+ *
+ * Because an editor can hold several cursors, each selection is converted on its own. A selection that lies inside a
+ * hidden voice has nothing to highlight and is left out. Returns null, as `previewRangeForSelection` does, when the
+ * preview cannot show the editor's selections at all, so that a highlight made by clicking in the preview is kept.
+ */
+export function previewRangesForSelections(
+  state: PreviewSyncState | undefined,
+  uri: string,
+  version: number,
+  selections: readonly SelectionOffsets[]
+): PreviewRange[] | null {
+  if (!state || state.deletions === null) return null;
+  if (state.uri !== uri || state.version !== version) return null;
+  const ranges: PreviewRange[] = [];
+  for (const selection of selections) {
+    const range = previewRangeForSelection(state, uri, version, selection.anchor, selection.active);
+    if (range !== null) {
+      ranges.push(range);
+    }
+  }
+  return ranges;
+}
+
 /**
  * Returns the range of the document that a click in the preview points at.
  *
