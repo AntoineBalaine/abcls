@@ -43,7 +43,49 @@ function simulateApplyTransform(
   return { newText, survivingIds, rangeCount: survivingIds.length };
 }
 
+/**
+ * Applies a context-aware transform to all the notes, chords and rests of a source, the way the server does for a selection that covers them.
+ */
+function applyToWholeSource(source: string, transformName: string): string {
+  const ctx = new ABCContext();
+  const ast = parse(Scanner(source, ctx), ctx);
+  const root = fromAst(ast, ctx);
+  // Because the server selects the node types of TRANSFORM_NODE_TAGS, the selection holds the notes, the chords and every kind of rest.
+  const tags = [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER, TAGS.MultiMeasureRest];
+  const ids = new Set(tags.flatMap((tag) => findByTag(root, tag)).map((node) => node.id));
+  const transformFn = lookupTransform(transformName);
+  if (!transformFn) throw new Error(`Unknown transform: ${transformName}`);
+  const result = transformFn({ root, cursors: [ids] }, ctx, interpretContext(ast, ctx));
+  return serializeCSTree(result.root, ctx);
+}
+
+/**
+ * Keeps the music lines of a result, with one space around each bar line, so that the spacing that the writer chooses does not matter.
+ */
+function musicOf(text: string): string {
+  return text.split("\n").slice(4).join("\n").replace(/[ \t]+/g, " ").replace(/ ?\| ?/g, " | ").replace(/ +\n/g, "\n").trim();
+}
+
 describe("Transform integration (simulated LSP flow)", () => {
+  describe("multiplyRhythmRebar and divideRhythmRebar", () => {
+    const source = 'X:1\nM:C\nL:1/8\nK:F\n[V:1] G2 G2 _B2 f2- | f4 g4 |\n[V:2] "Gm" x4 "Dm" x4 | "F" X |\n';
+
+    it("are context-aware, so that the server gives them the snapshots that tell the length of a bar", () => {
+      expect(CONTEXT_AWARE_TRANSFORMS.has("multiplyRhythmRebar")).to.equal(true);
+      expect(CONTEXT_AWARE_TRANSFORMS.has("divideRhythmRebar")).to.equal(true);
+    });
+
+    it("double the lengths and cut the bars to the length of the meter, with the factor that the server leaves out", () => {
+      const doubled = applyToWholeSource(source, "multiplyRhythmRebar");
+      expect(musicOf(doubled)).to.equal('[V:1] G4 G4 | _B4 f4- | f8 | g8 |\n[V:2] "Gm" x8 | "Dm" x8 | "F" X | X |');
+    });
+
+    it("halve the lengths and merge the bars again", () => {
+      const doubled = applyToWholeSource(source, "multiplyRhythmRebar");
+      expect(musicOf(applyToWholeSource(doubled, "divideRhythmRebar"))).to.equal(musicOf(source));
+    });
+  });
+
   describe("transpose", () => {
     it("transposes all notes and preserves cursor state", () => {
       const source = "X:1\nK:C\nCDE|\n";

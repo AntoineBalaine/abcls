@@ -35,6 +35,8 @@ import {
   addFlat,
   multiplyRhythm,
   divideRhythm,
+  multiplyRhythmRebar,
+  divideRhythmRebar,
   legato,
   toSlashNotation,
   parallelVoicing,
@@ -77,6 +79,9 @@ const TRANSFORM_MAP: Record<string, TransformFn> = {
   addFlat: (sel, ctx) => addFlat(sel, ctx),
   multiplyRhythm: (sel, ctx, ...args) => multiplyRhythm(sel, args[0] !== undefined ? Number(args[0]) : 2, ctx),
   divideRhythm: (sel, ctx, ...args) => divideRhythm(sel, args[0] !== undefined ? Number(args[0]) : 2, ctx),
+  // For the re-barring versions, args are: [snapshots, factor] (the snapshots give the length of a bar)
+  multiplyRhythmRebar: (sel, ctx, ...args) => multiplyRhythmRebar(sel, ctx, args[0] as DocumentSnapshots, args[1] !== undefined ? Number(args[1]) : 2),
+  divideRhythmRebar: (sel, ctx, ...args) => divideRhythmRebar(sel, ctx, args[1] !== undefined ? Number(args[1]) : 2),
   legato: (sel, ctx) => legato(sel, ctx),
   toSlashNotation: (sel, ctx, ...args) => toSlashNotation(sel, ctx, args[0] as DocumentSnapshots),
   // For context-aware transforms, socketHandler prepends snapshots at args[0]
@@ -129,4 +134,6 @@ export const CONTEXT_AWARE_TRANSFORMS = new Set([
   "splitSystems",
   "enharmonizeToKey",
   "explosion",
+  "multiplyRhythmRebar",
+  "divideRhythmRebar",
 ]);

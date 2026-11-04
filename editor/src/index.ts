@@ -123,6 +123,8 @@ export {
   addFlat,
   multiplyRhythm,
   divideRhythm,
+  multiplyRhythmRebar,
+  divideRhythmRebar,
   consolidateTiedNotes,
   legato,
   toSlashNotation,

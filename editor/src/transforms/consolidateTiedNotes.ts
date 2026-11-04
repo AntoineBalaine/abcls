@@ -38,7 +38,7 @@ function hasTie(node: CSNode): boolean {
 /**
  * Checks if two notes have identical pitch (same letter, accidental, octave).
  */
-function samePitch(a: CSNode, b: CSNode): boolean {
+export function samePitch(a: CSNode, b: CSNode): boolean {
   const pitchA = getPitchLexeme(a);
   const pitchB = getPitchLexeme(b);
   return pitchA !== null && pitchB !== null && pitchA === pitchB;
@@ -66,7 +66,7 @@ function getChordPitchLexemes(chordNode: CSNode): string[] {
 /**
  * Checks if two chords have identical pitch content.
  */
-function sameChordPitches(a: CSNode, b: CSNode): boolean {
+export function sameChordPitches(a: CSNode, b: CSNode): boolean {
   const pitchesA = getChordPitchLexemes(a);
   const pitchesB = getChordPitchLexemes(b);
   if (pitchesA.length !== pitchesB.length) return false;

@@ -36,6 +36,7 @@ export { explode, explode2, explode3, explode4 } from "./explode";
 export { addSharp, addFlat } from "./addAccidental";
 export { multiplyRhythm } from "./multiplyRhythm";
 export { divideRhythm } from "./divideRhythm";
+export { divideRhythmRebar, multiplyRhythmRebar } from "./rebar";
 export { legato } from "./legato";
 export { toSlashNotation } from "./toSlashNotation";
 export { parallelVoicing, parallelDiatonic, parallelChromatic, ParallelDirection, ParallelMode } from "./parallel";

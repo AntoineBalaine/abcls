@@ -5,7 +5,7 @@ import { TAGS } from "../csTree/types";
  * Because these transforms operate on the sequential relationship between nodes,
  * they need to see all nodes together rather than each node in isolation.
  */
-export const GROUPED_CURSOR_TRANSFORMS = new Set(["legato", "consolidateRests", "toSlashNotation", "explosion"]);
+export const GROUPED_CURSOR_TRANSFORMS = new Set(["legato", "consolidateRests", "toSlashNotation", "explosion", "multiplyRhythmRebar", "divideRhythmRebar"]);
 
 /**
  * Transforms that operate on cursor positions rather than selected nodes.
@@ -44,5 +44,8 @@ export const TRANSFORM_NODE_TAGS: Record<string, string[]> = {
   legato: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER],
   toSlashNotation: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.MultiMeasureRest],
   multiplyRhythm: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER],
+  // Because a bar of rest (X) must be repeated too, the re-barring versions also select the multi-measure rests.
+  multiplyRhythmRebar: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER, TAGS.MultiMeasureRest],
+  divideRhythmRebar: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER, TAGS.MultiMeasureRest],
   divideRhythm: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER],
 };
