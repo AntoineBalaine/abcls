@@ -8,6 +8,7 @@
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
 import { Range } from "vscode-languageserver-types";
+import { VoicingArgs, resolveVoices } from "./voicingArgs";
 
 interface ApplyTransformResult {
   textEdits: Array<{
@@ -253,8 +254,18 @@ export function registerTransformCommands(context: vscode.ExtensionContext, clie
     ["abc.harmonizeSpread", "spread"],
   ];
 
+  // Because a user keybinding can pass { "voices": 5 }, each preset reads its number of voices from its argument.
   for (const [commandId, voicing] of voicingPresets) {
-    context.subscriptions.push(vscode.commands.registerCommand(commandId, () => applyTransform(client, "harmonizeVoicing", [voicing, 4, null], statusBarItem)));
+    context.subscriptions.push(
+      vscode.commands.registerCommand(commandId, (args?: VoicingArgs) => {
+        const voices = resolveVoices(args);
+        if (voices === undefined) {
+          vscode.window.showErrorMessage("Voice count must be 4, 5 or 6");
+          return;
+        }
+        return applyTransform(client, "harmonizeVoicing", [voicing, voices, null], statusBarItem);
+      })
+    );
   }
 
   // Chord revoicing commands: these act on selected chords.

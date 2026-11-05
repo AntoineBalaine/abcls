@@ -807,6 +807,40 @@
     "configuration": {
       "title": "abc",
       "properties": {
+        "abc.keymap": {
+          "type": "object",
+          "default": {},
+          "description": "Changes to the keys of the select and transform menus. The keys \"select\" and \"transform\" each hold an object that maps a key, written in the Kakoune notation (for example \"d\", \"<a-t>\" or \"<c-up>\"), to a binding that is merged into the default one, or to null to remove it.",
+          "scope": "window"
+        },
+        "abc.keyboardLayout": {
+          "type": "string",
+          "enum": [
+            "qwerty",
+            "bepo"
+          ],
+          "enumDescriptions": [
+            "The US QWERTY layout.",
+            "The BÉPO layout."
+          ],
+          "default": "qwerty",
+          "description": "The layout that the keyboard view of the select and transform menus draws.",
+          "scope": "application"
+        },
+        "abc.keyboardGeometry": {
+          "type": "string",
+          "enum": [
+            "staggered",
+            "ortholinear"
+          ],
+          "enumDescriptions": [
+            "The rows are shifted against each other, as on most keyboards.",
+            "The keys are in aligned columns."
+          ],
+          "default": "staggered",
+          "description": "The geometry that the keyboard view of the select and transform menus draws.",
+          "scope": "application"
+        },
         "abc.midiInput.input": {
           "type": "string",
           "default": "",
