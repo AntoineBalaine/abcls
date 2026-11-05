@@ -455,7 +455,7 @@ async function applyPositionBasedTransform(
   }
 }
 
-async function applyTransform(client: LanguageClient, transform: string, args: unknown[], statusBarItem: vscode.StatusBarItem): Promise<void> {
+export async function applyTransform(client: LanguageClient, transform: string, args: unknown[], statusBarItem: vscode.StatusBarItem): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor || editor.document.languageId !== "abc") return;
 

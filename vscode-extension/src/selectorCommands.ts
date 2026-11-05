@@ -46,6 +46,41 @@ export function updateStatusBar(statusBarItem: vscode.StatusBarItem, selectionCo
   }
 }
 
+/**
+ * Applies a selector by its name to the current editor, using the non-empty selections as the scope.
+ *
+ * Because the keymap menu and the commands both need it, the request and the handling of its result live here once.
+ * A selector that finds nothing leaves the selections as they were when a scope was given.
+ */
+export async function applySelectorByName(client: LanguageClient, selectorName: string, args: unknown[], statusBarItem: vscode.StatusBarItem): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.languageId !== "abc") return;
+
+  const uri = editor.document.uri.toString();
+  const ranges = getSelectionRanges(editor);
+
+  try {
+    const result = await client.sendRequest<ApplySelectorResult>("abc.applySelector", {
+      uri,
+      selector: selectorName,
+      ...(args.length > 0 ? { args } : {}),
+      ranges,
+    });
+
+    if (result.ranges.length > 0) {
+      applySelectionsToEditor(editor, result.ranges);
+      updateStatusBar(statusBarItem, result.ranges.length);
+    } else if (ranges) {
+      // Silent no-op: selection provided but no matches found
+      // Leave the original selection intact
+    } else {
+      statusBarItem.hide();
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage(`Selector command failed: ${error}`);
+  }
+}
+
 export function registerSelectorCommands(context: vscode.ExtensionContext, client: LanguageClient, statusBarItem: vscode.StatusBarItem): void {
   const selectorCommands: Array<[string, string]> = [
     ["abc.selectChords", "selectChords"],
@@ -66,35 +101,7 @@ export function registerSelectorCommands(context: vscode.ExtensionContext, clien
   ];
 
   for (const [commandId, selectorName] of selectorCommands) {
-    context.subscriptions.push(
-      vscode.commands.registerCommand(commandId, async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor || editor.document.languageId !== "abc") return;
-
-        const uri = editor.document.uri.toString();
-        const ranges = getSelectionRanges(editor);
-
-        try {
-          const result = await client.sendRequest<ApplySelectorResult>("abc.applySelector", {
-            uri,
-            selector: selectorName,
-            ranges,
-          });
-
-          if (result.ranges.length > 0) {
-            applySelectionsToEditor(editor, result.ranges);
-            updateStatusBar(statusBarItem, result.ranges.length);
-          } else if (ranges) {
-            // Silent no-op: selection provided but no matches found
-            // Leave the original selection intact
-          } else {
-            statusBarItem.hide();
-          }
-        } catch (error) {
-          vscode.window.showErrorMessage(`Selector command failed: ${error}`);
-        }
-      })
-    );
+    context.subscriptions.push(vscode.commands.registerCommand(commandId, () => applySelectorByName(client, selectorName, [], statusBarItem)));
   }
 
   // selectNthFromTop requires a numeric argument from user input
@@ -109,28 +116,7 @@ export function registerSelectorCommands(context: vscode.ExtensionContext, clien
       });
       if (input === undefined) return;
 
-      const uri = editor.document.uri.toString();
-      const ranges = getSelectionRanges(editor);
-
-      try {
-        const result = await client.sendRequest<ApplySelectorResult>("abc.applySelector", {
-          uri,
-          selector: "selectNthFromTop",
-          args: [Number(input)],
-          ranges,
-        });
-
-        if (result.ranges.length > 0) {
-          applySelectionsToEditor(editor, result.ranges);
-          updateStatusBar(statusBarItem, result.ranges.length);
-        } else if (ranges) {
-          // Silent no-op: selection provided but no matches found
-        } else {
-          statusBarItem.hide();
-        }
-      } catch (error) {
-        vscode.window.showErrorMessage(`Selector command failed: ${error}`);
-      }
+      await applySelectorByName(client, "selectNthFromTop", [Number(input)], statusBarItem);
     })
   );
 
@@ -145,28 +131,7 @@ export function registerSelectorCommands(context: vscode.ExtensionContext, clien
       });
       if (input === undefined) return;
 
-      const uri = editor.document.uri.toString();
-      const ranges = getSelectionRanges(editor);
-
-      try {
-        const result = await client.sendRequest<ApplySelectorResult>("abc.applySelector", {
-          uri,
-          selector: "selectVoices",
-          args: [input],
-          ranges,
-        });
-
-        if (result.ranges.length > 0) {
-          applySelectionsToEditor(editor, result.ranges);
-          updateStatusBar(statusBarItem, result.ranges.length);
-        } else if (ranges) {
-          // Silent no-op: selection provided but no matches found
-        } else {
-          statusBarItem.hide();
-        }
-      } catch (error) {
-        vscode.window.showErrorMessage(`Selector command failed: ${error}`);
-      }
+      await applySelectorByName(client, "selectVoices", [input], statusBarItem);
     })
   );
 
