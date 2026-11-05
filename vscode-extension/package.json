@@ -437,6 +437,11 @@
         "category": "ABC"
       },
       {
+        "command": "abc.harmonizeSpread",
+        "title": "ABC: Harmonize Spread Voicing",
+        "category": "ABC"
+      },
+      {
         "command": "abc.parallelVoicing",
         "title": "ABC: Parallel Voicing",
         "category": "ABC"
@@ -747,6 +752,10 @@
         },
         {
           "command": "abc.harmonizeCluster",
+          "when": "editorLangId == abc"
+        },
+        {
+          "command": "abc.harmonizeSpread",
           "when": "editorLangId == abc"
         },
         {

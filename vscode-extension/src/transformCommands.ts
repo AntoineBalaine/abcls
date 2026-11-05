@@ -250,6 +250,7 @@ export function registerTransformCommands(context: vscode.ExtensionContext, clie
   const voicingPresets: Array<[string, string]> = [
     ["abc.harmonizeClose", "close"],
     ["abc.harmonizeCluster", "cluster"],
+    ["abc.harmonizeSpread", "spread"],
   ];
 
   for (const [commandId, voicing] of voicingPresets) {
@@ -270,7 +271,7 @@ export function registerTransformCommands(context: vscode.ExtensionContext, clie
   // Chord-symbol voicing with voice count prompt
   context.subscriptions.push(
     vscode.commands.registerCommand("abc.harmonizeVoicing", async () => {
-      const voicing = await vscode.window.showQuickPick(["close", "cluster"], {
+      const voicing = await vscode.window.showQuickPick(["close", "cluster", "spread"], {
         placeHolder: "Select voicing type",
       });
       if (!voicing) return;

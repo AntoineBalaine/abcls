@@ -68,11 +68,14 @@ After (harmonize +3): K:C  [CE] [EG] [GB]
 
 Builds a fully-voiced chord under a selected lead note, using the current chord symbol (or a diatonic chord derived from the key). Context-aware.
 
-Available voicing types: `close`, `cluster`. (`spread` also exists but has no dedicated command yet.)
+Available voicing types: `close`, `cluster` and `spread`. A spread voicing puts the root in the bass and opens the chord up over a wide range.
+
+In Visual Studio Code, the commands are "ABC: Harmonize Close Voicing", "ABC: Harmonize Cluster Voicing" and "ABC: Harmonize Spread Voicing", which build four voices, and "ABC: Harmonize with Voicing", which also asks for the type and for the number of voices (4, 5 or 6).
 
 ```
 Before: "Cmaj7"C
-After (close voicing): "Cmaj7"[CEGB]
+After (close voicing): "Cmaj7"[E,G,B,C]
+After (spread voicing): "Cmaj7"[C,,E,B,C]
 ```
 
 ### parallelVoicing
