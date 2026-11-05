@@ -1,9 +1,9 @@
-import { fromAst, createSelection, selectChords, selectNotes, selectTop, selectVoices, TAGS } from "../src/index";
 import { Scanner, parse, ABCContext, File_structure } from "abcls-parser";
 import { expect } from "chai";
 import { describe, it } from "mocha";
-import { computeNodeRange } from "../src/utils/rangeUtils";
+import { fromAst, createSelection, selectChords, selectNotes, selectTop, selectVoices, TAGS } from "../src/index";
 import { resolveSelectionRanges, resolveContiguousRanges, findNodeById, findNodesInRange } from "../src/runner/selectionRangeResolver";
+import { computeNodeRange } from "../src/utils/rangeUtils";
 
 function parseAbc(source: string): { ast: File_structure; ctx: ABCContext } {
   const ctx = new ABCContext();
@@ -111,6 +111,39 @@ describe("findNodesInRange", () => {
     expect(ids).to.have.length(1);
     const found = findNodeById(root, ids[0]);
     expect(found?.tag).to.equal(TAGS.Chord);
+  });
+
+  it("selects only the notes that a range covers when it covers a part of a chord, and the chord when it covers the whole chord", () => {
+    const { ast, ctx } = parseAbc("X:1\nK:C\n[GBce]|\n");
+    const root = fromAst(ast, ctx);
+    const chord = findNodesInRange(root, computeNodeRange(root)!, [TAGS.Chord])[0];
+    const noteIds = [...findNodesInRange(root, computeNodeRange(root)!, [TAGS.Note])];
+    expect(noteIds).to.have.length(4);
+    // The notes below the top one are what "select all but top" gives: three ranges, one for each note.
+    const belowTop = noteIds.slice(0, 3).map((id) => computeNodeRange(findNodeById(root, id)!)!);
+    for (const range of belowTop) {
+      const found = findNodesInRange(root, range, [TAGS.Note, TAGS.Chord]);
+      expect(found).to.have.length(1);
+      expect(findNodeById(root, found[0])?.tag).to.equal(TAGS.Note);
+    }
+    // A range from the first to the third note covers three notes of the chord and not the chord, so it gives those three notes.
+    const first = computeNodeRange(findNodeById(root, noteIds[0])!)!;
+    const third = computeNodeRange(findNodeById(root, noteIds[2])!)!;
+    const found = findNodesInRange(root, { start: first.start, end: third.end }, [TAGS.Note, TAGS.Chord]);
+    expect(found).to.have.length(3);
+    expect(found.every((id) => findNodeById(root, id)?.tag === TAGS.Note)).to.equal(true);
+    // The range of the whole chord is the chord.
+    const whole = findNodesInRange(root, computeNodeRange(findNodeById(root, chord)!)!, [TAGS.Note, TAGS.Chord]);
+    expect(whole).to.deep.equal([chord]);
+  });
+
+  it("keeps a chord whole for a transform that works on chords only", () => {
+    const { ast, ctx } = parseAbc("X:1\nK:C\n[GBce]|\n");
+    const root = fromAst(ast, ctx);
+    const note = findNodesInRange(root, computeNodeRange(root)!, [TAGS.Note])[0];
+    const found = findNodesInRange(root, computeNodeRange(findNodeById(root, note)!)!, [TAGS.Chord]);
+    expect(found).to.have.length(1);
+    expect(findNodeById(root, found[0])?.tag).to.equal(TAGS.Chord);
   });
 
   it("includes rests and y-spacers when they are passed among the requested tags", () => {

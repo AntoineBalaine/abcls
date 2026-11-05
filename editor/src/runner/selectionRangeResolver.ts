@@ -1,7 +1,7 @@
+import { Range } from "abcls-parser";
 import { CSNode, TAGS } from "../csTree/types";
 import { Selection } from "../selection";
-import { computeNodeRange, rangesOverlap } from "../utils/rangeUtils";
-import { Range, Position } from "abcls-parser";
+import { computeNodeRange, rangeCovers, rangesOverlap } from "../utils/rangeUtils";
 
 export function findNodeById(root: CSNode, targetId: number): CSNode | null {
   if (root.id === targetId) return root;
@@ -86,10 +86,32 @@ export function resolveRanges(
     : resolveSelectionRanges(newSelection);
 }
 
+/**
+ * Collects the notes of a chord that the range overlaps, and nothing else.
+ * It is used when a range covers only a part of a chord.
+ */
+function collectNotesOfChord(chord: CSNode, editorRange: Range, result: number[]): void {
+  let child = chord.firstChild;
+  while (child) {
+    collectNodesInRange(child, editorRange, new Set([TAGS.Note]), result);
+    child = child.nextSibling;
+  }
+}
+
 function collectNodesInRange(node: CSNode, editorRange: Range, tags: Set<string>, result: number[]): void {
   if (tags.has(node.tag)) {
     const nodeRange = computeNodeRange(node);
     if (nodeRange && rangesOverlap(editorRange, nodeRange)) {
+      // Because a range that covers only some notes of a chord (for example the notes below the top one) means those notes, a chord that
+      // the range does not cover whole is not a target as a whole when the transform works on notes: its overlapping notes are the targets.
+      if (node.tag === TAGS.Chord && tags.has(TAGS.Note) && !rangeCovers(editorRange, nodeRange)) {
+        const notes: number[] = [];
+        collectNotesOfChord(node, editorRange, notes);
+        if (notes.length > 0) {
+          result.push(...notes);
+          return;
+        }
+      }
       result.push(node.id);
       // Because a matched node's descendants (e.g. a Chord's inner Notes) are part of
       // that node's own scope, we must not also collect them as separate selection targets.
