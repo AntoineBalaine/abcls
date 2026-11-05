@@ -951,8 +951,9 @@
   "scripts": {
     "vscode:prepublish": "npm run copy-jazz-midi && npm run package-bundle",
     "copy-jazz-midi": "node -e \"const fs=require('fs');const src=require('path').join('..','node_modules','jazz-midi');const dest=require('path').join('node_modules','jazz-midi');if(fs.existsSync(src)){fs.cpSync(src,dest,{recursive:true});console.log('Copied jazz-midi');}else{console.warn('jazz-midi not found');}\"",
-    "build": "tsc -p ./ && node esbuild.js",
-    "build:production": "tsc -p ./ && node esbuild.js --production",
+    "check-keymap": "tsx scripts/checkDefaultKeymap.ts",
+    "build": "npm run check-keymap && tsc -p ./ && node esbuild.js",
+    "build:production": "npm run check-keymap && tsc -p ./ && node esbuild.js --production",
     "compile": "tsc -p ./",
     "watch": "npm run watch-bundle",
     "watch-bundle": "node esbuild.js --watch",
