@@ -69,7 +69,8 @@ const TRANSFORM_MAP: Record<string, TransformFn> = {
   remove: (sel) => remove(sel),
   addVoice: (sel, ctx, ...args) => addVoice(sel, args[0] as string, args[1] as VoiceParams, ctx),
   harmonize: (sel, ctx, ...args) => harmonize(sel, args[0] as number, ctx),
-  consolidateRests: (sel, ctx) => consolidateRests(sel, ctx),
+  // The command asks for the deep mode, which also joins rests into dotted ones. The explode transforms call the conservative one.
+  consolidateRests: (sel, ctx) => consolidateRests(sel, ctx, { dotted: true }),
   insertVoiceLine: (sel, ctx, ...args) => insertVoiceLine(sel, args[0] as string, ctx),
   voiceInfoLineToInline: (sel, ctx) => voiceInfoLineToInline(sel, ctx),
   voiceInlineToInfoLine: (sel, ctx) => voiceInlineToInfoLine(sel, ctx),

@@ -174,12 +174,17 @@ After: z2 z D
 
 ### consolidateRests
 
-Merges consecutive rests into a single rest of the combined duration.
+Merges consecutive rests of the same type into as few rests as possible, as long as each resulting rest can be written as one note value. Because dotted values count, the rests of a bar such as `z4 z2` or `z2 z3 z` become `z6` when the unit note length is an eighth note.
 
 ```
 Before: z z z z
 After: z4
+
+Before: z4 z2 | z2 z3 z |
+After: z6 | z6 |
 ```
+
+The merge never creates a rest that would need a tie, so `z3 z2` stays as it is, and five rests of one unit become `z4 z`. Bar lines, notes, chord symbols, and the difference between `z` and `x` rests all end a run of rests.
 
 ### legato
 
