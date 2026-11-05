@@ -28,6 +28,8 @@ export interface MenuContext {
   shownWarning: string;
   /** True while a leaf runs, so that a second menu cannot start a second command on the same document. */
   busy: boolean;
+  /** The document in which the menu was opened: a change to another document closes the menu, and a change back to this one does not. */
+  openedIn: vscode.TextDocument | undefined;
   listeners: MenuListener[];
 }
 
@@ -67,6 +69,7 @@ async function applyState(ctx: MenuContext, next: MenuState): Promise<void> {
 export async function openMode(ctx: MenuContext, mode: MenuMode): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor || editor.document.languageId !== "abc" || ctx.busy) return;
+  ctx.openedIn = editor.document;
   await applyState(ctx, openMenu(mode));
 }
 
@@ -122,6 +125,7 @@ export function registerModalMenu(context: vscode.ExtensionContext, client: Lang
     keymap: DEFAULT_KEYMAP,
     shownWarning: "",
     busy: false,
+    openedIn: undefined,
     listeners: [],
   };
   reloadKeymap(ctx);
@@ -139,9 +143,10 @@ export function registerModalMenu(context: vscode.ExtensionContext, client: Lang
       return handleKey(ctx, args.notation);
     }),
     // Because the menu holds the keyboard only for one command, switching editors drops it, and the context key never stays set.
-    // The event also fires with no editor when the focus moves to a webview, and that must not close the menu.
+    // The event also fires with no editor when the focus moves to a webview, and when the view hands the focus back to the same document,
+    // and neither must close the menu: only another document does.
     vscode.window.onDidChangeActiveTextEditor((editor) => {
-      if (editor !== undefined) void closeMenu(ctx);
+      if (editor !== undefined && editor.document !== ctx.openedIn) void closeMenu(ctx);
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("abc.keymap")) reloadKeymap(ctx);

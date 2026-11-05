@@ -20,6 +20,23 @@ function menuViewTabs(): vscode.Tab[] {
   return vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) => tab.label === "ABC keys");
 }
 
+/**
+ * Sets abc.keymap and returns once the change event has reached the extension. The extension registered its listener first,
+ * so when the listener of the test runs, the extension has already reloaded its keymap.
+ */
+async function setKeymap(value: unknown): Promise<void> {
+  const changed = new Promise<void>((resolve) => {
+    const listener = vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("abc.keymap")) {
+        listener.dispose();
+        resolve();
+      }
+    });
+  });
+  await vscode.workspace.getConfiguration("abc").update("keymap", value, vscode.ConfigurationTarget.Global);
+  await changed;
+}
+
 async function waitFor(condition: () => boolean): Promise<boolean> {
   for (let attempt = 0; attempt < 50; attempt++) {
     if (condition()) return true;
@@ -69,18 +86,13 @@ suite("The modal menu", () => {
   });
 
   test("reports a command that does not exist and closes, instead of rejecting", async () => {
-    const configuration = vscode.workspace.getConfiguration("abc");
-    await configuration.update(
-      "keymap",
-      { select: { q: { label: "broken", category: "history", action: { kind: "command", name: "abc.noSuchCommand" } } } },
-      vscode.ConfigurationTarget.Global
-    );
+    await setKeymap({ select: { q: { label: "broken", category: "history", action: { kind: "command", name: "abc.noSuchCommand" } } } });
     try {
       await vscode.commands.executeCommand("abc.menu.select");
       await key("q");
       assert.strictEqual((await state()).open, false);
     } finally {
-      await configuration.update("keymap", undefined, vscode.ConfigurationTarget.Global);
+      await setKeymap(undefined);
     }
   });
 
@@ -117,12 +129,7 @@ suite("The modal menu", () => {
     const probe = vscode.commands.registerCommand("abc.testProbe", () => {
       ran++;
     });
-    const configuration = vscode.workspace.getConfiguration("abc");
-    await configuration.update(
-      "keymap",
-      { select: { q: { label: "probe", category: "history", action: { kind: "command", name: "abc.testProbe" } } } },
-      vscode.ConfigurationTarget.Global
-    );
+    await setKeymap({ select: { q: { label: "probe", category: "history", action: { kind: "command", name: "abc.testProbe" } } } });
     try {
       await vscode.commands.executeCommand("abc.menu.showView");
       assert.ok(await waitFor(() => menuViewTabs().length === 1));
@@ -134,8 +141,17 @@ suite("The modal menu", () => {
       assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), editor.document.uri.toString(), "the focus must be back in the ABC editor");
     } finally {
       probe.dispose();
-      await configuration.update("keymap", undefined, vscode.ConfigurationTarget.Global);
+      await setKeymap(undefined);
     }
+  });
+
+  test("keeps an open menu open when a group is clicked in the view, and then runs a key of the group", async () => {
+    await vscode.commands.executeCommand("abc.menu.transform");
+    await vscode.commands.executeCommand("abc.menu.showView");
+    assert.ok(await waitFor(() => menuViewTabs().length === 1));
+    await vscode.commands.executeCommand("workbench.action.focusSecondEditorGroup");
+    await vscode.commands.executeCommand("_abc.menu.viewMessage", { type: "press", notation: "g" });
+    assert.deepStrictEqual(await state(), { open: true, mode: "transform", path: ["g"], count: "" });
   });
 
   test("ignores a message of the view that has no valid shape", async () => {

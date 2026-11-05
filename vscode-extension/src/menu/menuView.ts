@@ -8,6 +8,7 @@
  */
 
 import * as vscode from "vscode";
+import { KeyboardOptions, buildKeyboardModel } from "../keyboard/keyboardModel";
 import { Keymap } from "../keymap/types";
 import { MenuState } from "./menuState";
 import { makeNonce, renderWebviewHtml } from "./menuViewHtml";
@@ -55,7 +56,7 @@ function htmlFor(view: MenuViewContext, webview: vscode.Webview): string {
 function sendModel(host: Host, keymap: Keymap, state: MenuState): void {
   // Before the page is ready the message would be lost, and the ready message makes the extension send the current model.
   if (!host.ready) return;
-  const message: ToWebview = { type: "model", model: buildViewModel(keymap, state) };
+  const message: ToWebview = { type: "model", model: buildViewModel(keymap, state), keyboard: buildKeyboardModel(keymap, state, keyboardOptions()) };
   void host.webview.postMessage(message);
 }
 
@@ -79,7 +80,7 @@ function isToExtension(message: unknown): message is ToExtension {
 
 /**
  * A click in the view is a key press. When the menu is closed, the click first opens the mode that the view shows,
- * and afterwards the focus goes back to the editor. A message of another shape is ignored.
+ * and the focus goes back to the editor before the key is handled. A message of another shape is ignored.
  */
 export async function handleViewMessage(view: MenuViewContext, host: Host, message: unknown): Promise<void> {
   if (!isToExtension(message)) return;
@@ -88,9 +89,11 @@ export async function handleViewMessage(view: MenuViewContext, host: Host, messa
     sendModel(host, view.menu.keymap, view.menu.state);
     return;
   }
+  // A click leaves the focus in the webview, where there is no active editor and the menu cannot run a selector or a transform,
+  // so the focus goes back to the editor first. The menu stays open: it closes only when another document becomes active.
+  await restoreEditorFocus(view);
   if (!view.menu.state.open) await openMode(view.menu, view.menu.state.mode);
   await handleKey(view.menu, message.notation);
-  await restoreEditorFocus(view);
 }
 
 function attach(view: MenuViewContext, webview: vscode.Webview): Host {
@@ -125,6 +128,18 @@ export function showBesidePanel(view: MenuViewContext): void {
 export async function hideView(view: MenuViewContext): Promise<void> {
   view.panel?.dispose();
   if (view.viewHost) await vscode.commands.executeCommand("workbench.action.closePanel");
+}
+
+/** The layout, the geometry and the ISO keys that the settings ask the keyboard view to draw. A value that is not valid gives the default. */
+export function keyboardOptions(): KeyboardOptions {
+  const configuration = vscode.workspace.getConfiguration("abc");
+  const layout = configuration.get<string>("keyboardLayout", "qwerty");
+  const geometry = configuration.get<string>("keyboardGeometry", "staggered");
+  return {
+    layout: layout === "bepo" ? "bepo" : "qwerty",
+    geometry: geometry === "ortholinear" ? "ortholinear" : "staggered",
+    iso: configuration.get<boolean>("keyboardIsoKeys", false) === true,
+  };
 }
 
 function location(): string {
@@ -168,6 +183,16 @@ export function registerMenuView(context: vscode.ExtensionContext, menu: MenuCon
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(PANEL_VIEW_ID, provider, { webviewOptions: { retainContextWhenHidden: true } }),
+    // Because the keyboard model depends on the settings of the layout, a change of them draws the view again.
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (
+        event.affectsConfiguration("abc.keyboardLayout") ||
+        event.affectsConfiguration("abc.keyboardGeometry") ||
+        event.affectsConfiguration("abc.keyboardIsoKeys")
+      ) {
+        postModel(view, menu.keymap, menu.state);
+      }
+    }),
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       if (editor && editor.document.languageId === "abc") view.lastEditor = editor;
     }),

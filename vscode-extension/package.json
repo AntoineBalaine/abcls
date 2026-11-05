@@ -836,6 +836,12 @@
     "configuration": {
       "title": "abc",
       "properties": {
+        "abc.keyboardIsoKeys": {
+          "type": "boolean",
+          "default": false,
+          "description": "Draw the keys that only ISO keyboards have (the key next to the left Shift, and the key above Enter) in the keyboard view of the select and transform menus.",
+          "scope": "application"
+        },
         "abc.menuView.autoOpen": {
           "type": "boolean",
           "default": true,

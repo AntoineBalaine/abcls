@@ -1,0 +1,222 @@
+import * as assert from "assert";
+import { JSDOM } from "jsdom";
+import { buildKeyboardModel } from "../src/keyboard/keyboardModel";
+import { DEFAULT_KEYMAP } from "../src/keymap/defaultKeymap";
+import { openMenu } from "../src/menu/menuState";
+import { buildViewModel } from "../src/menu/menuViewModel";
+import { ToExtension } from "../src/menu/viewMessages";
+import { DEFAULT_UI, UiState, fitUnit, renderControls } from "./keyboardView";
+import { renderApp } from "./menuView";
+
+function render(mode: "select" | "transform", layout: "qwerty" | "bepo", ui: Partial<UiState> = {}) {
+  const dom = new JSDOM('<!DOCTYPE html><div id="root"></div>');
+  const root = dom.window.document.getElementById("root") as HTMLElement;
+  const posted: ToExtension[] = [];
+  const state = openMenu(mode);
+  const keyboard = buildKeyboardModel(DEFAULT_KEYMAP, state, { layout, geometry: "staggered", iso: false });
+  const saved: UiState[] = [];
+  const current: UiState = { ...DEFAULT_UI, ...ui };
+  renderApp(
+    root,
+    { type: "model", model: buildViewModel(DEFAULT_KEYMAP, state), keyboard },
+    current,
+    (message) => posted.push(message),
+    1200,
+    (next) => saved.push({ ...next })
+  );
+  return { dom, root, posted, saved, keyboard, ui: current };
+}
+
+function click(dom: JSDOM, node: Element): void {
+  node.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+}
+
+describe("the keyboard view", () => {
+  it("draws every cap as four cells, and the caps of the layout", () => {
+    const { root, keyboard } = render("transform", "qwerty");
+    const caps = root.querySelectorAll(".cap");
+    assert.strictEqual(caps.length, keyboard.caps.flat().length);
+    for (const cap of Array.from(caps)) assert.strictEqual(cap.querySelectorAll(".cell").length, 4);
+  });
+
+  it("puts a bound cell in its category, with the short name of its binding", () => {
+    const { root } = render("transform", "qwerty");
+    const cells = Array.from(root.querySelectorAll(".cell.b"));
+    const octave = cells.find((cell) => cell.querySelector(".lab")?.textContent === "octave up");
+    assert.ok(octave && octave.classList.contains("c-pitch"));
+    assert.ok(cells.some((cell) => cell.querySelector(".lab")?.textContent === "harm. 8ve up"));
+  });
+
+  it("marks a group with an arrow and a new key with a tag", () => {
+    const { root } = render("select", "qwerty");
+    const cells = Array.from(root.querySelectorAll(".cell.b"));
+    assert.ok(cells.some((cell) => cell.querySelector(".lab")?.textContent?.endsWith("›")));
+    assert.ok(cells.some((cell) => cell.querySelector(".nw")));
+  });
+
+  it("labels the count digits of the transform menu, and styles the dead keys", () => {
+    const { root } = render("transform", "qwerty");
+    assert.ok(Array.from(root.querySelectorAll(".cell.count .lab")).every((label) => label.textContent === "count"));
+    assert.ok(root.querySelectorAll(".cell.count").length >= 9);
+    assert.ok(root.querySelectorAll(".cell.dead").length > 0);
+  });
+
+  it("posts a press with the notation of the layer when a bound cell is clicked", () => {
+    const { dom, root, posted } = render("select", "qwerty");
+    const cell = Array.from(root.querySelectorAll(".cell.b")).find((candidate) => candidate.querySelector(".lab")?.textContent === "chords");
+    assert.ok(cell);
+    click(dom, cell);
+    assert.deepStrictEqual(posted, [{ type: "press", notation: "c" }]);
+  });
+
+  it("does not post anything when an unbound cell is clicked", () => {
+    const { dom, root, posted } = render("select", "qwerty");
+    const cell = root.querySelector(".cell:not(.b):not(.count)");
+    assert.ok(cell);
+    click(dom, cell);
+    assert.deepStrictEqual(posted, []);
+  });
+
+  it("fills the detail strip with the four layers of a key when it is hovered", () => {
+    const { dom, root } = render("transform", "qwerty");
+    assert.ok(root.querySelector(".detail .hint"));
+    const cell = Array.from(root.querySelectorAll(".cell.b")).find((candidate) => candidate.querySelector(".lab")?.textContent === "octave up");
+    assert.ok(cell);
+    cell.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
+    const rows = Array.from(root.querySelectorAll(".detail .layer-row"));
+    assert.strictEqual(rows.length, 4);
+    assert.ok(rows.some((row) => row.textContent?.includes("harmonize octave up") && row.textContent.includes("<a-t>")));
+  });
+
+  it("shows the tray with the Ctrl chords, and a click on one presses it", () => {
+    const { dom, root, posted } = render("transform", "qwerty");
+    const key = Array.from(root.querySelectorAll(".trayKey")).find((candidate) => candidate.querySelector(".key")?.textContent === "<c-up>");
+    assert.ok(key);
+    click(dom, key);
+    assert.deepStrictEqual(posted, [{ type: "press", notation: "<c-up>" }]);
+  });
+
+  it("fades the other layers when one layer is chosen under Show", () => {
+    const { root } = render("transform", "qwerty", { show: "2" });
+    assert.ok(root.querySelectorAll(".cell.on").length > 0);
+    assert.ok(root.querySelector(".cell.on")?.classList.contains("br"), "the AltGr layer is the bottom right cell");
+    assert.ok(Array.from(root.querySelectorAll(".cell.off")).every((cell) => !cell.classList.contains("br")));
+  });
+
+  it("draws the controls, and a change redraws and saves the choices", () => {
+    const { dom, root, saved, ui } = render("transform", "qwerty");
+    const choice = Array.from(root.querySelectorAll(".choice")).find((button) => button.textContent === "AltGr");
+    assert.ok(choice);
+    click(dom, choice);
+    assert.strictEqual(ui.show, "2");
+    assert.strictEqual(saved.length, 1);
+    assert.strictEqual(saved[0].show, "2");
+    assert.ok(root.querySelectorAll(".cell.off").length > 0, "the page must be drawn again");
+  });
+
+  it("shows only the list, or only the keyboard, as the view choice says", () => {
+    assert.strictEqual(render("select", "qwerty", { view: "list" }).root.querySelectorAll(".cap").length, 0);
+    assert.ok(render("select", "qwerty", { view: "list" }).root.querySelectorAll(".row").length > 0);
+    const board = render("select", "qwerty", { view: "keyboard" });
+    assert.ok(board.root.querySelectorAll(".cap").length > 0);
+    assert.strictEqual(board.root.querySelectorAll(".row").length, 0);
+  });
+
+  it("highlights the free keys when asked", () => {
+    assert.strictEqual(render("select", "qwerty").root.querySelectorAll(".cell.free").length, 0);
+    assert.ok(render("select", "qwerty", { free: true }).root.querySelectorAll(".cell.free").length > 0);
+  });
+
+  it("filters by category when a chip is chosen, and chooses it again to clear", () => {
+    const { dom, root, ui } = render("select", "qwerty");
+    const chip = root.querySelector(".chip.c-selectType");
+    assert.ok(chip);
+    click(dom, chip);
+    assert.strictEqual(ui.highlight, "selectType");
+    assert.ok(root.querySelectorAll(".cell.dim").length > 0);
+  });
+
+  it("shows only the list when the extension sent no keyboard model", () => {
+    const dom = new JSDOM('<!DOCTYPE html><div id="root"></div>');
+    const root = dom.window.document.getElementById("root") as HTMLElement;
+    renderApp(
+      root,
+      { type: "model", model: buildViewModel(DEFAULT_KEYMAP, openMenu("select")) },
+      { ...DEFAULT_UI },
+      () => undefined,
+      1200,
+      () => undefined
+    );
+    assert.strictEqual(root.querySelectorAll(".cap").length, 0);
+    assert.ok(root.querySelectorAll(".row").length > 0);
+  });
+
+  it("draws the BÉPO digits of the select menu in the Shift cell", () => {
+    const { root } = render("select", "bepo");
+    const cells = Array.from(root.querySelectorAll(".cell.tl.b"));
+    assert.ok(cells.some((cell) => cell.querySelector(".q")?.textContent === "1"));
+  });
+});
+
+describe("the page when the model changes", () => {
+  it("clears a highlight whose category is not in the new model, so that the board is not dimmed for good", () => {
+    const { root, ui } = render("select", "qwerty", { highlight: "voicing" });
+    assert.strictEqual(ui.highlight, null);
+    assert.strictEqual(root.querySelectorAll(".cell.dim").length, 0);
+  });
+
+  it("keeps the scroll of the board when it draws again", () => {
+    const { dom, root, ui } = render("select", "qwerty");
+    const wrap = root.querySelector(".board-wrap") as HTMLElement;
+    wrap.scrollLeft = 40;
+    const state = openMenu("select");
+    renderApp(
+      root,
+      {
+        type: "model",
+        model: buildViewModel(DEFAULT_KEYMAP, state),
+        keyboard: buildKeyboardModel(DEFAULT_KEYMAP, state, { layout: "qwerty", geometry: "staggered", iso: false }),
+      },
+      ui,
+      () => undefined,
+      1200,
+      () => undefined
+    );
+    assert.strictEqual((root.querySelector(".board-wrap") as HTMLElement).scrollLeft, 40);
+    void dom;
+  });
+
+  it("lets a bound cell be pressed from the keyboard", () => {
+    const { dom, root, posted } = render("select", "qwerty");
+    const cell = Array.from(root.querySelectorAll(".cell.b")).find((candidate) => candidate.querySelector(".lab")?.textContent === "chords") as HTMLElement;
+    assert.strictEqual(cell.getAttribute("role"), "button");
+    assert.strictEqual(cell.getAttribute("tabindex"), "0");
+    cell.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    cell.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "x", bubbles: true }));
+    assert.deepStrictEqual(posted, [{ type: "press", notation: "c" }]);
+  });
+});
+
+describe("renderControls", () => {
+  it("marks the choice that is current", () => {
+    const dom = new JSDOM("<!DOCTYPE html><div></div>");
+    const bar = renderControls(dom.window.document, { ...DEFAULT_UI, view: "keyboard", show: "1" }, () => undefined);
+    const pressed = Array.from(bar.querySelectorAll('[aria-pressed="true"]')).map((node) => node.textContent);
+    assert.deepStrictEqual(pressed, ["keyboard", "Shift"]);
+  });
+});
+
+describe("fitUnit", () => {
+  const keyboard = buildKeyboardModel(DEFAULT_KEYMAP, openMenu("select"), { layout: "qwerty", geometry: "staggered", iso: false });
+
+  it("keeps the caps between 84 and 112 pixels", () => {
+    assert.strictEqual(fitUnit(keyboard, 400), 84);
+    assert.strictEqual(fitUnit(keyboard, 5000), 112);
+    const middle = fitUnit(keyboard, 1300);
+    assert.ok(middle >= 84 && middle <= 112);
+  });
+
+  it("gives a default size when the width is not known", () => {
+    assert.strictEqual(fitUnit(keyboard, 0), 92);
+  });
+});

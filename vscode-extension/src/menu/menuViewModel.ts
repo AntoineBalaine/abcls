@@ -15,6 +15,8 @@ export interface ViewRow {
   category: string;
   isGroup: boolean;
   isNew: boolean;
+  /** What the key does, for the detail of a key: the kind and name of the action, or the size of a group. */
+  action: string;
 }
 
 export interface ViewModel {
@@ -26,6 +28,11 @@ export interface ViewModel {
   rows: ViewRow[];
 }
 
+function describeAction(node: KeymapNode): string {
+  if (node.type === "group") return `menu of ${Object.keys(node.children).length} keys`;
+  return node.action.kind === "mode" ? `switch to ${node.action.name}` : `${node.action.kind} ${node.action.name}`;
+}
+
 export function toRow(notation: string, node: KeymapNode): ViewRow {
   return {
     notation,
@@ -34,6 +41,7 @@ export function toRow(notation: string, node: KeymapNode): ViewRow {
     category: node.category,
     isGroup: node.type === "group",
     isNew: node.type === "leaf" && node.isNew === true,
+    action: describeAction(node),
   };
 }
 

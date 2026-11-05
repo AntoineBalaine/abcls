@@ -2,7 +2,7 @@ import * as assert from "assert";
 import { JSDOM } from "jsdom";
 import { ViewModel } from "../src/menu/menuViewModel";
 import { ToExtension } from "../src/menu/viewMessages";
-import { displayNotation, renderModel } from "./menuView";
+import { displayNotation, isModelMessage, loadUi, renderModel } from "./menuView";
 
 const MODEL: ViewModel = {
   mode: "transform",
@@ -10,12 +10,12 @@ const MODEL: ViewModel = {
   breadcrumb: ["transform", "voicing menu (count = voices)"],
   count: "5",
   rows: [
-    { notation: "c", label: "close voicing", short: "close voicing", category: "voicing", isGroup: false, isNew: false },
-    { notation: "s", label: "spread voicing", short: "spread", category: "voicing", isGroup: false, isNew: true },
-    { notation: "t", label: "octave up", short: "octave up", category: "pitch", isGroup: false, isNew: false },
-    { notation: "g", label: "voicing menu", short: "voicings", category: "voicing", isGroup: true, isNew: false },
-    { notation: "<c-up>", label: "octave up", short: "octave up", category: "pitch", isGroup: false, isNew: false },
-    { notation: "z", label: "custom", short: "custom", category: "madeUpByTheUser", isGroup: false, isNew: false },
+    { notation: "c", label: "close voicing", short: "close voicing", category: "voicing", isGroup: false, isNew: false, action: "x" },
+    { notation: "s", label: "spread voicing", short: "spread", category: "voicing", isGroup: false, isNew: true, action: "x" },
+    { notation: "t", label: "octave up", short: "octave up", category: "pitch", isGroup: false, isNew: false, action: "x" },
+    { notation: "g", label: "voicing menu", short: "voicings", category: "voicing", isGroup: true, isNew: false, action: "menu of 3 keys" },
+    { notation: "<c-up>", label: "octave up", short: "octave up", category: "pitch", isGroup: false, isNew: false, action: "x" },
+    { notation: "z", label: "custom", short: "custom", category: "madeUpByTheUser", isGroup: false, isNew: false, action: "x" },
   ],
 };
 
@@ -78,7 +78,7 @@ describe("renderModel", () => {
   it("writes text as text, so that a label cannot inject markup", () => {
     const { root } = render({
       ...MODEL,
-      rows: [{ notation: "q", label: "<img src=x onerror=alert(1)>", short: "x", category: "pitch", isGroup: false, isNew: false }],
+      rows: [{ notation: "q", label: "<img src=x onerror=alert(1)>", short: "x", category: "pitch", isGroup: false, isNew: false, action: "x" }],
     });
     assert.strictEqual(root.querySelector("img"), null);
   });
@@ -89,5 +89,46 @@ describe("displayNotation", () => {
     assert.strictEqual(displayNotation("<c-up>"), "<c-↑>");
     assert.strictEqual(displayNotation("<c-S-down>"), "<c-S-↓>");
     assert.strictEqual(displayNotation("t"), "t");
+  });
+});
+
+describe("loadUi", () => {
+  it("keeps the valid saved choices, and never the highlight", () => {
+    assert.deepStrictEqual(loadUi({ view: "keyboard", show: "2", free: true, highlight: "pitch" }), {
+      view: "keyboard",
+      show: "2",
+      free: true,
+      highlight: null,
+    });
+  });
+
+  it("gives the default to a field that is missing or has an unknown value", () => {
+    assert.deepStrictEqual(loadUi({ view: "other", show: "9", free: "yes" }), { view: "both", show: "all", free: false, highlight: null });
+    assert.deepStrictEqual(loadUi(undefined), { view: "both", show: "all", free: false, highlight: null });
+    assert.deepStrictEqual(loadUi(null), { view: "both", show: "all", free: false, highlight: null });
+    assert.deepStrictEqual(loadUi("text"), { view: "both", show: "all", free: false, highlight: null });
+  });
+});
+
+describe("isModelMessage", () => {
+  it("accepts a model, with or without a keyboard", () => {
+    assert.ok(isModelMessage({ type: "model", model: MODEL }));
+    assert.ok(isModelMessage({ type: "model", model: MODEL, keyboard: { caps: [], tray: [] } }));
+  });
+
+  it("rejects a message that the page could not draw, without throwing", () => {
+    for (const message of [
+      null,
+      undefined,
+      "x",
+      5,
+      {},
+      { type: "model" },
+      { type: "model", model: {} },
+      { type: "model", model: { rows: [], breadcrumb: [] }, keyboard: {} },
+      { type: "other", model: MODEL },
+    ]) {
+      assert.strictEqual(isModelMessage(message), false, JSON.stringify(message));
+    }
   });
 });
