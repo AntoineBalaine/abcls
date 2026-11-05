@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "lib": ["ES2021", "DOM"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": []
+  },
+  "include": [
+    "./*.ts",
+    "../src/menu/viewMessages.ts",
+    "../src/menu/menuViewModel.ts",
+    "../src/menu/categories.ts",
+    "../src/menu/menuState.ts",
+    "../src/keymap/types.ts",
+    "../src/keymap/resolve.ts"
+  ],
+  "exclude": ["./*.spec.ts"]
+}

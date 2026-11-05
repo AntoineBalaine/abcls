@@ -7,6 +7,7 @@ import * as vscode from "vscode";
 import { ExtensionContext } from "vscode";
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from "vscode-languageclient/node";
 import { registerCommands } from "./extensionCommands";
+import { registerMenuView } from "./menu/menuView";
 import { registerModalMenu } from "./menu/modalMenu";
 import { registerRendererCommands, setLspClient } from "./renderer";
 import { registerSelectorCommands } from "./selectorCommands";
@@ -91,7 +92,8 @@ export async function activate(context: ExtensionContext) {
   registerTransformCommands(context, client, statusBarItem);
 
   // Register the modal menu of the select and transform keys (depends on the selector and transform commands)
-  registerModalMenu(context, client, statusBarItem);
+  const menu = registerModalMenu(context, client, statusBarItem);
+  registerMenuView(context, menu);
 }
 
 export function deactivate(): Thenable<void> | undefined {

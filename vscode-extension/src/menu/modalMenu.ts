@@ -139,7 +139,10 @@ export function registerModalMenu(context: vscode.ExtensionContext, client: Lang
       return handleKey(ctx, args.notation);
     }),
     // Because the menu holds the keyboard only for one command, switching editors drops it, and the context key never stays set.
-    vscode.window.onDidChangeActiveTextEditor(() => closeMenu(ctx)),
+    // The event also fires with no editor when the focus moves to a webview, and that must not close the menu.
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (editor !== undefined) void closeMenu(ctx);
+    }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("abc.keymap")) reloadKeymap(ctx);
     })

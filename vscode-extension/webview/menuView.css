@@ -1,0 +1,164 @@
+:root {
+  --gap: 6px;
+}
+
+body {
+  margin: 0;
+  padding: 10px 14px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+/* one accent color for each category of the keymap */
+.c-selectType {
+  --cat: #6aa6e8;
+}
+.c-selectRhythm {
+  --cat: #4fcfc8;
+}
+.c-selectStructure {
+  --cat: #d6c26a;
+}
+.c-selectPosition {
+  --cat: #7fcf7f;
+}
+.c-selectDelimiter {
+  --cat: #c79ae0;
+}
+.c-pitch {
+  --cat: #ee8b72;
+}
+.c-harmony {
+  --cat: #ee7db4;
+}
+.c-rhythm {
+  --cat: #ebb25a;
+}
+.c-accidental {
+  --cat: #c9c7bf;
+}
+.c-voice {
+  --cat: #98a0b0;
+}
+.c-rest {
+  --cat: #8fb8a8;
+}
+.c-voicing {
+  --cat: #b4d86a;
+}
+.c-parallel {
+  --cat: #5ac8fa;
+}
+.c-layout {
+  --cat: #ffb86c;
+}
+.c-io {
+  --cat: #bd93f9;
+}
+.c-dynamics {
+  --cat: #ff79c6;
+}
+.c-history {
+  --cat: #9aa5b1;
+}
+.c-mode {
+  --cat: #ffd866;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  margin-bottom: 10px;
+}
+
+.crumb {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.crumb .node {
+  color: var(--vscode-descriptionForeground);
+}
+.crumb .current {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+.crumb .sep {
+  color: var(--vscode-disabledForeground);
+}
+.count {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-descriptionForeground);
+}
+.state {
+  margin-left: auto;
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+}
+.state.open {
+  color: var(--vscode-charts-green);
+}
+
+.category {
+  margin: 0 0 12px;
+}
+.category-name {
+  margin: 0 0 4px;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cat, var(--vscode-descriptionForeground));
+}
+
+.rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--gap);
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  background: color-mix(in srgb, var(--cat) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cat) 45%, var(--vscode-panel-border, transparent));
+  border-left-width: 3px;
+  border-radius: 4px;
+  font: inherit;
+}
+.row:hover {
+  background: color-mix(in srgb, var(--cat) 26%, transparent);
+}
+.row:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.key {
+  min-width: 2.4em;
+  padding: 0 5px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.92em;
+  text-align: center;
+  border: 1px solid var(--vscode-panel-border, currentColor);
+  border-radius: 3px;
+}
+.label {
+  flex: 1;
+}
+.marker {
+  color: var(--cat);
+}
+.tag {
+  font-size: 0.7em;
+  font-weight: 700;
+  color: var(--cat);
+}

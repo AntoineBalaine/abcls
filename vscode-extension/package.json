@@ -21,6 +21,16 @@
   "contributes": {
     "commands": [
       {
+        "command": "abc.menu.showView",
+        "title": "Show the menu view",
+        "category": "abc"
+      },
+      {
+        "command": "abc.menu.hideView",
+        "title": "Hide the menu view",
+        "category": "abc"
+      },
+      {
         "command": "abc.startMIDIInput",
         "title": "abc: MIDI Input: Start MIDI input",
         "group": "MIDI Input",
@@ -804,9 +814,48 @@
         "editor.semanticHighlighting.enabled": true
       }
     },
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "abcKeys",
+          "title": "ABC keys",
+          "icon": "$(keyboard)"
+        }
+      ]
+    },
+    "views": {
+      "abcKeys": [
+        {
+          "type": "webview",
+          "id": "abcMenuView",
+          "name": "ABC keys",
+          "when": "config.abc.menuView.location == panel"
+        }
+      ]
+    },
     "configuration": {
       "title": "abc",
       "properties": {
+        "abc.menuView.autoOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the view of the select and transform menus beside the editor every time a menu opens or the mode switches. With false, open it with the command abc: Show the menu view.",
+          "scope": "application"
+        },
+        "abc.menuView.location": {
+          "type": "string",
+          "enum": [
+            "beside",
+            "panel"
+          ],
+          "enumDescriptions": [
+            "In an editor column beside the current one.",
+            "In the bottom panel, which is as wide as the window and suits the keyboard view. It does not open by itself: open the tab ABC keys once."
+          ],
+          "default": "beside",
+          "description": "Where the view of the select and transform menus lives.",
+          "scope": "application"
+        },
         "abc.keymap": {
           "type": "object",
           "default": {},
@@ -2271,17 +2320,17 @@
     "copy-jazz-midi": "node -e \"const fs=require('fs');const src=require('path').join('..','node_modules','jazz-midi');const dest=require('path').join('node_modules','jazz-midi');if(fs.existsSync(src)){fs.cpSync(src,dest,{recursive:true});console.log('Copied jazz-midi');}else{console.warn('jazz-midi not found');}\"",
     "generate-keybindings": "tsx scripts/generateMenuKeybindings.ts",
     "check-keymap": "tsx scripts/checkDefaultKeymap.ts",
-    "build": "npm run generate-keybindings && npm run check-keymap && tsc -p ./ && node esbuild.js",
-    "build:production": "npm run generate-keybindings && npm run check-keymap && tsc -p ./ && node esbuild.js --production",
+    "build": "npm run generate-keybindings && npm run check-keymap && tsc -p ./ && tsc -p webview && node esbuild.js",
+    "build:production": "npm run generate-keybindings && npm run check-keymap && tsc -p ./ && tsc -p webview && node esbuild.js --production",
     "compile": "tsc -p ./",
     "watch": "npm run watch-bundle",
     "watch-bundle": "node esbuild.js --watch",
     "package-bundle": "node esbuild.js --production",
     "copy-binary": "node -e \"const fs=require('fs');const path=require('path');const os=require('os');const binDir='bin';const srcDir=path.join('..','native','build');const binaryName=os.platform()==='win32'?'mscore.exe':'mscore';fs.mkdirSync(binDir,{recursive:true});const src=path.join(srcDir,binaryName);const dest=path.join(binDir,binaryName);if(fs.existsSync(src)){fs.copyFileSync(src,dest);fs.chmodSync(dest,0o755);console.log('Copied',binaryName,'to',binDir);}else{console.warn('Warning:',src,'not found. Build native package first.');}\"",
     "pretest": "npm run compile && npm run lint",
-    "test": "mocha --require tsx 'src/**/*.spec.ts'",
-    "lint": "eslint src --ext ts",
-    "lint:fix": "eslint src --ext ts --fix",
+    "test": "mocha --require tsx 'src/**/*.spec.ts' 'webview/**/*.spec.ts'",
+    "lint": "eslint src webview scripts --ext ts",
+    "lint:fix": "eslint src webview scripts --ext ts --fix",
     "_test": "node ../out/vscode-extension/test/runTest.js",
     "package": "vsce package --out ..",
     "publish": "vsce publish"
