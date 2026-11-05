@@ -101,7 +101,7 @@ suite("The modal menu", () => {
     }
   });
 
-  test("reports a command that does not exist and closes, instead of rejecting", async () => {
+  test("reports a command that does not exist and stays open, instead of rejecting", async () => {
     await setKeymap({ select: { q: { label: "broken", category: "history", action: { kind: "command", name: "abc.noSuchCommand" } } } });
     try {
       await vscode.commands.executeCommand("abc.menu.select");
@@ -112,7 +112,7 @@ suite("The modal menu", () => {
     }
   });
 
-  test("opens the view beside the editor without taking the focus, and keeps it when the menu closes", async () => {
+  test("opens the view without taking the focus, and keeps it when the menu closes", async () => {
     const editor = vscode.window.activeTextEditor;
     assert.ok(editor && editor.document.languageId === "abc");
     await vscode.commands.executeCommand("abc.menu.transform");
