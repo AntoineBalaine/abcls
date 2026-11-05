@@ -29,6 +29,17 @@ describe("step", () => {
     assert.strictEqual(effect.kind === "run" && effect.count, 5);
   });
 
+  it("stays open after a command when the menu is sticky, with the path and the count cleared", () => {
+    const first = step(openMenu("transform"), DEFAULT_KEYMAP, { notation: "5" }, true).state;
+    const grouped = step(first, DEFAULT_KEYMAP, { notation: "g" }, true).state;
+    const result = step(grouped, DEFAULT_KEYMAP, { notation: "c" }, true);
+    assert.ok(result.effect.kind === "run" && result.effect.count === 5);
+    assert.deepStrictEqual(result.state, { open: true, mode: "transform", path: [], count: "" });
+    const next = step(result.state, DEFAULT_KEYMAP, { notation: "t" }, true);
+    assert.ok(next.effect.kind === "run" && next.effect.leaf.action.name === "transpose");
+    assert.strictEqual(step(next.state, DEFAULT_KEYMAP, { notation: "<esc>" }, true).state.open, false);
+  });
+
   it("does not take a bound digit for a count", () => {
     const { effect } = press(openMenu("transform"), "g", "2");
     assert.ok(effect.kind === "run" && effect.leaf.action.name === "dropVoicing" && effect.leaf.action.args[0] === "drop2");

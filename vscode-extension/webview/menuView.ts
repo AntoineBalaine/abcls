@@ -59,7 +59,6 @@ function renderHeader(doc: Document, model: ViewModel): HTMLElement {
   });
   header.append(crumb);
   if (model.mode === "transform") header.append(element(doc, "span", "count", `count ${model.count === "" ? "–" : model.count}`));
-  header.append(element(doc, "span", model.open ? "state open" : "state closed", model.open ? "menu open" : "menu closed"));
   return header;
 }
 
@@ -96,13 +95,17 @@ export function renderApp(root: HTMLElement, message: ToWebview, ui: UiState, po
   if (ui.highlight !== null && !categoriesOf(message).has(ui.highlight)) ui.highlight = null;
   const scrollLeft = root.querySelector(".board-wrap")?.scrollLeft ?? 0;
 
-  const parts: HTMLElement[] = [renderHeader(doc, message.model)];
+  // With a keyboard, the mode and the count are at the start of the line of the controls, which saves a line. Without one they have a line of their own.
+  const header = renderHeader(doc, message.model);
+  const parts: HTMLElement[] = message.keyboard ? [] : [header];
   if (message.keyboard) {
-    parts.push(renderControls(doc, ui, message.keyboard, post, rerender));
+    parts.push(renderControls(doc, ui, message.keyboard, post, rerender, header));
     if (ui.view !== "list") parts.push(renderKeyboard(doc, message.keyboard, ui, post, rerender, availableWidth));
   }
   if (ui.view !== "keyboard" || !message.keyboard) parts.push(renderList(doc, message.model, post));
   root.setAttribute("data-size", ui.size);
+  // Because the view stays open when the menu closes, a closed menu is shown dimmed: only an open menu takes the keys.
+  root.setAttribute("data-menu", message.model.open ? "open" : "closed");
   root.replaceChildren(...parts);
   // A page that is drawn again must not throw the board back to its left edge, which is what happens in a narrow panel at every key.
   const wrap = root.querySelector(".board-wrap");

@@ -17,6 +17,12 @@ export interface DispatchDeps {
   statusBarItem: vscode.StatusBarItem;
 }
 
+/** True when the active editor has only cursors, with no selected text. */
+function hasNothingSelected(): boolean {
+  const editor = vscode.window.activeTextEditor;
+  return editor !== undefined && editor.selections.every((selection) => selection.isEmpty);
+}
+
 export async function runLeaf(leaf: Leaf, count: number | undefined, deps: DispatchDeps): Promise<void> {
   const args = expandArgs(leaf.action.args, count);
   switch (leaf.action.kind) {
@@ -24,6 +30,13 @@ export async function runLeaf(leaf: Leaf, count: number | undefined, deps: Dispa
       await applySelectorByName(deps.client, leaf.action.name, args, deps.statusBarItem);
       return;
     case "transform":
+      // Because a transform acts on the selection, a bare cursor leaves it nothing to work on, and the command would return without a word.
+      if (hasNothingSelected()) {
+        vscode.window.showInformationMessage(
+          "Nothing is selected, so there is nothing to transform. Switch to the select menu with < or Tab, choose what to select, and switch back with > or Tab."
+        );
+        return;
+      }
       await applyTransform(deps.client, leaf.action.name, args, deps.statusBarItem);
       return;
     case "command":

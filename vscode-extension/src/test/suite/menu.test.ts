@@ -77,12 +77,28 @@ suite("The modal menu", () => {
     assert.deepStrictEqual(await state(), { open: true, mode: "select", path: [], count: "5" });
   });
 
-  test("closes after a command and ignores the keys while it is closed", async () => {
+  test("stays open after a command, and closes on Esc and then ignores the keys", async () => {
     await vscode.commands.executeCommand("abc.menu.select");
     await key("c");
+    assert.strictEqual((await state()).open, true);
+    await key("n");
+    assert.strictEqual((await state()).open, true);
+    await key("<esc>");
     assert.strictEqual((await state()).open, false);
     await key("c");
     assert.strictEqual((await state()).open, false);
+  });
+
+  test("closes after a command when the menu is not sticky", async () => {
+    const configuration = vscode.workspace.getConfiguration("abc");
+    await configuration.update("menu.sticky", false, vscode.ConfigurationTarget.Global);
+    try {
+      await vscode.commands.executeCommand("abc.menu.select");
+      await key("c");
+      assert.strictEqual((await state()).open, false);
+    } finally {
+      await configuration.update("menu.sticky", undefined, vscode.ConfigurationTarget.Global);
+    }
   });
 
   test("reports a command that does not exist and closes, instead of rejecting", async () => {
@@ -90,7 +106,7 @@ suite("The modal menu", () => {
     try {
       await vscode.commands.executeCommand("abc.menu.select");
       await key("q");
-      assert.strictEqual((await state()).open, false);
+      assert.strictEqual((await state()).open, true, "the menu stays open after a command that failed");
     } finally {
       await setKeymap(undefined);
     }
@@ -137,7 +153,7 @@ suite("The modal menu", () => {
       // The menu is closed here, so the click first opens the mode that the view shows, which is select.
       await vscode.commands.executeCommand("_abc.menu.viewMessage", { type: "press", notation: "q" });
       assert.strictEqual(ran, 1, "the clicked key must run its command once");
-      assert.strictEqual((await state()).open, false);
+      assert.strictEqual((await state()).open, true, "the menu stays open after a click");
       assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), editor.document.uri.toString(), "the focus must be back in the ABC editor");
     } finally {
       probe.dispose();

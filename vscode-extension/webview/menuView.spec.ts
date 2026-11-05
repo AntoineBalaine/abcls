@@ -64,11 +64,6 @@ describe("renderModel", () => {
     assert.deepStrictEqual(posted, [{ type: "press", notation: "g" }]);
   });
 
-  it("says whether the menu is open", () => {
-    assert.strictEqual(render().root.querySelector(".state")?.textContent, "menu open");
-    assert.strictEqual(render({ ...MODEL, open: false }).root.querySelector(".state")?.textContent, "menu closed");
-  });
-
   it("replaces the previous content when it renders again", () => {
     const { root } = render();
     renderModel(root, { ...MODEL, rows: MODEL.rows.slice(0, 1) }, () => undefined);
@@ -98,6 +93,7 @@ describe("loadUi", () => {
       view: "keyboard",
       show: "2",
       free: true,
+      size: "large",
       highlight: null,
     });
   });

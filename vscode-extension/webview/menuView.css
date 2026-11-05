@@ -25,6 +25,13 @@ body {
   font-size: 15px;
 }
 
+#root[data-menu="closed"] {
+  opacity: 0.45;
+}
+#root[data-menu="open"] {
+  opacity: 1;
+}
+
 /* one accent color for each category of the keymap */
 .c-selectType {
   --cat: #6aa6e8;
@@ -106,14 +113,6 @@ body {
 .count {
   font-family: var(--vscode-editor-font-family);
   color: var(--vscode-descriptionForeground);
-}
-.state {
-  margin-left: auto;
-  font-size: 0.85em;
-  color: var(--vscode-descriptionForeground);
-}
-.state.open {
-  color: var(--vscode-charts-green);
 }
 
 .category {

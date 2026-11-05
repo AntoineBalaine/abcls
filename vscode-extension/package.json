@@ -842,6 +842,12 @@
           "description": "Draw the keys that only ISO keyboards have (the key next to the left Shift, and the key above Enter) in the keyboard view of the select and transform menus.",
           "scope": "application"
         },
+        "abc.menu.sticky": {
+          "type": "boolean",
+          "default": true,
+          "description": "Keep the select or transform menu open after a command, so that the next key runs another command. Esc closes it. With false, a command closes the menu, like a user mode of the Kakoune plugin.",
+          "scope": "application"
+        },
         "abc.menuView.autoOpen": {
           "type": "boolean",
           "default": true,

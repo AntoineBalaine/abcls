@@ -28,6 +28,8 @@ export interface MenuContext {
   shownWarning: string;
   /** True while a leaf runs, so that a second menu cannot start a second command on the same document. */
   busy: boolean;
+  /** The keys that were pressed are handled one after the other, because a command may take a while and the menu stays open. */
+  queue: Promise<void>;
   /** The document in which the menu was opened: a change to another document closes the menu, and a change back to this one does not. */
   openedIn: vscode.TextDocument | undefined;
   listeners: MenuListener[];
@@ -78,9 +80,21 @@ export async function closeMenu(ctx: MenuContext): Promise<void> {
   await applyState(ctx, closedState(ctx.state.mode));
 }
 
-export async function handleKey(ctx: MenuContext, notation: string): Promise<void> {
-  const result = step(ctx.state, ctx.keymap, { notation });
-  // The menu closes before the leaf runs, so that a command that prompts the user does not run with the menu still open.
+/** Whether the menu stays open after a command (abc.menu.sticky, on by default). */
+function isSticky(): boolean {
+  return vscode.workspace.getConfiguration("abc").get<boolean>("menu.sticky", true);
+}
+
+/** Handles a key after the keys that came before it, so that two quick keys never run two commands at the same time. */
+export function handleKey(ctx: MenuContext, notation: string): Promise<void> {
+  const handled = ctx.queue.then(() => processKey(ctx, notation));
+  ctx.queue = handled.catch(() => undefined);
+  return handled;
+}
+
+async function processKey(ctx: MenuContext, notation: string): Promise<void> {
+  const result = step(ctx.state, ctx.keymap, { notation }, isSticky());
+  // A menu that closes does so before the leaf runs, so that a command that prompts the user does not run with the menu still open.
   await applyState(ctx, result.state);
   if (result.effect.kind === "run") {
     ctx.busy = true;
@@ -125,6 +139,7 @@ export function registerModalMenu(context: vscode.ExtensionContext, client: Lang
     keymap: DEFAULT_KEYMAP,
     shownWarning: "",
     busy: false,
+    queue: Promise.resolve(),
     openedIn: undefined,
     listeners: [],
   };

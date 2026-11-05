@@ -52,6 +52,11 @@ describe("the settings of the modal keymap in package.json", () => {
     assert.strictEqual(settings["abc.keyboardIsoKeys"].scope, "application");
   });
 
+  it("declares abc.menu.sticky as a boolean that is on by default", () => {
+    assert.strictEqual(settings["abc.menu.sticky"].type, "boolean");
+    assert.strictEqual(settings["abc.menu.sticky"].default, true);
+  });
+
   it("declares the settings of the menu view: it opens by itself, and sits beside the editor by default", () => {
     assert.strictEqual(settings["abc.menuView.autoOpen"].type, "boolean");
     assert.strictEqual(settings["abc.menuView.autoOpen"].default, true);

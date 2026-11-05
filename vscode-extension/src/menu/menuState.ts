@@ -74,8 +74,9 @@ function isDigit(notation: string): boolean {
  * The rules, in order: Esc closes; Backspace goes back by one count digit, then one group, then closes;
  * a key bound at the current path wins, so that a bound digit is never taken for a count, and a mode key of the root works inside a group;
  * an unbound digit in transform mode extends the count; anything else is ignored and the menu stays open.
+ * A leaf runs and closes the menu, unless the menu is sticky, which keeps it open for the next key.
  */
-export function step(state: MenuState, keymap: Keymap, input: MenuInput): StepResult {
+export function step(state: MenuState, keymap: Keymap, input: MenuInput, sticky = false): StepResult {
   if (!state.open) return { state, effect: NOTHING };
 
   if (input.notation === "<esc>") return { state: close(state), effect: NOTHING };
@@ -105,5 +106,7 @@ export function step(state: MenuState, keymap: Keymap, input: MenuInput): StepRe
     return { state, effect: { kind: "error", message: `"${name}" is not a mode` } };
   }
 
-  return { state: close(state), effect: { kind: "run", leaf: node, count: countOf(state) } };
+  // A sticky menu stays open after a command, ready for the next key, with the path and the count cleared. Otherwise the command closes it.
+  const next = sticky ? { ...state, path: [], count: "" } : close(state);
+  return { state: next, effect: { kind: "run", leaf: node, count: countOf(state) } };
 }

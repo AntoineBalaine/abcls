@@ -5,7 +5,7 @@ All notable changes to the AbcLsp extension will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- A modal menu for the select and transform commands, like the user modes of the Kakoune plugin. With VSCodeVim, `h` opens the select menu and `k` opens the transform menu in the Normal and Visual modes of an ABC file. Press a key to run a command, and the menu closes. Some keys open a smaller menu, such as `g` for the voicings, and a number typed before a transform is its count. `<`, `>` and `Tab` switch between the two menus. Without VSCodeVim, bind the commands `abc.menu.select` and `abc.menu.transform` to keys of your own
+- A modal menu for the select and transform commands, like the user modes of the Kakoune plugin. With VSCodeVim, `h` opens the select menu and `k` opens the transform menu in the Normal and Visual modes of an ABC file. Press a key to run a command: the menu stays open for the next key until `Esc`, and the setting `abc.menu.sticky` set to false closes it after one command. Some keys open a smaller menu, such as `g` for the voicings, and a number typed before a transform is its count. `<`, `>` and `Tab` switch between the two menus. Without VSCodeVim, bind the commands `abc.menu.select` and `abc.menu.transform` to keys of your own
 - A view of the keys of the current menu, which opens below the editor without taking the focus, and draws a keyboard with the four layers of every key (QWERTY and BÉPO, staggered or ortholinear). A click on a key presses it. The settings `abc.menuView.autoOpen`, `abc.menuView.location`, `abc.keyboardLayout`, `abc.keyboardGeometry` and `abc.keyboardIsoKeys` control it
 - The setting `abc.keymap` changes the keys of the menus
 - `ABC: Show the menu view` and `ABC: Hide the menu view`

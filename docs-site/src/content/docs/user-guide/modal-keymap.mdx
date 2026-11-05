@@ -3,7 +3,7 @@ title: Modal Keymap in VS Code
 description: Select and transform ABC notation with a menu of keys in VS Code
 ---
 
-The VS Code extension has two key menus, one to select musical elements and one to transform them. They work like the user modes of the [Kakoune plugin](/user-guide/kakoune/): you press a key to open a menu, then one more key to run a command, and the menu closes. Some keys open a smaller menu of their own, and a number typed before a transform is its count.
+The VS Code extension has two key menus, one to select musical elements and one to transform them. They work like the user modes of the [Kakoune plugin](/user-guide/kakoune/): you press a key to open a menu, then a key to run a command. The menu stays open, so the next key runs another command, until you press `Esc`. Some keys open a smaller menu of their own, and a number typed before a transform is its count.
 
 The keys are not the same as those of the Kakoune plugin. The tables further down list every key of both menus.
 
@@ -48,6 +48,7 @@ On a Mac, AltGr is the Option key. The keyboard shows an AltGr layer as the symb
 
 | Setting                 | Values                     | What it does                                                                                                                                                                              |
 | ----------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `abc.menu.sticky`       | `true`, `false`            | Keeps the menu open after a command. With `false`, a command closes the menu, like a user mode of the Kakoune plugin. The default is `true`.                                              |
 | `abc.menuView.autoOpen` | `true`, `false`            | Opens the view each time a menu opens. The default is `true`.                                                                                                                             |
 | `abc.menuView.location` | `below`, `beside`, `panel` | Puts the view in a row below the editor, which is the default, in a column beside it, or in the bottom panel. In the bottom panel it does not open by itself: open the tab ABC keys once. |
 | `abc.keyboardLayout`    | `qwerty`, `bepo`           | The layout that the keyboard draws. The extension does not detect it.                                                                                                                     |

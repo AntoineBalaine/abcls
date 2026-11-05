@@ -172,8 +172,16 @@ function choiceGroup<T extends string>(doc: Document, options: Array<[T, string]
  * The controls. The first row is what the keyboard is: its layout, its geometry and the ISO keys, which the page writes to the
  * settings through the extension. The second row is what the page shows: the view, the layer to emphasize, the size, and the free keys.
  */
-export function renderControls(doc: Document, ui: UiState, keyboard: KeyboardModel | undefined, post: Post, rerender: () => void): HTMLElement {
+export function renderControls(
+  doc: Document,
+  ui: UiState,
+  keyboard: KeyboardModel | undefined,
+  post: Post,
+  rerender: () => void,
+  lead?: HTMLElement
+): HTMLElement {
   const bar = element(doc, "div", "controls");
+  if (lead) bar.append(lead);
   const label = (text: string): HTMLElement => element(doc, "span", "label", text);
 
   if (keyboard) {
@@ -269,10 +277,12 @@ export function renderKeyboard(doc: Document, keyboard: KeyboardModel, ui: UiSta
   const section = element(doc, "section", "keyboard");
   const unit = fitUnit(keyboard, availableWidth, ui.size);
   section.style.setProperty("--u", `${unit}px`);
-  const height = Math.round(unit * 0.7);
+  // The text of the cells follows the width of the caps and does not get smaller than what can be read. The height of a cap is what two
+  // lines of text need in each of its two rows of cells, because most names fit in two lines and a third line would be empty space.
+  const fontSize = Math.max(7.5, Math.round(unit * 0.085 * 10) / 10);
+  const height = Math.round(fontSize * 4.4 + 14);
   section.style.setProperty("--ch", `${height}px`);
-  // The text of the cells follows the height of the caps, which is less than the width, so the cells grow wider and the text stays small.
-  section.style.setProperty("--fs", `${Math.max(7.5, Math.round(height * 0.115 * 10) / 10)}px`);
+  section.style.setProperty("--fs", `${fontSize}px`);
 
   const detailSlot = element(doc, "div", "detail-slot");
   detailSlot.append(renderDetail(doc, null));

@@ -158,6 +158,17 @@ describe("the keyboard view", () => {
   });
 });
 
+describe("the mode indicator", () => {
+  it("is at the start of the line of the controls when there is a keyboard, and the page has no line of its own for it", () => {
+    const { root } = render("transform", "qwerty");
+    const controls = root.querySelector(".controls") as HTMLElement;
+    assert.ok(controls.firstElementChild?.classList.contains("header"));
+    assert.ok(controls.querySelector(".crumb")?.textContent?.includes("transform"));
+    assert.strictEqual(root.querySelectorAll(".header").length, 1);
+    assert.strictEqual(root.querySelector(".state"), null);
+  });
+});
+
 describe("the page when the model changes", () => {
   it("clears a highlight whose category is not in the new model, so that the board is not dimmed for good", () => {
     const { root, ui } = render("select", "qwerty", { highlight: "voicing" });
