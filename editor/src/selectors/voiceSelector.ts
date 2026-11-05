@@ -98,6 +98,31 @@ interface VoiceWalkCtx {
   scopeIds: Set<number>;
   hasScope: boolean;
   foundMatch: boolean;
+  /** True while the walk is at the start of a line, which is where a comment makes a whole line of its own. */
+  atLineStart: boolean;
+  /** True right after a line that is not music, so that the line break that ends it is not selected either. */
+  skipLineBreak: boolean;
+}
+
+/** Checks if a node is a line break token. */
+function isLineBreak(node: CSNode): boolean {
+  return isTokenNode(node) && getTokenData(node).lexeme === "\n";
+}
+
+/**
+ * Checks if a node makes a line that is not music: a comment that has its own line, a directive, or an info line that
+ * does not name a voice. Because the selection of a voice is meant for its music, these lines are left out of it,
+ * even when they sit between two lines of the voice.
+ */
+function isNonMusicLine(node: CSNode, atLineStart: boolean): boolean {
+  if (node.tag === TAGS.Directive) return true;
+  if (node.tag === TAGS.Info_line) return !isVoiceMarker(node);
+  return node.tag === TAGS.Comment && atLineStart;
+}
+
+/** Tells if a token only holds blanks, because blanks do not stop a comment from being alone on its line. */
+function isBlankToken(node: CSNode): boolean {
+  return isTokenNode(node) && /^[ \t]+$/.test(getTokenData(node).lexeme);
 }
 
 /**
@@ -127,6 +152,27 @@ function walkChildren(ctx: VoiceWalkCtx, containerNode: CSNode): void {
     if (isVoiceMarker(child)) {
       const extractedId = extractVoiceId(child);
       ctx.currentVoice = extractedId || "";
+    }
+
+    if (ctx.skipLineBreak && isLineBreak(child)) {
+      // Because the line that this break ends is not music, the break leaves the selection with it.
+      ctx.skipLineBreak = false;
+      ctx.atLineStart = true;
+      child = child.nextSibling;
+      continue;
+    }
+    ctx.skipLineBreak = false;
+
+    if (isNonMusicLine(child, ctx.atLineStart)) {
+      flushCurrentRun(ctx);
+      ctx.skipLineBreak = true;
+      child = child.nextSibling;
+      continue;
+    }
+    if (isLineBreak(child)) {
+      ctx.atLineStart = true;
+    } else if (!isBlankToken(child)) {
+      ctx.atLineStart = false;
     }
 
     const targetMatches = ctx.targetVoiceIds.has(ctx.currentVoice);
@@ -195,6 +241,8 @@ function walkForVoice(ctx: VoiceWalkCtx, root: CSNode): void {
     // Find and walk the tune body
     const tuneBodies = findByTag(tune, TAGS.Tune_Body);
     for (const tuneBody of tuneBodies) {
+      ctx.atLineStart = true;
+      ctx.skipLineBreak = false;
       walkChildren(ctx, tuneBody);
       flushCurrentRun(ctx);
     }
@@ -258,6 +306,8 @@ export function selectVoices(input: Selection, voiceIds: string): Selection {
     scopeIds,
     hasScope,
     foundMatch: false,
+    atLineStart: true,
+    skipLineBreak: false,
   };
 
   walkForVoice(ctx, input.root);

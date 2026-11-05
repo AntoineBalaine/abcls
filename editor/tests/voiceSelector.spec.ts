@@ -486,4 +486,64 @@ ABC             | DFE             | DBA
       expect(result2).to.not.equal(sel, "V:2 should find matches");
     });
   });
+
+  describe("comment, directive, and info lines between the music lines", () => {
+    const source = [
+      "X:1",
+      "L:1/8",
+      "K:C",
+      '[V:1] "E" C2 | D2 | % trailing',
+      '[V:2] "E" X | X |',
+      "%",
+      "%%text close",
+      "M:3/4",
+      "%",
+      "[V:1] E2 |",
+      "[V:2] X |",
+      "%",
+      "[V:1] F2 |",
+      "[V:2] z6 |",
+      "",
+    ].join("\n");
+
+    const tagsOfCursor = (cursor: Set<number>, root: ReturnType<typeof toSelection>["root"]): string[] => {
+      const tags: string[] = [];
+      const visit = (node: typeof root): void => {
+        if (cursor.has(node.id)) tags.push(node.tag);
+        for (let child = node.firstChild; child !== null; child = child.nextSibling) visit(child);
+      };
+      visit(root);
+      return tags;
+    };
+
+    it("does not select the comment lines, the directives, or the info lines that are not voice markers", () => {
+      const sel = toSelection(source);
+      const result = selectVoices(sel, "2");
+      for (const cursor of result.cursors) {
+        const tags = tagsOfCursor(cursor, sel.root);
+        expect(tags).to.not.include(TAGS.Directive);
+        expect(tags).to.not.include(TAGS.Info_line);
+      }
+      const commentCounts = result.cursors.map((c) => tagsOfCursor(c, sel.root).filter((t) => t === TAGS.Comment).length);
+      expect(commentCounts.every((n) => n === 0)).to.equal(true);
+    });
+
+    it("gives one cursor for each block of music lines of the voice", () => {
+      const sel = toSelection(source);
+      expect(selectVoices(sel, "2").cursors.length).to.equal(3);
+      expect(selectVoices(sel, "1").cursors.length).to.equal(3);
+    });
+
+    it("keeps a comment that trails the music on the same line", () => {
+      const sel = toSelection(source);
+      const result = selectVoices(sel, "1");
+      const first = tagsOfCursor(result.cursors[0], sel.root);
+      expect(first).to.include(TAGS.Comment);
+    });
+
+    it("still keeps the lines of a voice together when nothing separates them", () => {
+      const sel = toSelection("X:1\nK:C\n[V:1] C |\n[V:1] D |\n[V:2] E |\n");
+      expect(selectVoices(sel, "1").cursors.length).to.equal(1);
+    });
+  });
 });
