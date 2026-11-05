@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "generate": "tsx scripts/generateKeymapTable.ts",
+    "build": "npm run generate && astro build",
     "preview": "astro preview"
   },
   "dependencies": {

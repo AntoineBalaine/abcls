@@ -1,0 +1,233 @@
+---
+title: Modal Keymap in VS Code
+description: Select and transform ABC notation with a menu of keys in VS Code
+---
+
+The VS Code extension has two key menus, one to select musical elements and one to transform them. They work like the user modes of the [Kakoune plugin](/user-guide/kakoune/): you press a key to open a menu, then one more key to run a command, and the menu closes. Some keys open a smaller menu of their own, and a number typed before a transform is its count.
+
+The keys are not the same as those of the Kakoune plugin. The tables further down list every key of both menus.
+
+## Opening a menu
+
+With the VSCodeVim extension, `h` opens the select menu and `k` opens the transform menu in the Normal, Visual and Visual Line modes of an ABC file, when no menu is open yet. Both keys replace the Vim motions of the same name, and the VSCodeVim modes are the only place where they open a menu by default. Without VSCodeVim there is no default key, because `h` and `k` would stop typing in every ABC file.
+
+The two keys are the keybindings of the commands `abc.menu.select` and `abc.menu.transform`, so you change them in `keybindings.json` like any other key:
+
+```json
+[
+  { "key": "space s", "command": "abc.menu.select", "when": "editorLangId == abc && editorTextFocus && !abc.modeMenuOpen && vim.mode == 'Normal'" },
+  { "key": "space t", "command": "abc.menu.transform", "when": "editorLangId == abc && editorTextFocus && !abc.modeMenuOpen && vim.mode == 'Normal'" }
+]
+```
+
+## Using a menu
+
+While a menu is open, every key goes to it. These keys work in both menus:
+
+| Key         | What it does                                                                 |
+| ----------- | ---------------------------------------------------------------------------- |
+| `<`         | Go to the select menu                                                        |
+| `>`         | Go to the transform menu                                                     |
+| `Tab`       | Switch to the other menu (written `<tab>` in the tables)                     |
+| `Backspace` | Remove the last digit of the count, or go back from a smaller menu, or close |
+| `Esc`       | Close the menu                                                               |
+
+The transform menu takes a count of up to three digits, and a leading zero is ignored. Type it before the command: `5 g c` is a close voicing with five voices, and the count of a voicing is its number of voices, 4, 5 or 6. A digit that is itself bound in the menu is a command, not a count, so inside the `g` menu the digits `2`, `3` and `4` choose a drop voicing, and a count can only be typed before `g`. In the select menu the digits `1` to `9` select the note that many places from the top, and `t` is the same as `1`.
+
+A key written as `<a-t>` is Alt plus `t`, `<c-up>` is Ctrl plus the up arrow, and `<c-S-up>` is Ctrl plus Shift plus the up arrow. An uppercase letter is typed with Shift.
+
+A transform acts on the current selection, so use the select menu first to choose what the transform applies to.
+
+## The key view
+
+The view of the keys opens beside the editor each time a menu opens, without taking the keyboard focus. It shows the keys of the current menu, grouped by category, and a click on a key presses it. It also draws a keyboard.
+
+Because VS Code gives an extension no event for a held Shift or Alt key, the keyboard cannot follow the modifiers. Every key is drawn with its four layers at once: Shift at the top left, AltGr and Shift at the top right, the plain key at the bottom left and AltGr at the bottom right. A cell with a binding has the colour of its category and the short name of its command, and hovering a key shows the full detail of its four layers. The keys that no key of the keyboard carries, such as the Ctrl arrows, are in a row above it.
+
+On a Mac, AltGr is the Option key. The keyboard shows an AltGr layer as the symbol that the key types when that symbol is bound, as the `<` of the BÉPO layout is, and otherwise as the Alt chord of the key, such as `<a-t>`.
+
+| Setting                 | Values                     | What it does                                                                                                                                                                                |
+| ----------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `abc.menuView.autoOpen` | `true`, `false`            | Opens the view beside the editor each time a menu opens. The default is `true`.                                                                                                             |
+| `abc.menuView.location` | `beside`, `panel`          | Puts the view beside the editor, or in the bottom panel, which is as wide as the window and suits the keyboard. In the bottom panel it does not open by itself: open the tab ABC keys once. |
+| `abc.keyboardLayout`    | `qwerty`, `bepo`           | The layout that the keyboard draws. The extension does not detect it.                                                                                                                       |
+| `abc.keyboardGeometry`  | `staggered`, `ortholinear` | Whether the rows are shifted against each other, or the keys are in aligned columns.                                                                                                        |
+| `abc.keyboardIsoKeys`   | `true`, `false`            | Draws the keys that only ISO keyboards have.                                                                                                                                                |
+
+The settings of the view and of the keyboard belong to the user, and a workspace cannot set them. The setting `abc.keymap` can also be set for a workspace.
+
+The commands `ABC: Show the menu view` and `ABC: Hide the menu view` open and close the view by hand.
+
+## Keys of the menus
+
+A key that ends with `›` in the tables opens a smaller menu, and the keys of that menu are written with the key of the menu in front, for example `g c`.
+
+{/* keymap-tables:start */}
+
+### Keys of the select menu
+
+| Key     | What it does                      | Category               |
+| ------- | --------------------------------- | ---------------------- |
+| `c`     | chords                            | select by type         |
+| `n`     | notes                             | select by type         |
+| `N`     | non-chord notes                   | select by type         |
+| `C`     | chord notes                       | select by type         |
+| `z`     | rests                             | select by type         |
+| `A`     | annotations (new, not in Kakoune) | select by type         |
+| `r`     | rhythm                            | select rhythm          |
+| `R`     | rhythm parents                    | select rhythm          |
+| `x`     | tune                              | select structure       |
+| `m`     | measures                          | select structure       |
+| `s`     | system                            | select structure       |
+| `v`     | voices (prompts for ids)          | select structure       |
+| `1`     | top note (same as t)              | select by position     |
+| `2`     | 2nd from top                      | select by position     |
+| `3`     | 3rd from top                      | select by position     |
+| `4`     | 4th from top                      | select by position     |
+| `5`     | 5th from top                      | select by position     |
+| `6`     | 6th from top                      | select by position     |
+| `7`     | 7th from top                      | select by position     |
+| `8`     | 8th from top                      | select by position     |
+| `9`     | 9th from top                      | select by position     |
+| `t`     | top note                          | select by position     |
+| `T`     | all but top                       | select by position     |
+| `b`     | bottom note                       | select by position     |
+| `B`     | all but bottom                    | select by position     |
+| `i`     | inside ›                          | select inside / around |
+| `i c`   | inside chord                      | select inside / around |
+| `i g`   | inside grace group                | select inside / around |
+| `i f`   | inside inline field               | select inside / around |
+| `i p`   | inside grouping                   | select inside / around |
+| `a`     | around ›                          | select inside / around |
+| `a c`   | around chord                      | select inside / around |
+| `a g`   | around grace group                | select inside / around |
+| `a f`   | around inline field               | select inside / around |
+| `a p`   | around grouping                   | select inside / around |
+| `<`     | go to select mode                 | mode switch            |
+| `>`     | go to transform mode              | mode switch            |
+| `<tab>` | switch mode                       | mode switch            |
+| `u`     | undo (new, not in Kakoune)        | history                |
+
+### Keys of the transform menu
+
+| Key          | What it does                                 | Category    |
+| ------------ | -------------------------------------------- | ----------- |
+| `t`          | octave up                                    | pitch       |
+| `T`          | octave down                                  | pitch       |
+| `<c-up>`     | octave up                                    | pitch       |
+| `<c-down>`   | octave down                                  | pitch       |
+| `+`          | semitone up                                  | pitch       |
+| `-`          | semitone down                                | pitch       |
+| `<c-S-up>`   | harmonize octave up                          | harmonize   |
+| `<c-S-down>` | harmonize octave down                        | harmonize   |
+| `<a-t>`      | harmonize octave up                          | harmonize   |
+| `<a-T>`      | harmonize octave down                        | harmonize   |
+| `p`          | harmonize up (diatonic)                      | harmonize   |
+| `P`          | harmonize down (diatonic)                    | harmonize   |
+| `*`          | multiply length                              | rhythm      |
+| `/`          | divide length                                | rhythm      |
+| `a`          | add sharp                                    | accidentals |
+| `A`          | add flat                                     | accidentals |
+| `e`          | enharmonize                                  | accidentals |
+| `E`          | enharmonize to key                           | accidentals |
+| `<`          | go to select mode                            | mode switch |
+| `>`          | go to transform mode                         | mode switch |
+| `<tab>`      | switch mode                                  | mode switch |
+| `v`          | V:1 to [V:1]                                 | voices      |
+| `V`          | [V:1] to V:1                                 | voices      |
+| `o`          | add voice (prompts)                          | voices      |
+| `O`          | insert voice line (prompts)                  | voices      |
+| `x`          | explode chords                               | voices      |
+| `r`          | to rest                                      | rests       |
+| `R`          | consolidate rests                            | rests       |
+| `l`          | legato (extend through rests)                | rests       |
+| `h`          | close voicing, 4 voices                      | voicings    |
+| `H`          | close voicing, 5 voices                      | voicings    |
+| `<a-h>`      | close voicing, 6 voices                      | voicings    |
+| `g`          | voicing menu (count = voices) ›              | voicings    |
+| `g 2`        | drop 2 (revoices chords)                     | voicings    |
+| `g 3`        | drop 3 (revoices chords)                     | voicings    |
+| `g 4`        | drop 2-4 (revoices chords)                   | voicings    |
+| `g c`        | close voicing                                | voicings    |
+| `g k`        | cluster voicing                              | voicings    |
+| `g s`        | spread voicing (new, not in Kakoune)         | voicings    |
+| `y`          | parallel diatonic //&lt;-prev                | parallel    |
+| `Y`          | parallel diatonic //->next                   | parallel    |
+| `{`          | parallel chromatic //&lt;-prev               | parallel    |
+| `<a-Y>`      | parallel chromatic //->next                  | parallel    |
+| `s`          | split system at cursor (new, not in Kakoune) | systems     |
+| `j`          | join system with next (new, not in Kakoune)  | systems     |
+| `i`          | interleave voices (new, not in Kakoune)      | systems     |
+| `m`          | export to MIDI                               | MIDI        |
+| `M`          | import from MIDI (prompts)                   | MIDI        |
+| `(`          | wrap crescendo (new, not in Kakoune)         | dynamics    |
+| `)`          | wrap decrescendo (new, not in Kakoune)       | dynamics    |
+| `u`          | undo (new, not in Kakoune)                   | history     |
+
+{/* keymap-tables:end */}
+
+## Changing the keys
+
+The setting `abc.keymap` changes the keys of the menus without changing the extension. It is an object with the keys `select` and `transform`. Each holds an object that maps a key to a binding that is merged into the default one, or to `null` to remove it.
+
+Move the command that rests on `s` in the transform menu to `S`, and remove the command of `j`:
+
+```json
+{
+  "abc.keymap": {
+    "transform": {
+      "S": { "label": "split system", "category": "layout", "action": { "kind": "command", "name": "abc.splitSystem" } },
+      "s": null,
+      "j": null
+    }
+  }
+}
+```
+
+Change only the label of a key and keep its action:
+
+```json
+{
+  "abc.keymap": {
+    "select": { "c": { "label": "every chord" } }
+  }
+}
+```
+
+Add a drop 2 voicing to the main transform menu:
+
+```json
+{
+  "abc.keymap": {
+    "transform": {
+      "d": { "label": "drop 2", "category": "voicing", "action": { "kind": "transform", "name": "dropVoicing", "args": ["drop2"] } }
+    }
+  }
+}
+```
+
+A binding has a `label`, a `category`, and an `action` with a `kind` (`selector`, `transform` or `command`), a `name`, and optional `args`. An argument can be `{ "count": { "default": 4, "multiplier": 1 } }`, which stands for the number typed in the menu, or the default when no number was typed, times the multiplier. With a default of 1 and a multiplier of 12, as the octave keys have, no count gives 12 and a count of 2 gives 24. A binding that has `children` instead of an `action` is a smaller menu. The setting reports its problems in a message when it is invalid.
+
+### Keys that have no keybinding
+
+While a menu is open, the extension routes the letters, digits, ASCII symbols, the Alt chords of the letters and the Ctrl arrows to the menu. A key that is not among them, such as an accented letter, needs a keybinding of your own. The extension tells you so with the entry to add, and you write the key of your keyboard in it, for example:
+
+```json
+{ "key": "ctrl+alt+e", "command": "abc.menu.key", "args": { "notation": "<c-a-e>" }, "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc" }
+```
+
+### The number of voices of a voicing
+
+The commands `abc.harmonizeClose`, `abc.harmonizeCluster` and `abc.harmonizeSpread` take the number of voices, 4, 5 or 6, as an argument, so a keybinding can ask for five voices:
+
+```json
+{ "key": "ctrl+alt+5", "command": "abc.harmonizeClose", "args": { "voices": 5 } }
+```
+
+Any other value shows the message "Voice count must be 4, 5 or 6".
+
+## Limits
+
+- The AltGr layers of the keyboard come from the macOS layouts `U.S.` and `bépo 1.1`. On Windows and Linux AltGr is Ctrl and Alt together, and other layouts have other AltGr symbols, so the Alt chords and the AltGr symbols may collide there.
+- A keybinding that stands for a shifted symbol, such as `{`, is written with the key of a US keyboard, and VS Code matches it through the layout. On another layout such a key, or a digit that needs Shift, may not reach the menu, and a keybinding of your own fixes it.
+- The panel cannot show which modifier is held, because VS Code gives extensions no event for it.

@@ -23,12 +23,12 @@
       {
         "command": "abc.menu.showView",
         "title": "Show the menu view",
-        "category": "abc"
+        "category": "ABC"
       },
       {
         "command": "abc.menu.hideView",
         "title": "Hide the menu view",
-        "category": "abc"
+        "category": "ABC"
       },
       {
         "command": "abc.startMIDIInput",
