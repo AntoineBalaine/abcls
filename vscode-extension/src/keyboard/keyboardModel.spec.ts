@@ -153,6 +153,15 @@ describe("the tray", () => {
   });
 });
 
+describe("the options in the model", () => {
+  it("carries the layout, the geometry and the ISO keys that it was built with, for the controls of the page", () => {
+    const model = buildKeyboardModel(DEFAULT_KEYMAP, openMenu("select"), { layout: "bepo", geometry: "ortholinear", iso: true });
+    assert.strictEqual(model.layout, "bepo");
+    assert.strictEqual(model.geometry, "ortholinear");
+    assert.strictEqual(model.iso, true);
+  });
+});
+
 describe("rowOffset", () => {
   it("staggers the rows of a staggered keyboard", () => {
     assert.deepStrictEqual(

@@ -15,15 +15,19 @@ export type Post = (message: ToExtension) => void;
 
 export type Show = "all" | "0" | "1" | "2" | "3";
 
+export type Size = "small" | "medium" | "large";
+
 /** What the user chose in the page, which survives a reload of the page. */
 export interface UiState {
   view: "both" | "keyboard" | "list";
   show: Show;
   free: boolean;
+  /** How large the page is drawn: the keys, and the text of the page. */
+  size: Size;
   highlight: string | null;
 }
 
-export const DEFAULT_UI: UiState = { view: "both", show: "all", free: false, highlight: null };
+export const DEFAULT_UI: UiState = { view: "both", show: "all", free: false, size: "small", highlight: null };
 
 export const LAYER_NAMES = ["base", "Shift", "AltGr", "AltGr+Shift"];
 
@@ -157,59 +161,118 @@ function button(doc: Document, label: string, pressed: boolean, onClick: () => v
   return node;
 }
 
-/** The controls: which of the list and the keyboard to show, which layer to emphasize, and the highlight of the free keys. */
-export function renderControls(doc: Document, ui: UiState, rerender: () => void): HTMLElement {
+/** Makes a group of buttons of which one is pressed. */
+function choiceGroup<T extends string>(doc: Document, options: Array<[T, string]>, current: T, onChoose: (value: T) => void): HTMLElement {
+  const group = element(doc, "div", "choices");
+  for (const [value, label] of options) group.append(button(doc, label, current === value, () => onChoose(value)));
+  return group;
+}
+
+/**
+ * The controls. The first row is what the keyboard is: its layout, its geometry and the ISO keys, which the page writes to the
+ * settings through the extension. The second row is what the page shows: the view, the layer to emphasize, the size, and the free keys.
+ */
+export function renderControls(doc: Document, ui: UiState, keyboard: KeyboardModel | undefined, post: Post, rerender: () => void): HTMLElement {
   const bar = element(doc, "div", "controls");
-  const views: Array<[UiState["view"], string]> = [
-    ["both", "keyboard and list"],
-    ["keyboard", "keyboard"],
-    ["list", "list"],
-  ];
-  const viewGroup = element(doc, "div", "choices");
-  for (const [value, label] of views) {
-    viewGroup.append(
-      button(doc, label, ui.view === value, () => {
+  const label = (text: string): HTMLElement => element(doc, "span", "label", text);
+
+  if (keyboard) {
+    bar.append(
+      label("Layout"),
+      choiceGroup(
+        doc,
+        [
+          ["qwerty", "QWERTY"],
+          ["bepo", "BÉPO"],
+        ],
+        keyboard.layout,
+        (value) => post({ type: "keyboard", layout: value })
+      ),
+      label("Keys"),
+      choiceGroup(
+        doc,
+        [
+          ["staggered", "staggered"],
+          ["ortholinear", "ortholinear"],
+        ],
+        keyboard.geometry,
+        (value) => post({ type: "keyboard", geometry: value })
+      ),
+      button(doc, "ISO keys", keyboard.iso, () => post({ type: "keyboard", iso: !keyboard.iso }))
+    );
+  }
+  bar.append(
+    label("View"),
+    choiceGroup(
+      doc,
+      [
+        ["both", "keyboard and list"],
+        ["keyboard", "keyboard"],
+        ["list", "list"],
+      ] as Array<[UiState["view"], string]>,
+      ui.view,
+      (value) => {
         ui.view = value;
         rerender();
-      })
-    );
-  }
-  const showGroup = element(doc, "div", "choices");
-  const shows: Array<[Show, string]> = [
-    ["all", "all layers"],
-    ["0", "base"],
-    ["1", "Shift"],
-    ["2", "AltGr"],
-    ["3", "AltGr+Shift"],
-  ];
-  for (const [value, label] of shows) {
-    showGroup.append(
-      button(doc, label, ui.show === value, () => {
+      }
+    ),
+    label("Show"),
+    choiceGroup(
+      doc,
+      [
+        ["all", "all layers"],
+        ["0", "base"],
+        ["1", "Shift"],
+        ["2", "AltGr"],
+        ["3", "AltGr+Shift"],
+      ] as Array<[Show, string]>,
+      ui.show,
+      (value) => {
         ui.show = value;
         rerender();
-      })
-    );
-  }
-  const free = button(doc, "highlight free keys", ui.free, () => {
-    ui.free = !ui.free;
-    rerender();
-  });
-  bar.append(element(doc, "span", "label", "View"), viewGroup, element(doc, "span", "label", "Show"), showGroup, free);
+      }
+    ),
+    label("Size"),
+    choiceGroup(
+      doc,
+      [
+        ["small", "S"],
+        ["medium", "M"],
+        ["large", "L"],
+      ] as Array<[Size, string]>,
+      ui.size,
+      (value) => {
+        ui.size = value;
+        rerender();
+      }
+    ),
+    button(doc, "highlight free keys", ui.free, () => {
+      ui.free = !ui.free;
+      rerender();
+    })
+  );
   return bar;
 }
 
-/** Sets the size of the caps from the width that the board has, down to a minimum below which the board scrolls. */
-export function fitUnit(keyboard: KeyboardModel, availableWidth: number): number {
+/** The smallest and the largest width of a cap, in pixels, for each size of the page. */
+const UNIT_RANGE: Record<Size, [number, number]> = { small: [64, 112], medium: [84, 132], large: [104, 152] };
+
+/** The size of the caps: the width that the board has allows, between the bounds of the size, and below the minimum the board scrolls. */
+export function fitUnit(keyboard: KeyboardModel, availableWidth: number, size: Size = "medium"): number {
+  const [least, most] = UNIT_RANGE[size];
   const widest = Math.max(1, ...keyboard.caps.map((row) => (row[0]?.offset ?? 0) + row.length));
-  if (availableWidth <= 0) return 92;
-  return Math.max(84, Math.min(112, Math.floor((availableWidth - 12 * 4) / widest)));
+  if (availableWidth <= 0) return Math.round((least + most) / 2);
+  return Math.max(least, Math.min(most, Math.floor((availableWidth - 12 * 4) / widest)));
 }
 
 export function renderKeyboard(doc: Document, keyboard: KeyboardModel, ui: UiState, post: Post, rerender: () => void, availableWidth: number): HTMLElement {
   const section = element(doc, "section", "keyboard");
-  const unit = fitUnit(keyboard, availableWidth);
+  const unit = fitUnit(keyboard, availableWidth, ui.size);
   section.style.setProperty("--u", `${unit}px`);
-  section.style.setProperty("--ch", `${Math.round(unit * 1.08)}px`);
+  const height = Math.round(unit * 0.7);
+  section.style.setProperty("--ch", `${height}px`);
+  // The text of the cells follows the height of the caps, which is less than the width, so the cells grow wider and the text stays small.
+  section.style.setProperty("--fs", `${Math.max(7.5, Math.round(height * 0.115 * 10) / 10)}px`);
 
   const detailSlot = element(doc, "div", "detail-slot");
   detailSlot.append(renderDetail(doc, null));

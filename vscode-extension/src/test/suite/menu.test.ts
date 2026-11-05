@@ -154,6 +154,23 @@ suite("The modal menu", () => {
     assert.deepStrictEqual(await state(), { open: true, mode: "transform", path: ["g"], count: "" });
   });
 
+  test("writes the layout that is chosen in the view to the settings, and ignores a value that is not a layout", async () => {
+    const configuration = vscode.workspace.getConfiguration("abc");
+    try {
+      await vscode.commands.executeCommand("_abc.menu.viewMessage", { type: "keyboard", layout: "bepo", geometry: "ortholinear", iso: true });
+      const after = vscode.workspace.getConfiguration("abc");
+      assert.strictEqual(after.get("keyboardLayout"), "bepo");
+      assert.strictEqual(after.get("keyboardGeometry"), "ortholinear");
+      assert.strictEqual(after.get("keyboardIsoKeys"), true);
+      await vscode.commands.executeCommand("_abc.menu.viewMessage", { type: "keyboard", layout: "dvorak" });
+      assert.strictEqual(vscode.workspace.getConfiguration("abc").get("keyboardLayout"), "bepo");
+    } finally {
+      await configuration.update("keyboardLayout", undefined, vscode.ConfigurationTarget.Global);
+      await configuration.update("keyboardGeometry", undefined, vscode.ConfigurationTarget.Global);
+      await configuration.update("keyboardIsoKeys", undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
   test("ignores a message of the view that has no valid shape", async () => {
     await vscode.commands.executeCommand("_abc.menu.viewMessage", null);
     await vscode.commands.executeCommand("_abc.menu.viewMessage", { type: "press", notation: 5 });

@@ -14,7 +14,7 @@ import { MenuState } from "./menuState";
 import { makeNonce, renderWebviewHtml } from "./menuViewHtml";
 import { buildViewModel } from "./menuViewModel";
 import { MenuContext, handleKey, openMode } from "./modalMenu";
-import { ToExtension, ToWebview } from "./viewMessages";
+import { KeyboardChoice, ToExtension, ToWebview } from "./viewMessages";
 
 export const VIEW_TYPE = "abcMenuView";
 export const PANEL_VIEW_ID = "abcMenuView";
@@ -32,6 +32,8 @@ export interface MenuViewContext {
   panelHost: Host | undefined;
   viewHost: Host | undefined;
   previous: MenuState;
+  /** True while the editor area is split in two rows because the view made the split. */
+  createdSplit: boolean;
   /** The last ABC editor, to which the focus goes back after a click in the view. */
   lastEditor: vscode.TextEditor | undefined;
 }
@@ -71,11 +73,27 @@ async function restoreEditorFocus(view: MenuViewContext): Promise<void> {
   await vscode.window.showTextDocument(editor.document, { viewColumn: editor.viewColumn, preserveFocus: false });
 }
 
+function isKeyboardChoice(message: { layout?: unknown; geometry?: unknown; iso?: unknown }): boolean {
+  const layoutOk = message.layout === undefined || message.layout === "qwerty" || message.layout === "bepo";
+  const geometryOk = message.geometry === undefined || message.geometry === "staggered" || message.geometry === "ortholinear";
+  const isoOk = message.iso === undefined || typeof message.iso === "boolean";
+  return layoutOk && geometryOk && isoOk;
+}
+
 function isToExtension(message: unknown): message is ToExtension {
   if (typeof message !== "object" || message === null) return false;
   const type = (message as { type?: unknown }).type;
   if (type === "ready") return true;
+  if (type === "keyboard") return isKeyboardChoice(message as { layout?: unknown; geometry?: unknown; iso?: unknown });
   return type === "press" && typeof (message as { notation?: unknown }).notation === "string";
+}
+
+/** Writes the choices of the keyboard that the page made to the settings. The change of a setting then draws the view again. */
+async function applyKeyboardChoice(choice: KeyboardChoice): Promise<void> {
+  const configuration = vscode.workspace.getConfiguration("abc");
+  if (choice.layout !== undefined) await configuration.update("keyboardLayout", choice.layout, vscode.ConfigurationTarget.Global);
+  if (choice.geometry !== undefined) await configuration.update("keyboardGeometry", choice.geometry, vscode.ConfigurationTarget.Global);
+  if (choice.iso !== undefined) await configuration.update("keyboardIsoKeys", choice.iso, vscode.ConfigurationTarget.Global);
 }
 
 /**
@@ -87,6 +105,11 @@ export async function handleViewMessage(view: MenuViewContext, host: Host, messa
   if (message.type === "ready") {
     host.ready = true;
     sendModel(host, view.menu.keymap, view.menu.state);
+    return;
+  }
+  if (message.type === "keyboard") {
+    // Choosing a layout is not a key press, so the focus stays where it is.
+    await applyKeyboardChoice(message);
     return;
   }
   // A click leaves the focus in the webview, where there is no active editor and the menu cannot run a selector or a transform,
@@ -104,27 +127,50 @@ function attach(view: MenuViewContext, webview: vscode.Webview): Host {
   return host;
 }
 
-/** Opens the panel beside the editor, or shows it again, without taking the focus. */
-export function showBesidePanel(view: MenuViewContext): void {
+/**
+ * Splits the editor area into two rows, so that the view can sit below the editor and use the whole width. It only does so when there is
+ * one editor group, because a user who has split the editor area already chose a layout. It returns true when it made the split.
+ */
+async function splitBelow(): Promise<boolean> {
+  if (groupCount() !== 1) return false;
+  await vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 1, groups: [{ size: 0.7 }, { size: 0.3 }] });
+  return groupCount() === 2;
+}
+
+/** The number of editor groups now. It is a function because the value changes while the layout is set. */
+function groupCount(): number {
+  return vscode.window.tabGroups.all.length;
+}
+
+/**
+ * Opens the panel below the editor (location below), or beside it (location beside, or when the editor area is already split),
+ * or shows it again, without taking the focus.
+ */
+export async function showEditorPanel(view: MenuViewContext): Promise<void> {
   if (view.panel) {
     view.panel.reveal(undefined, true);
     return;
   }
-  const panel = vscode.window.createWebviewPanel(
-    VIEW_TYPE,
-    "ABC keys",
-    { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
-    { retainContextWhenHidden: true }
-  );
+  const split = location() === "below" ? await splitBelow() : false;
+  // The panel may have been created while the split was made, so the check is made again.
+  if (view.panel) return;
+  const viewColumn = split ? vscode.ViewColumn.Two : vscode.ViewColumn.Beside;
+  const panel = vscode.window.createWebviewPanel(VIEW_TYPE, "ABC keys", { viewColumn, preserveFocus: true }, { retainContextWhenHidden: true });
   view.panel = panel;
   view.panelHost = attach(view, panel.webview);
+  view.createdSplit = split;
   panel.onDidDispose(() => {
     view.panel = undefined;
     view.panelHost = undefined;
+    // The editor area goes back to one group when the view made the split, so that closing the view leaves no empty row behind.
+    if (view.createdSplit && groupCount() === 2 && vscode.window.tabGroups.all.some((group) => group.tabs.length === 0)) {
+      void vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 0, groups: [{}] });
+    }
+    view.createdSplit = false;
   });
 }
 
-/** Closes the beside panel, or the bottom panel when the view lives there. */
+/** Closes the view, in the editor area or in the bottom panel. */
 export async function hideView(view: MenuViewContext): Promise<void> {
   view.panel?.dispose();
   if (view.viewHost) await vscode.commands.executeCommand("workbench.action.closePanel");
@@ -143,7 +189,7 @@ export function keyboardOptions(): KeyboardOptions {
 }
 
 function location(): string {
-  return vscode.workspace.getConfiguration("abc").get<string>("menuView.location", "beside");
+  return vscode.workspace.getConfiguration("abc").get<string>("menuView.location", "below");
 }
 
 function autoOpens(): boolean {
@@ -154,7 +200,7 @@ function autoOpens(): boolean {
 export function onMenuChanged(view: MenuViewContext, state: MenuState, keymap: Keymap): void {
   const justOpened = state.open && (!view.previous.open || view.previous.mode !== state.mode);
   view.previous = state;
-  if (justOpened && autoOpens() && location() === "beside") showBesidePanel(view);
+  if (justOpened && autoOpens() && location() !== "panel") void showEditorPanel(view);
   if (state.open && vscode.window.activeTextEditor?.document.languageId === "abc") view.lastEditor = vscode.window.activeTextEditor;
   postModel(view, keymap, state);
 }
@@ -167,6 +213,7 @@ export function registerMenuView(context: vscode.ExtensionContext, menu: MenuCon
     panelHost: undefined,
     viewHost: undefined,
     previous: menu.state,
+    createdSplit: false,
     lastEditor: vscode.window.activeTextEditor,
   };
 
@@ -197,7 +244,7 @@ export function registerMenuView(context: vscode.ExtensionContext, menu: MenuCon
       if (editor && editor.document.languageId === "abc") view.lastEditor = editor;
     }),
     vscode.commands.registerCommand("abc.menu.showView", () =>
-      location() === "panel" ? vscode.commands.executeCommand(`${PANEL_VIEW_ID}.focus`) : showBesidePanel(view)
+      location() === "panel" ? vscode.commands.executeCommand(`${PANEL_VIEW_ID}.focus`) : showEditorPanel(view)
     ),
     vscode.commands.registerCommand("abc.menu.hideView", () => hideView(view)),
     // An internal command (the underscore keeps it out of the palette) that lets the extension host tests send a message as the page would.

@@ -55,9 +55,9 @@ describe("the settings of the modal keymap in package.json", () => {
   it("declares the settings of the menu view: it opens by itself, and sits beside the editor by default", () => {
     assert.strictEqual(settings["abc.menuView.autoOpen"].type, "boolean");
     assert.strictEqual(settings["abc.menuView.autoOpen"].default, true);
-    assert.deepStrictEqual(settings["abc.menuView.location"].enum, ["beside", "panel"]);
-    assert.strictEqual(settings["abc.menuView.location"].default, "beside");
-    assert.strictEqual(settings["abc.menuView.location"].enumDescriptions?.length, 2);
+    assert.deepStrictEqual(settings["abc.menuView.location"].enum, ["below", "beside", "panel"]);
+    assert.strictEqual(settings["abc.menuView.location"].default, "below");
+    assert.strictEqual(settings["abc.menuView.location"].enumDescriptions?.length, 3);
   });
 
   it("contributes the webview of the bottom panel only when the location is the panel", () => {

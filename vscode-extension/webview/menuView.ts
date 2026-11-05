@@ -8,7 +8,7 @@
 import { CATEGORY_ORDER, categoryName } from "../src/menu/categories";
 import { ViewModel, ViewRow } from "../src/menu/menuViewModel";
 import { ToExtension, ToWebview } from "../src/menu/viewMessages";
-import { DEFAULT_UI, Show, UiState, renderControls, renderKeyboard } from "./keyboardView";
+import { DEFAULT_UI, Show, Size, UiState, renderControls, renderKeyboard } from "./keyboardView";
 
 export type Post = (message: ToExtension) => void;
 
@@ -98,10 +98,11 @@ export function renderApp(root: HTMLElement, message: ToWebview, ui: UiState, po
 
   const parts: HTMLElement[] = [renderHeader(doc, message.model)];
   if (message.keyboard) {
-    parts.push(renderControls(doc, ui, rerender));
+    parts.push(renderControls(doc, ui, message.keyboard, post, rerender));
     if (ui.view !== "list") parts.push(renderKeyboard(doc, message.keyboard, ui, post, rerender, availableWidth));
   }
   if (ui.view !== "keyboard" || !message.keyboard) parts.push(renderList(doc, message.model, post));
+  root.setAttribute("data-size", ui.size);
   root.replaceChildren(...parts);
   // A page that is drawn again must not throw the board back to its left edge, which is what happens in a narrow panel at every key.
   const wrap = root.querySelector(".board-wrap");
@@ -120,6 +121,7 @@ declare function acquireVsCodeApi(): unknown;
 
 const VIEWS: UiState["view"][] = ["both", "keyboard", "list"];
 const SHOWS: Show[] = ["all", "0", "1", "2", "3"];
+const SIZES: Size[] = ["small", "medium", "large"];
 
 /** Reads the saved choices. A field that is missing or has an unknown value gets its default, and the highlight is never kept. */
 export function loadUi(saved: unknown): UiState {
@@ -128,6 +130,7 @@ export function loadUi(saved: unknown): UiState {
     view: VIEWS.includes(source.view as UiState["view"]) ? (source.view as UiState["view"]) : DEFAULT_UI.view,
     show: SHOWS.includes(source.show as Show) ? (source.show as Show) : DEFAULT_UI.show,
     free: typeof source.free === "boolean" ? source.free : DEFAULT_UI.free,
+    size: SIZES.includes(source.size as Size) ? (source.size as Size) : DEFAULT_UI.size,
     highlight: null,
   };
 }
@@ -146,7 +149,7 @@ function start(): void {
   if (!root) return;
   const post: Post = (message) => api.postMessage(message);
   const ui = loadUi(api.getState ? api.getState() : undefined);
-  const save = (state: UiState): void => api.setState?.({ view: state.view, show: state.show, free: state.free });
+  const save = (state: UiState): void => api.setState?.({ view: state.view, show: state.show, free: state.free, size: state.size });
   let last: ToWebview | undefined;
   const draw = (): void => {
     if (last) renderApp(root, last, ui, post, root.clientWidth - 28, save);

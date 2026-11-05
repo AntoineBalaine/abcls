@@ -845,20 +845,22 @@
         "abc.menuView.autoOpen": {
           "type": "boolean",
           "default": true,
-          "description": "Open the view of the select and transform menus beside the editor every time a menu opens or the mode switches. With false, open it with the command abc: Show the menu view.",
+          "description": "Open the view of the select and transform menus every time a menu opens or the mode switches. With false, open it with the command abc: Show the menu view.",
           "scope": "application"
         },
         "abc.menuView.location": {
           "type": "string",
           "enum": [
+            "below",
             "beside",
             "panel"
           ],
           "enumDescriptions": [
+            "In a row below the editor, as wide as the window. The editor area is split in two rows when it has one group.",
             "In an editor column beside the current one.",
-            "In the bottom panel, which is as wide as the window and suits the keyboard view. It does not open by itself: open the tab ABC keys once."
+            "In the bottom panel, which is as wide as the window. It does not open by itself: open the tab ABC keys once."
           ],
-          "default": "beside",
+          "default": "below",
           "description": "Where the view of the select and transform menus lives.",
           "scope": "application"
         },

@@ -94,7 +94,7 @@ describe("displayNotation", () => {
 
 describe("loadUi", () => {
   it("keeps the valid saved choices, and never the highlight", () => {
-    assert.deepStrictEqual(loadUi({ view: "keyboard", show: "2", free: true, highlight: "pitch" }), {
+    assert.deepStrictEqual(loadUi({ view: "keyboard", show: "2", free: true, size: "large", highlight: "pitch" }), {
       view: "keyboard",
       show: "2",
       free: true,
@@ -103,10 +103,16 @@ describe("loadUi", () => {
   });
 
   it("gives the default to a field that is missing or has an unknown value", () => {
-    assert.deepStrictEqual(loadUi({ view: "other", show: "9", free: "yes" }), { view: "both", show: "all", free: false, highlight: null });
-    assert.deepStrictEqual(loadUi(undefined), { view: "both", show: "all", free: false, highlight: null });
-    assert.deepStrictEqual(loadUi(null), { view: "both", show: "all", free: false, highlight: null });
-    assert.deepStrictEqual(loadUi("text"), { view: "both", show: "all", free: false, highlight: null });
+    assert.deepStrictEqual(loadUi({ view: "other", show: "9", free: "yes", size: "huge" }), {
+      view: "both",
+      show: "all",
+      free: false,
+      size: "small",
+      highlight: null,
+    });
+    assert.deepStrictEqual(loadUi(undefined), { view: "both", show: "all", free: false, size: "small", highlight: null });
+    assert.deepStrictEqual(loadUi(null), { view: "both", show: "all", free: false, size: "small", highlight: null });
+    assert.deepStrictEqual(loadUi("text"), { view: "both", show: "all", free: false, size: "small", highlight: null });
   });
 });
 

@@ -40,19 +40,19 @@ A transform acts on the current selection, so use the select menu first to choos
 
 ## The key view
 
-The view of the keys opens beside the editor each time a menu opens, without taking the keyboard focus. It shows the keys of the current menu, grouped by category, and a click on a key presses it. It also draws a keyboard.
+The view of the keys opens below the editor each time a menu opens, without taking the keyboard focus. When the editor area has one group, it is split in two rows for the view, and the view is as wide as the window. It shows the keys of the current menu, grouped by category, and a click on a key presses it. It also draws a keyboard.
 
 Because VS Code gives an extension no event for a held Shift or Alt key, the keyboard cannot follow the modifiers. Every key is drawn with its four layers at once: Shift at the top left, AltGr and Shift at the top right, the plain key at the bottom left and AltGr at the bottom right. A cell with a binding has the colour of its category and the short name of its command, and hovering a key shows the full detail of its four layers. The keys that no key of the keyboard carries, such as the Ctrl arrows, are in a row above it.
 
 On a Mac, AltGr is the Option key. The keyboard shows an AltGr layer as the symbol that the key types when that symbol is bound, as the `<` of the BÉPO layout is, and otherwise as the Alt chord of the key, such as `<a-t>`.
 
-| Setting                 | Values                     | What it does                                                                                                                                                                                |
-| ----------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `abc.menuView.autoOpen` | `true`, `false`            | Opens the view beside the editor each time a menu opens. The default is `true`.                                                                                                             |
-| `abc.menuView.location` | `beside`, `panel`          | Puts the view beside the editor, or in the bottom panel, which is as wide as the window and suits the keyboard. In the bottom panel it does not open by itself: open the tab ABC keys once. |
-| `abc.keyboardLayout`    | `qwerty`, `bepo`           | The layout that the keyboard draws. The extension does not detect it.                                                                                                                       |
-| `abc.keyboardGeometry`  | `staggered`, `ortholinear` | Whether the rows are shifted against each other, or the keys are in aligned columns.                                                                                                        |
-| `abc.keyboardIsoKeys`   | `true`, `false`            | Draws the keys that only ISO keyboards have.                                                                                                                                                |
+| Setting                 | Values                     | What it does                                                                                                                                                                              |
+| ----------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `abc.menuView.autoOpen` | `true`, `false`            | Opens the view each time a menu opens. The default is `true`.                                                                                                                             |
+| `abc.menuView.location` | `below`, `beside`, `panel` | Puts the view in a row below the editor, which is the default, in a column beside it, or in the bottom panel. In the bottom panel it does not open by itself: open the tab ABC keys once. |
+| `abc.keyboardLayout`    | `qwerty`, `bepo`           | The layout that the keyboard draws. The extension does not detect it.                                                                                                                     |
+| `abc.keyboardGeometry`  | `staggered`, `ortholinear` | Whether the rows are shifted against each other, or the keys are in aligned columns.                                                                                                      |
+| `abc.keyboardIsoKeys`   | `true`, `false`            | Draws the keys that only ISO keyboards have.                                                                                                                                              |
 
 The settings of the view and of the keyboard belong to the user, and a workspace cannot set them. The setting `abc.keymap` can also be set for a workspace.
 

@@ -43,6 +43,8 @@ export interface CapView {
 export interface KeyboardModel {
   layout: "qwerty" | "bepo";
   geometry: "staggered" | "ortholinear";
+  /** Whether the keys that only ISO keyboards have are drawn. */
+  iso: boolean;
   caps: CapView[][];
   /** The keys of the current menu that no cap carries: the Ctrl chords, Tab, and the mode keys on a layout that does not type them. */
   tray: ViewRow[];
@@ -139,5 +141,5 @@ export function buildKeyboardModel(keymap: Keymap, state: MenuState, options: Ke
   for (const [canon, entry] of bindings) {
     if (!placed.has(canon)) tray.push(toRow(entry.key, entry.node));
   }
-  return { layout: options.layout, geometry: options.geometry, caps, tray };
+  return { layout: options.layout, geometry: options.geometry, iso: options.iso, caps, tray };
 }
