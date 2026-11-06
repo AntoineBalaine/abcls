@@ -1791,6 +1791,29 @@ export function moveNextSpreadVoice(state: SpreadState): SpreadState | null {
 }
 
 /**
+ * Lowers the bass by one octave when it lies a 3rd (3 or 4 semitones) below the voice above it, which turns the 3rd into a 10th.
+ * Because the moved voices shift down as one block, a 3rd at the bottom would otherwise stay a 3rd while the whole bottom of the voicing
+ * goes down, so the bass is corrected as soon as the 3rd appears. The limits of a valid state still apply to the new bass.
+ */
+export function lowerBassFromThird(state: SpreadState): SpreadState {
+  const voices = spreadStateVoices(state);
+  const gap = voices[1].midi - voices[0].midi;
+  if (gap !== 3 && gap !== 4) return state;
+  const stack = state.stack.slice();
+  const bass = stack[stack.length - 1];
+  stack[stack.length - 1] = { ...bass, midi: bass.midi - 12 };
+  return { lead: state.lead, unmoved: state.unmoved, stack };
+}
+
+/**
+ * Moves the next voice and then corrects the bass. Returns null when no voice can move.
+ */
+export function advanceSpreadState(state: SpreadState): SpreadState | null {
+  const moved = moveNextSpreadVoice(state);
+  return moved === null ? null : lowerBassFromThird(moved);
+}
+
+/**
  * Picks the voice that makes room for the bass when the close voicing has no root: the lowest tension, or else the lowest fifth.
  * Returns the index in the voices, which are sorted from the top to the bottom, or -1 when no voice can go.
  */
@@ -1808,6 +1831,7 @@ export function pickVoiceToRemoveForBass(others: VoicedNote[]): number {
  * Builds a spread voicing from the chord scale close voicing, by pushing its voices down by octaves, one at a time.
  * The root goes to the bottom first. Then the voice right under the lead drops below the voices that stay, and the voices that
  * moved earlier are pushed down. Because the voices that stay behind remain close, the closest intervals are in the upper voices.
+ * Whenever the bass lies a 3rd below the voice above it, the bass drops one more octave, so that the interval becomes a 10th.
  * The loop stops before the first step that breaks a spacing limit, so the result is the last valid step.
  *
  * @param rootPosChord The root-position chord from buildChord
@@ -1845,13 +1869,13 @@ export function buildScaleSpreadVoicing(
   const ceiling = others.length > 0 ? others[others.length - 1].midi : lead.midi;
   const bass: VoicedNote = { ...root, midi: highestMidiBelow(ceiling, rootPitchClass) };
 
-  let state: SpreadState = { lead, unmoved: others, stack: [bass] };
+  let state = lowerBassFromThird({ lead, unmoved: others, stack: [bass] });
   if (!isSpreadStateValid(spreadStateVoices(state))) return null;
 
-  let next = moveNextSpreadVoice(state);
+  let next = advanceSpreadState(state);
   while (next !== null && isSpreadStateValid(spreadStateVoices(next))) {
     state = next;
-    next = moveNextSpreadVoice(state);
+    next = advanceSpreadState(state);
   }
   return spreadStateVoices(state);
 }

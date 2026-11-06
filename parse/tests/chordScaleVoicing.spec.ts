@@ -327,6 +327,16 @@ describe("the chord scale spread voicing", () => {
       expect(letters(voices!)).to.equal("EABC");
     });
 
+    it("keeps a 10th, and not a 3rd, between the bass and the voice above it: B7 under F# in E with six voices", () => {
+      const voices = scaleSpread(makeChord(KeyRoot.B, KeyAccidental.None, ChordQuality.Dominant, 7), 78, 6, makeKey(KeyRoot.E));
+      expect(voices!.map((voice) => voice.midi)).to.deep.equal([35, 51, 61, 68, 69, 78]);
+    });
+
+    it("lowers the bass of G#m under D# in E with six voices, where it formed a 3rd with the voice above", () => {
+      const voices = scaleSpread(makeChord(KeyRoot.G, KeyAccidental.Sharp, ChordQuality.Minor, 7), 75, 6, makeKey(KeyRoot.E));
+      expect(voices![1].midi - voices![0].midi).to.equal(15);
+    });
+
     it("returns null when the lead is not in the chord scale", () => {
       expect(scaleSpread(cmaj7, 77, 5)).to.equal(null);
     });
@@ -372,6 +382,17 @@ describe("the chord scale spread voicing", () => {
             if (voices[index].midi - voices[index - 1].midi > MAX_UPPER_GAP) upperOk = false;
           }
           return bassGap <= MAX_BASS_GAP && (minBass === undefined || voices[0].midi >= minBass) && upperOk;
+        })
+      );
+    });
+
+    it("never leaves a 3rd between the bass and the voice above it", () => {
+      fc.assert(
+        fc.property(spreadArb, (input) => {
+          const voices = build(input);
+          if (voices === null) return true;
+          const bassGap = voices[1].midi - voices[0].midi;
+          return bassGap !== 3 && bassGap !== 4;
         })
       );
     });

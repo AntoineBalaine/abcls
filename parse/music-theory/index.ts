@@ -115,6 +115,7 @@ export {
   buildClusterVoicing,
   buildScaleCloseVoicing,
   buildScaleSpreadVoicing,
+  lowerBassFromThird,
   MAX_BASS_GAP,
   swapChordForRootLead,
   isMinorSecondAboveChordTone,
