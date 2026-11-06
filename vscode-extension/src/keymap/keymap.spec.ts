@@ -75,6 +75,9 @@ describe("resolveKey", () => {
     const scaleClose = resolveKey(DEFAULT_KEYMAP.transform, ["g"], "t");
     assert.ok(scaleClose && scaleClose.type === "leaf" && scaleClose.action.name === "harmonizeVoicing");
     assert.strictEqual((scaleClose.action.args as unknown[])[0], "scaleClose");
+    const scaleSpread = resolveKey(DEFAULT_KEYMAP.transform, ["g"], "S");
+    assert.ok(scaleSpread && scaleSpread.type === "leaf" && scaleSpread.action.name === "harmonizeVoicing");
+    assert.strictEqual((scaleSpread.action.args as unknown[])[0], "scaleSpread");
     for (const oldKey of ["c", "k", "s"]) {
       assert.ok(resolveKey(DEFAULT_KEYMAP.transform, ["g"], oldKey), `the key g ${oldKey} must stay`);
     }

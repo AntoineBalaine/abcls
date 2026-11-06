@@ -12,6 +12,7 @@ import {
   buildChordScale,
   buildClusterVoicing,
   buildScaleCloseVoicing,
+  buildScaleSpreadVoicing,
   swapChordForRootLead,
   substituteTensions,
   descendScale,
@@ -272,7 +273,7 @@ export function harmonize(selection: Selection, steps: number, ctx: ABCContext):
  * written, rather than building one under a lead note, so they live in
  * dropVoicing/DropVoicing (./revoice) instead of here.
  */
-export type VoicingType = "close" | "cluster" | "spread" | "scaleClose";
+export type VoicingType = "close" | "cluster" | "spread" | "scaleClose" | "scaleSpread";
 
 /**
  * Snapshot of the harmonic context at a given position.
@@ -510,7 +511,14 @@ export function voiceChord(
   let leadTension: VoicedNote | null = null;
   let voicedChord: VoicedNote[];
 
-  if (voicing === "scaleClose") {
+  if (voicing === "scaleSpread") {
+    // Chord scale spread voicing: push the voices of the chord scale close voicing down by octaves
+    if (!isChordScaleTone(lead.midi, rootPosChord, chord, key)) return null;
+    tensions = getAvailableTensions(rootPosChord, chord, key);
+    const spreadVoicing = buildScaleSpreadVoicing(rootPosChord, tensions, lead.midi, voiceCount);
+    if (spreadVoicing === null) return null;
+    voicedChord = spreadVoicing;
+  } else if (voicing === "scaleClose") {
     // Chord scale close voicing: walk down the chord scale from the lead
     if (!isChordScaleTone(lead.midi, rootPosChord, chord, key)) return null;
     tensions = getAvailableTensions(rootPosChord, chord, key);

@@ -6,6 +6,10 @@ import {
   buildChord,
   getAvailableTensions,
   buildScaleCloseVoicing,
+  buildScaleSpreadVoicing,
+  MAX_BASS_GAP,
+  MAX_UPPER_GAP,
+  LOW_INTERVAL_LIMITS,
   swapChordForRootLead,
   keyRootToLetter,
   keyAccidentalToSemitones,
@@ -287,6 +291,94 @@ describe("the chord scale close voicing", () => {
     it("only uses the notes of the chord scale", () => {
       fc.assert(
         fc.property(voicingArb, (input) => {
+          const voices = build(input);
+          if (voices === null) return true;
+          const chord = swapChordForRootLead(makeChord(input.root, input.accidental, input.quality, 7), input.leadMidi % 12);
+          const rootPosChord = buildChord(chord, input.leadMidi);
+          const tensions = getAvailableTensions(rootPosChord, chord, makeKey(input.keyRoot));
+          const allowed = new Set([...rootPosChord.map((note) => note.midi % 12), ...Array.from(tensions.values()).map((note) => note.midi % 12)]);
+          return voices.every((voice) => allowed.has(voice.midi % 12));
+        })
+      );
+    });
+  });
+});
+
+/** The voicing that voiceChord builds for the chord scale spread voicing: the sixth chord swap comes first, and then the loop. */
+function scaleSpread(written: ParsedChord, leadMidi: number, voiceCount: number, key: KeySignature = C_MAJOR): VoicedNote[] | null {
+  const chord = swapChordForRootLead(written, leadMidi % 12);
+  const rootPosChord = buildChord(chord, leadMidi);
+  const tensions = getAvailableTensions(rootPosChord, chord, key);
+  return buildScaleSpreadVoicing(rootPosChord, tensions, leadMidi, voiceCount);
+}
+
+describe("the chord scale spread voicing", () => {
+  const cmaj7 = makeChord(KeyRoot.C, KeyAccidental.None, ChordQuality.Major, 7);
+
+  describe("example-based tests", () => {
+    it("pushes the voices of Cmaj7 under E down until the low interval limit stops it: E A G B C with five voices", () => {
+      const voices = scaleSpread(cmaj7, 76, 5);
+      expect(letters(voices!)).to.equal("EAGBC");
+      expect(voices!.map((voice) => voice.midi)).to.deep.equal([48, 59, 67, 69, 76]);
+    });
+
+    it("makes room for the root with four voices: E A B C", () => {
+      const voices = scaleSpread(cmaj7, 76, 4);
+      expect(letters(voices!)).to.equal("EABC");
+    });
+
+    it("returns null when the lead is not in the chord scale", () => {
+      expect(scaleSpread(cmaj7, 77, 5)).to.equal(null);
+    });
+  });
+
+  describe("property-based tests", () => {
+    const spreadArb = fc.record({
+      root: fc.constantFrom(...ROOTS),
+      accidental: fc.constantFrom(...ACCIDENTALS),
+      quality: fc.constantFrom(...QUALITIES),
+      keyRoot: fc.constantFrom(...ROOTS),
+      voiceCount: fc.integer({ min: 4, max: 6 }),
+      leadMidi: fc.integer({ min: 60, max: 90 }),
+    });
+
+    function build(input: { root: KeyRoot; accidental: KeyAccidental; quality: ChordQuality; keyRoot: KeyRoot; voiceCount: number; leadMidi: number }) {
+      return scaleSpread(makeChord(input.root, input.accidental, input.quality, 7), input.leadMidi, input.voiceCount, makeKey(input.keyRoot));
+    }
+
+    it("builds the requested voices, ascending, with the lead on top and the root in the bass", () => {
+      fc.assert(
+        fc.property(spreadArb, (input) => {
+          const voices = build(input);
+          if (voices === null) return true;
+          const chord = swapChordForRootLead(makeChord(input.root, input.accidental, input.quality, 7), input.leadMidi % 12);
+          const rootPitchClass = buildChord(chord, input.leadMidi)[0].midi % 12;
+          const midis = voices.map((voice) => voice.midi);
+          const isStrictlyAscending = midis.every((midi, index) => index === 0 || midi > midis[index - 1]);
+          return voices.length === input.voiceCount && midis[midis.length - 1] === input.leadMidi && isStrictlyAscending && midis[0] % 12 === rootPitchClass;
+        })
+      );
+    });
+
+    it("respects the spacing limits and the low interval limits", () => {
+      fc.assert(
+        fc.property(spreadArb, (input) => {
+          const voices = build(input);
+          if (voices === null) return true;
+          const bassGap = voices[1].midi - voices[0].midi;
+          const minBass = LOW_INTERVAL_LIMITS[bassGap];
+          let upperOk = true;
+          for (let index = 2; index < voices.length; index++) {
+            if (voices[index].midi - voices[index - 1].midi > MAX_UPPER_GAP) upperOk = false;
+          }
+          return bassGap <= MAX_BASS_GAP && (minBass === undefined || voices[0].midi >= minBass) && upperOk;
+        })
+      );
+    });
+
+    it("only uses the notes of the chord scale and the root", () => {
+      fc.assert(
+        fc.property(spreadArb, (input) => {
           const voices = build(input);
           if (voices === null) return true;
           const chord = swapChordForRootLead(makeChord(input.root, input.accidental, input.quality, 7), input.leadMidi % 12);

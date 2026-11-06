@@ -114,6 +114,8 @@ export {
   buildChordScale,
   buildClusterVoicing,
   buildScaleCloseVoicing,
+  buildScaleSpreadVoicing,
+  MAX_BASS_GAP,
   swapChordForRootLead,
   isMinorSecondAboveChordTone,
   // Phase 4: Diatonic Chord Derivation

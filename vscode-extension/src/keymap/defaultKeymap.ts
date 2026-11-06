@@ -119,6 +119,10 @@ export const DEFAULT_KEYMAP: Keymap = {
           short: "scale close",
           isNew: true,
         }),
+        S: leaf("chord scale spread voicing", "voicing", "transform", "harmonizeVoicing", ["scaleSpread", count(4, 1), null], {
+          short: "scale spread",
+          isNew: true,
+        }),
       },
       "voicings ›"
     ),

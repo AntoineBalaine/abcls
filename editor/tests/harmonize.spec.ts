@@ -741,6 +741,11 @@ describe("harmonize", () => {
       expect(result).to.equal('X:1\nK:E\n"G#m"[B,CFGBd]|\n');
     });
 
+    it('"C"e with the chord scale spread voicing and 5 voices gives E A G B C from the top, with the closest intervals in the upper voices', () => {
+      const result = harmonizeClose('X:1\nK:C\n"C"e|\n', -1, "scaleSpread", 5);
+      expect(result).to.equal('X:1\nK:C\n"C"[C,B,GAe]|\n');
+    });
+
     it('"C"e in 6 voices with the chord scale close voicing walks down the chord scale from the lead', () => {
       const result = harmonizeClose('X:1\nK:C\n"C"e|\n', -1, "scaleClose", 6);
       expect(result).to.equal('X:1\nK:C\n"C"[DGABce]|\n');
