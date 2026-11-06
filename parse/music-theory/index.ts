@@ -140,3 +140,5 @@ export { findPreviousChordInVoice, findNextChordInVoice } from "./voiceLeading";
 
 // Re-export chord position collector types
 export { ChordPositionCollector, ChordPosition, ChordCollectorConfig } from "../interpreter/ChordPositionCollector";
+
+export { BeamItem, beamJoins, groupStarts } from "./beaming";
