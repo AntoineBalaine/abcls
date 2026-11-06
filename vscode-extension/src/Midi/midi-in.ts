@@ -2,14 +2,21 @@ import JZZ from "jzz";
 // no types for jzz-midi-smf
 // @ts-expect-error no types available
 import jzzMidiSmf from "jzz-midi-smf";
-import { StatusBarAlignment, StatusBarItem, TextEditorEdit, window } from "vscode";
+import { ConfigurationTarget, Selection, StatusBarAlignment, StatusBarItem, TextEditorEdit, commands, window } from "vscode";
+import { InputAction, ControlState, InputControls, actionForMessage, createControlState, parseControllerActions, parseRestNote } from "./inputControls";
 import { Accidentals, LogLevel, getConfiguration, logger } from "./midi-utils";
+import { PedalGate, PedalMode, createPedalGate, isGateOpen, toggleGate, updatePedalGate, GateChange } from "./pedalGate";
 jzzMidiSmf(JZZ);
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace MIDIIn {
+  /** The context key that is true while the MIDI input runs, so that keys for the step input apply only then. */
+  const MIDI_INPUT_ACTIVE_CONTEXT = "abc.midiInputActive";
+
   type MIDIInStateType = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     midiInPort: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    controlInPort: any;
     active: boolean;
     lastNoteTime: number; // timestamp of last note
     chordTimeout: NodeJS.Timeout | null; // timer for chord completion
@@ -24,6 +31,7 @@ export namespace MIDIIn {
 
   const initialMidiInState: MIDIInStateType = {
     midiInPort: undefined,
+    controlInPort: undefined,
     active: false,
     lastNoteTime: 0,
     chordTimeout: null,
@@ -37,7 +45,74 @@ export namespace MIDIIn {
   // chord notes that have been lifted off
   export const chordNotes: Set<number> = new Set();
 
+  // The pedal gate, and the mode that it was made for, so that a change of the setting starts a new gate.
+  let pedalGate: PedalGate = createPedalGate("off");
+  let pedalGateMode: PedalMode = "off";
+
+  const getPedalSettings = (): { mode: PedalMode; controller: number } => {
+    const { pedalMode, pedalController } = getConfiguration().midiInput;
+    const mode: PedalMode = pedalMode === "hold" || pedalMode === "toggle" ? pedalMode : "off";
+    return { mode, controller: Number.isInteger(pedalController) ? pedalController : 64 };
+  };
+
+  // Because the setting can change while the input runs, a gate that was made for another mode is replaced.
+  const syncPedalGate = (mode: PedalMode): void => {
+    if (pedalGateMode !== mode) {
+      pedalGate = createPedalGate(mode);
+      pedalGateMode = mode;
+    }
+  };
+
+  // Writes the chord that is waiting for its release window at once, because the gate is about to close on it.
+  const flushPendingChord = (): void => {
+    if (!MIDIInState.chordTimeout) return;
+    clearTimeout(MIDIInState.chordTimeout);
+    MIDIInState.chordTimeout = null;
+    if (activeNotes.size > 0) {
+      const { accidentals, relativeMode } = getMIDIInputConfig();
+      outputNotes(activeNotes, accidentals, relativeMode);
+      activeNotes.clear();
+    }
+  };
+
+  const applyGateChange = (change: GateChange): void => {
+    if (change === "closed") flushPendingChord();
+    if (change !== "unchanged") updateMIDIStatusBarItem();
+  };
+
+  const controlState: ControlState = createControlState();
+
+  const getInputControls = (): InputControls => {
+    const { restNote, controllerActions } = getConfiguration().midiInput;
+    return { restNote: parseRestNote(restNote), controllerActions: parseControllerActions(controllerActions) };
+  };
+
+  // Carries out an action of the controls. Because a rest and a bar line are written like notes, a closed gate holds them back too.
+  const runInputAction = (action: InputAction, isOpen: boolean): void => {
+    if ((action === "rest" || action === "barLine") && !isOpen) return;
+    if (action === "rest") writeRest();
+    else if (action === "barLine") writeBarLine();
+    else if (action === "undo") undoInput();
+    else toggleInputGate();
+  };
+
+  /**
+   * Reads the messages that are not notes to write: the pedal of the gate, and the controls of the step input.
+   * It serves the port of the notes and the port of a footswitch alike, and tells whether the message was a control.
+   */
+  const handleControlMessage = (msg: ArrayLike<number>): boolean => {
+    const pedal = getPedalSettings();
+    syncPedalGate(pedal.mode);
+    applyGateChange(updatePedalGate(pedalGate, msg, pedal.mode, pedal.controller));
+    const action = actionForMessage(msg, getInputControls(), controlState);
+    if (action === undefined) return false;
+    runInputAction(action, isGateOpen(pedalGate, pedal.mode));
+    return true;
+  };
+
   const midiInMsgProcessor = JZZ.Widget();
+  // The widget of a second port, such as a MIDI footswitch, which sends controls and no notes to write.
+  const controlMsgProcessor = JZZ.Widget();
   // function called when a midi msg is received
 
   const getMIDIInputConfig = (): MIDIInputConfig => {
@@ -136,25 +211,70 @@ export namespace MIDIIn {
   };
 
   export type OutputNotesFnType = (notes: Set<number>, accidentals: "sharps" | "flats", relativeMode: boolean) => void;
+
+  /**
+   * How the text that the input writes is left in the editor:
+   * "select" selects it when the setting asks for it, so that a key can change its rhythm, and "caret" leaves only a cursor after it.
+   */
+  type WriteMode = "select" | "caret";
+
+  // Because two writes that come together would both read the same cursor, and the second one would land before the first one,
+  // every write waits for the one before it.
+  let writeQueue: Promise<void> = Promise.resolve();
+
+  const writeText = async (text: string, mode: WriteMode): Promise<void> => {
+    try {
+      const activeTextEditor = window.activeTextEditor;
+      if (!activeTextEditor) {
+        throw new Error(`No active text editor open`);
+      }
+      const position = activeTextEditor.selection.active;
+      const applied = await activeTextEditor.edit((editBuilder: TextEditorEdit) => {
+        editBuilder.insert(position, text);
+      });
+      if (!applied) return;
+      const end = position.translate(0, text.length);
+      // Because the next notes are written at the end of the selection, the selection moves along with the input.
+      if (mode === "select" && getConfiguration().midiInput.selectLatestInput === true) {
+        activeTextEditor.selection = new Selection(position, end);
+      } else if (mode === "caret") {
+        activeTextEditor.selection = new Selection(end, end);
+      }
+    } catch (err) {
+      logger(String(err), LogLevel.error, false);
+    }
+  };
+
+  const enqueueWrite = (text: string, mode: WriteMode): void => {
+    writeQueue = writeQueue.then(() => writeText(text, mode));
+  };
+
   // actually output the notes as text in the editor
   const outputNotes: OutputNotesFnType = (notes: Set<number>, accidentals?: Accidentals, relativeMode?: boolean) => {
     const outputString = notesToString(notes, accidentals, relativeMode);
-    if (outputString.length) {
-      try {
-        const activeTextEditor = window.activeTextEditor;
-        if (!activeTextEditor) {
-          throw new Error(`No active text editor open`);
-        }
-
-        activeTextEditor.edit((editBuilder: TextEditorEdit) => {
-          const position = activeTextEditor.selection.active;
-          editBuilder.insert(position, outputString);
-        });
-      } catch (err) {
-        logger(String(err), LogLevel.error, false);
-      }
-    }
+    if (outputString.length) enqueueWrite(outputString, "select");
   };
+
+  /** Writes a rest, which is music like a note, so it is selected and Page Up and Page Down change its length. */
+  export const writeRest = (): void => {
+    flushPendingChord();
+    enqueueWrite("z", "select");
+  };
+
+  /** Writes a bar line, and leaves only a cursor after it. */
+  export const writeBarLine = (): void => {
+    flushPendingChord();
+    enqueueWrite(" | ", "caret");
+  };
+
+  /** Undoes the last edit of the editor, which is the last input or the last change of a rhythm. */
+  export const undoInput = (): void => {
+    flushPendingChord();
+    writeQueue = writeQueue.then(async () => {
+      await commands.executeCommand("undo");
+    });
+  };
+
   export const processNote = (MIDINoteNumber: number, keyDown: boolean, MIDIInputConfig: MIDIInputConfig) => (outputNoteFn: OutputNotesFnType) => {
     const { accidentals, relativeMode, chordMode, chordTimeWindow } = MIDIInputConfig;
 
@@ -206,15 +326,25 @@ export namespace MIDIIn {
     const statusByte: number = msg[0] & 0xf0; // Get only the status byte type, ignore the channel
     const MIDINoteNumber: number = msg[1];
     const velocity: number = msg[2];
+    const pedal = getPedalSettings();
+    if (handleControlMessage(msg)) return;
     if ([0x80, 0x90].includes(statusByte) && MIDINoteNumber >= 12 && MIDINoteNumber <= 127) {
       // 0x90 indicates a keyDown event, 0 velocity check in the case of running status mode
       const keyDown: boolean = statusByte === 0x90 && velocity > 0;
+      // Because a note that began while the gate was open must still end, only a new note is held back by a closed gate.
+      if (keyDown && !isGateOpen(pedalGate, pedal.mode)) return;
       const MIDIInputConfig = getMIDIInputConfig();
       const noteProcessor = processNote(MIDINoteNumber, keyDown, MIDIInputConfig);
       noteProcessor(outputNotes);
     } else {
       logger(`Received other MIDI message: ${msg}`, LogLevel.warning, true);
     }
+  };
+
+  // @ts-expect-error _receive is an internal JZZ property
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  controlMsgProcessor._receive = (msg: any) => {
+    handleControlMessage(msg);
   };
 
   // start midi input
@@ -228,7 +358,17 @@ export namespace MIDIIn {
       MIDIInState.midiInPort = config.midiInput.input.length ? JZZ().openMidiIn(config.midiInput.input) : JZZ().openMidiIn();
 
       MIDIInState.midiInPort.connect(midiInMsgProcessor);
+      // Because a footswitch is often a device of its own, its port can be opened as well, for the controls only.
+      const controlInput: string = config.midiInput.controlInput ?? "";
+      if (controlInput.length > 0 && controlInput !== config.midiInput.input) {
+        MIDIInState.controlInPort = JZZ().openMidiIn(controlInput);
+        MIDIInState.controlInPort.connect(controlMsgProcessor);
+      }
       MIDIInState.active = true;
+      void commands.executeCommand("setContext", MIDI_INPUT_ACTIVE_CONTEXT, true);
+      // Because the pedal is assumed to be up when the input starts, a pedal mode starts with the gate closed.
+      pedalGateMode = getPedalSettings().mode;
+      pedalGate = createPedalGate(pedalGateMode);
     } catch (err) {
       logger(String(err), LogLevel.error, false);
     }
@@ -240,9 +380,62 @@ export namespace MIDIIn {
       MIDIInState.midiInPort.disconnect();
       MIDIInState.midiInPort.close();
     }
-    MIDIInState = initialMidiInState;
+    if (MIDIInState.controlInPort) {
+      MIDIInState.controlInPort.disconnect();
+      MIDIInState.controlInPort.close();
+    }
+    MIDIInState = { ...initialMidiInState };
     MIDIInState.active = false;
+    controlState.downControllers.clear();
+    void commands.executeCommand("setContext", MIDI_INPUT_ACTIVE_CONTEXT, false);
+    pedalGate = createPedalGate("off");
+    pedalGateMode = "off";
     updateMIDIStatusBarItem();
+  };
+
+  /**
+   * Flips the gate from a command, for a footswitch that sends a key and not a MIDI message, such as a Bluetooth page turner.
+   * A key has no release that an extension can see, so only the toggle mode can use it.
+   */
+  export const toggleInputGate = (): void => {
+    const { mode } = getPedalSettings();
+    if (mode !== "toggle") {
+      window.showInformationMessage("Set abc.midiInput.pedalMode to toggle to switch the MIDI input with a key.");
+      return;
+    }
+    syncPedalGate(mode);
+    applyGateChange(toggleGate(pedalGate));
+  };
+
+  /**
+   * Lets the user choose how the pedal acts, from a list, and saves the choice in the settings.
+   */
+  export const setPedalMode = async (): Promise<void> => {
+    const choices: Array<{ label: PedalMode; description: string }> = [
+      { label: "off", description: "The notes you play are always written" },
+      { label: "hold", description: "The notes are written only while the pedal is down" },
+      { label: "toggle", description: "Each press of the pedal switches the writing of notes on or off" },
+    ];
+    const current = getPedalSettings().mode;
+    const picked = await window.showQuickPick(
+      choices.map((choice) => ({ ...choice, description: choice.label === current ? `${choice.description} (current)` : choice.description })),
+      { placeHolder: "How should the MIDI input pedal act?" }
+    );
+    if (picked === undefined) return;
+    await getConfiguration().update(`midiInput.pedalMode`, picked.label, ConfigurationTarget.Global);
+    syncPedalGate(picked.label);
+    updateMIDIStatusBarItem();
+  };
+
+  /**
+   * Switches the setting that selects the notes that the input just wrote, and says what it is now.
+   */
+  export const toggleSelectLatestInput = async (): Promise<void> => {
+    const isOn = getConfiguration().midiInput.selectLatestInput === true;
+    await getConfiguration().update(`midiInput.selectLatestInput`, !isOn, ConfigurationTarget.Global);
+    window.showInformationMessage(
+      !isOn ? "The MIDI input now selects the notes that it writes." : "The MIDI input no longer selects the notes that it writes."
+    );
   };
 
   export const restartMIDIInput = async () => {
@@ -281,6 +474,11 @@ export namespace MIDIIn {
       statusBarItems.start = startBtn;
     }
     {
+      const gateItem = window.createStatusBarItem(StatusBarAlignment.Right, 3);
+      gateItem.command = `abc.toggleMIDIInputGate`;
+      statusBarItems.gate = gateItem;
+    }
+    {
       const stopBtn = window.createStatusBarItem(StatusBarAlignment.Right, 1);
       stopBtn.command = `abc.stopMIDIInput`;
       stopBtn.text = `$(debug-stop) Stop MIDI Input`;
@@ -304,6 +502,18 @@ export namespace MIDIIn {
       if (MIDIInState.active) {
         statusBarItems.start.hide();
         statusBarItems.stop.show();
+        const { mode } = getPedalSettings();
+        if (mode === "off") {
+          statusBarItems.gate.hide();
+        } else {
+          syncPedalGate(mode);
+          const isOpen = isGateOpen(pedalGate, mode);
+          statusBarItems.gate.text = isOpen ? `$(record) MIDI listening` : `$(circle-slash) MIDI waiting for the pedal`;
+          statusBarItems.gate.tooltip = isOpen
+            ? `Notes are written. ${mode === "hold" ? "Release" : "Press"} the pedal to stop.`
+            : `Notes are not written. Press the pedal to listen.`;
+          statusBarItems.gate.show();
+        }
       } else {
         statusBarItems.start.show();
         statusBarItems.stop.hide();

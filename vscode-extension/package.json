@@ -49,6 +49,42 @@
         "description": "Set workspace-folder specific MIDI input device for input. You can also change this manually (for more scopes) in settings under `abc › Midi Input: Input`."
       },
       {
+        "command": "abc.writeMIDIInputRest",
+        "title": "abc: MIDI Input: Write a rest",
+        "group": "MIDI Input",
+        "description": "Writes a rest (z) and selects it, so that Page Up and Page Down change its length. Bind it to a key, such as a key that a pedal sends. A MIDI control can also do it, see `abc.midiInput.controllerActions` and `abc.midiInput.restNote`."
+      },
+      {
+        "command": "abc.writeMIDIInputBarLine",
+        "title": "abc: MIDI Input: Write a bar line",
+        "group": "MIDI Input",
+        "description": "Writes a bar line after the notes that were just written."
+      },
+      {
+        "command": "abc.undoMIDIInput",
+        "title": "abc: MIDI Input: Undo the last input",
+        "group": "MIDI Input",
+        "description": "Undoes the last edit of the editor, which is the last note or rest that the input wrote, or the last change of a rhythm."
+      },
+      {
+        "command": "abc.toggleMIDIInputSelectLatest",
+        "title": "abc: MIDI Input: toggle select input notes during midi input",
+        "group": "MIDI Input",
+        "description": "Switches `abc.midiInput.selectLatestInput`. While it is on, the notes that the MIDI input just wrote are selected, so that Page Up and Page Down can divide and multiply their length."
+      },
+      {
+        "command": "abc.setMIDIInputPedalMode",
+        "title": "abc: MIDI Input: Set the pedal mode",
+        "group": "MIDI Input",
+        "description": "Chooses how a pedal switches the MIDI input: off, hold (notes are written while the pedal is down) or toggle (each press switches the writing on or off). The choice is saved in `abc.midiInput.pedalMode`."
+      },
+      {
+        "command": "abc.toggleMIDIInputGate",
+        "title": "abc: MIDI Input: Switch the writing of notes on and off (toggle pedal mode)",
+        "group": "MIDI Input",
+        "description": "Switches the MIDI input on and off when `abc.midiInput.pedalMode` is `toggle`. Bind it to the key that a footswitch sends, such as a Bluetooth page turner."
+      },
+      {
         "command": "abc.restartMIDIInput",
         "title": "abc: MIDI Input: Restart MIDI Input",
         "group": "MIDI Input",
@@ -920,6 +956,65 @@
           "description": "MIDI Device used for input. If none specified, the first valid device is used. After changing, please run the `abc: MIDI Input: Restart MIDI Input` command. You can alternatively use the command `abc: MIDI Input: Set output device` to select a device from a list.",
           "scope": "resource"
         },
+        "abc.midiInput.pedalMode": {
+          "type": "string",
+          "enum": [
+            "off",
+            "hold",
+            "toggle"
+          ],
+          "enumDescriptions": [
+            "The notes you play are always written.",
+            "The notes are written only while the pedal is down.",
+            "Each press of the pedal switches the writing of notes on or off."
+          ],
+          "default": "off",
+          "group": "MIDI Input",
+          "description": "Lets a pedal decide when the notes that you play are written. The pedal is a control change message on the MIDI input, the sustain pedal of a keyboard by default.",
+          "scope": "resource"
+        },
+        "abc.midiInput.pedalController": {
+          "type": "number",
+          "default": 64,
+          "minimum": 0,
+          "maximum": 127,
+          "group": "MIDI Input",
+          "description": "The number of the control change that the pedal sends: 64 is the sustain pedal, 66 the sostenuto pedal and 67 the soft pedal.",
+          "scope": "resource"
+        },
+        "abc.midiInput.selectLatestInput": {
+          "type": "boolean",
+          "default": false,
+          "group": "MIDI Input",
+          "description": "Select the notes that were just written, so that a key can change their rhythm: while the MIDI input runs, Page Up divides and Page Down multiplies the length of the selected notes, as the keys of a page turner pedal send them. The next notes are still written after the selection. With VSCodeVim, the selection puts the editor in Visual mode.",
+          "scope": "resource"
+        },
+        "abc.midiInput.restNote": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "minimum": 0,
+          "maximum": 127,
+          "group": "MIDI Input",
+          "description": "The number of a MIDI note that writes a rest when you press it, a keyswitch of the keyboard (21 is the lowest key of an 88-key piano). Null means that no note does.",
+          "scope": "resource"
+        },
+        "abc.midiInput.controllerActions": {
+          "type": "object",
+          "default": {},
+          "group": "MIDI Input",
+          "description": "What each control change number does while the MIDI input runs. The keys are controller numbers and the values are `rest`, `barLine`, `undo` or `toggleGate`. For example, { \"20\": \"rest\", \"21\": \"barLine\", \"22\": \"undo\", \"23\": \"toggleGate\" } for a four-button footswitch. A rest and a bar line are written only while the pedal gate is open. Do not use the number of `abc.midiInput.pedalController`.",
+          "scope": "resource"
+        },
+        "abc.midiInput.controlInput": {
+          "type": "string",
+          "default": "",
+          "group": "MIDI Input",
+          "description": "The name of a second MIDI device, such as a footswitch, whose control changes work the controls above and the pedal. Empty means that the controls come on the same device as the notes. After changing, run `abc: MIDI Input: Restart MIDI Input`.",
+          "scope": "resource"
+        },
         "abc.midiInput.chordMode": {
           "type": "boolean",
           "default": true,
@@ -1054,6 +1149,16 @@
       }
     ],
     "keybindings": [
+      {
+        "key": "pageup",
+        "command": "abc.divideRhythm",
+        "when": "editorLangId == abc && editorTextFocus && abc.midiInputActive"
+      },
+      {
+        "key": "pagedown",
+        "command": "abc.multiplyRhythm",
+        "when": "editorLangId == abc && editorTextFocus && abc.midiInputActive"
+      },
       {
         "key": "k",
         "command": "abc.menu.select",
