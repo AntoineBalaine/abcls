@@ -1,6 +1,6 @@
 import { Range } from "abcls-parser";
 import { CSNode, TAGS } from "../csTree/types";
-import { computeNodeRange } from "../utils/rangeUtils";
+import { computeNodeRange, rangeCovers } from "../utils/rangeUtils";
 import { comparePositions, findByTag } from "./treeWalk";
 
 export type NavigationDirection = "next" | "previous";
@@ -28,6 +28,21 @@ export function collectChordRanges(root: CSNode): Range[] {
     if (range !== null) ranges.push(range);
   }
   return ranges;
+}
+
+/**
+ * Lists the range of every music element that a player counts as one step, in the order of the document:
+ * a chord, a note that is not part of a chord, and a rest. Because the notes of a chord belong to the chord, they are left out.
+ */
+export function collectElementRanges(root: CSNode): Range[] {
+  const chords = collectChordRanges(root);
+  const loneNotes = collectNoteRanges(root).filter((note) => !chords.some((chord) => rangeCovers(chord, note)));
+  const rests: Range[] = [];
+  for (const rest of findByTag(root, TAGS.Rest)) {
+    const range = computeNodeRange(rest);
+    if (range !== null) rests.push(range);
+  }
+  return [...chords, ...loneNotes, ...rests].sort((a, b) => comparePositions(a.start.line, a.start.character, b.start.line, b.start.character));
 }
 
 function isEmptyRange(range: Range): boolean {
@@ -88,6 +103,18 @@ export function moveSelectionsToNote(root: CSNode, selections: Range[], directio
  */
 export function moveSelectionsToChord(root: CSNode, selections: Range[], direction: NavigationDirection, steps: number = 1): Range[] {
   return moveSelectionsAmong(collectChordRanges(root), selections, direction, steps);
+}
+
+/**
+ * Moves each selection to the next or the previous chord, lone note or rest, with the same rules as moveSelectionsToNote.
+ *
+ * @param root The root of the tree of the document
+ * @param selections The selections of the editor, empty ones included
+ * @param direction The direction to move in
+ * @param steps How many elements to move, 1 by default
+ */
+export function moveSelectionsToElement(root: CSNode, selections: Range[], direction: NavigationDirection, steps: number = 1): Range[] {
+  return moveSelectionsAmong(collectElementRanges(root), selections, direction, steps);
 }
 
 /**

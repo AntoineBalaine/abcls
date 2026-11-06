@@ -53,6 +53,14 @@ describe("selector navigators", () => {
     expect(previous).to.deep.equal([{ start: { line: 2, character: 0 }, end: { line: 2, character: 4 } }]);
   });
 
+  it("moves a caret to the next and the previous chord, note or rest", () => {
+    const rooted = rootOf("X:1\nK:C\nC [DF] z |\n");
+    const next = lookupNavigator("selectNextElement")!(rooted, [caret(2, 0)], []);
+    expect(next).to.deep.equal([{ start: { line: 2, character: 2 }, end: { line: 2, character: 6 } }]);
+    const previous = lookupNavigator("selectPreviousElement")!(rooted, [caret(2, 7)], []);
+    expect(previous).to.deep.equal([{ start: { line: 2, character: 2 }, end: { line: 2, character: 6 } }]);
+  });
+
   it("moves several notes when it is given a count", () => {
     const next = lookupNavigator("selectNextNote")!(root, [caret(2, 0)], [], 2);
     expect(next).to.deep.equal([{ start: { line: 2, character: 4 }, end: { line: 2, character: 5 } }]);

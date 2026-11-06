@@ -2,6 +2,7 @@ import {
   CSNode,
   moveSelectionsToNote,
   moveSelectionsToChord,
+  moveSelectionsToElement,
   selectContaining,
   ContainerKind,
   Selection,
@@ -75,6 +76,8 @@ const NAVIGATOR_MAP: Record<string, NavigatorFn> = {
   selectNextNote: (root, selections, _lines, steps) => moveSelectionsToNote(root, selections, "next", Number(steps ?? 1)),
   selectPreviousNote: (root, selections, _lines, steps) => moveSelectionsToNote(root, selections, "previous", Number(steps ?? 1)),
   // The elements that hold the caret: the note under it, the measure around it, the system that it is in.
+  selectNextElement: (root, selections, _lines, steps) => moveSelectionsToElement(root, selections, "next", Number(steps ?? 1)),
+  selectPreviousElement: (root, selections, _lines, steps) => moveSelectionsToElement(root, selections, "previous", Number(steps ?? 1)),
   selectNextChord: (root, selections, _lines, steps) => moveSelectionsToChord(root, selections, "next", Number(steps ?? 1)),
   selectPreviousChord: (root, selections, _lines, steps) => moveSelectionsToChord(root, selections, "previous", Number(steps ?? 1)),
 };

@@ -32,6 +32,14 @@ export const DEFAULT_KEYMAP: Keymap = {
     "<tab>": leaf("switch mode", "mode", "mode", "toggle", []),
     "<": leaf("previous note (count = notes)", "selectMove", "selector", "selectPreviousNote", [count(1, 1)], { short: "prev. note", isNew: true }),
     ">": leaf("next note (count = notes)", "selectMove", "selector", "selectNextNote", [count(1, 1)], { short: "next note", isNew: true }),
+    "(": leaf("previous chord, note or rest (count = elements)", "selectMove", "selector", "selectPreviousElement", [count(1, 1)], {
+      short: "prev. element",
+      isNew: true,
+    }),
+    ")": leaf("next chord, note or rest (count = elements)", "selectMove", "selector", "selectNextElement", [count(1, 1)], {
+      short: "next element",
+      isNew: true,
+    }),
     "[": leaf("previous chord (count = chords)", "selectMove", "selector", "selectPreviousChord", [count(1, 1)], { short: "prev. chord", isNew: true }),
     "]": leaf("next chord (count = chords)", "selectMove", "selector", "selectNextChord", [count(1, 1)], { short: "next chord", isNew: true }),
     c: leaf("chords", "selectType", "selector", "selectChords", []),

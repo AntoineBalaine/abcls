@@ -31,6 +31,8 @@ export { toAst } from "./csTree/toAst";
 export {
   collectNoteRanges,
   collectChordRanges,
+  collectElementRanges,
+  moveSelectionsToElement,
   findAdjacentRange,
   moveSelectionsToNote,
   moveSelectionsToChord,

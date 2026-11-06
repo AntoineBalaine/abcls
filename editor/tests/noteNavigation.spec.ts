@@ -2,7 +2,15 @@ import { Range } from "abcls-parser";
 import { expect } from "chai";
 import * as fc from "fast-check";
 import { describe, it } from "mocha";
-import { collectChordRanges, collectNoteRanges, findAdjacentRange, moveSelectionsToChord, moveSelectionsToNote } from "../src/selectors/noteNavigation";
+import {
+  collectChordRanges,
+  collectElementRanges,
+  moveSelectionsToElement,
+  collectNoteRanges,
+  findAdjacentRange,
+  moveSelectionsToChord,
+  moveSelectionsToNote,
+} from "../src/selectors/noteNavigation";
 import { toCSTree } from "./helpers";
 
 function caret(line: number, character: number): Range {
@@ -21,6 +29,30 @@ describe("noteNavigation", () => {
     it("lists every note in the order of the document, the notes of a chord included", () => {
       const ranges = collectNoteRanges(toCSTree(SOURCE));
       expect(ranges).to.deep.equal([range(2, 0, 1), range(2, 2, 3), range(2, 5, 6), range(2, 6, 7), range(2, 9, 10)]);
+    });
+  });
+
+  describe("moveSelectionsToElement", () => {
+    // Line 2: C at 0, [ at 2, D at 3, F at 4, ] at 5, z at 7, E at 9.
+    const rooted = toCSTree("X:1\nK:C\nC [DF] z E |\n");
+
+    it("lists the chords, the lone notes and the rests, and leaves the notes of a chord out", () => {
+      expect(collectElementRanges(rooted)).to.deep.equal([range(2, 0, 1), range(2, 2, 6), range(2, 7, 8), range(2, 9, 10)]);
+    });
+
+    it("moves from a note to the chord, from the chord to the rest, and from the rest to the next note", () => {
+      expect(moveSelectionsToElement(rooted, [caret(2, 0)], "next")).to.deep.equal([range(2, 2, 6)]);
+      expect(moveSelectionsToElement(rooted, [range(2, 2, 6)], "next")).to.deep.equal([range(2, 7, 8)]);
+      expect(moveSelectionsToElement(rooted, [range(2, 7, 8)], "next")).to.deep.equal([range(2, 9, 10)]);
+    });
+
+    it("moves backward over the same elements, and several steps with a count", () => {
+      expect(moveSelectionsToElement(rooted, [range(2, 9, 10)], "previous")).to.deep.equal([range(2, 7, 8)]);
+      expect(moveSelectionsToElement(rooted, [caret(2, 9)], "previous", 3)).to.deep.equal([range(2, 0, 1)]);
+    });
+
+    it("moves from a caret inside a chord to the element that follows the chord", () => {
+      expect(moveSelectionsToElement(rooted, [caret(2, 4)], "next")).to.deep.equal([range(2, 7, 8)]);
     });
   });
 
