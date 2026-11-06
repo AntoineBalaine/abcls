@@ -113,6 +113,9 @@ export {
   substituteTensions,
   buildChordScale,
   buildClusterVoicing,
+  buildScaleCloseVoicing,
+  swapChordForRootLead,
+  isMinorSecondAboveChordTone,
   // Phase 4: Diatonic Chord Derivation
   DIATONIC_QUALITIES,
   descendScale,

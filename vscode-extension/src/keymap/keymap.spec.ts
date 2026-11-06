@@ -71,6 +71,15 @@ describe("resolveKey", () => {
     assert.ok(closeVoicing && closeVoicing.type === "leaf" && closeVoicing.action.name === "harmonizeVoicing");
   });
 
+  it("resolves g t of the transform mode to the chord scale close voicing, next to the old voicings", () => {
+    const scaleClose = resolveKey(DEFAULT_KEYMAP.transform, ["g"], "t");
+    assert.ok(scaleClose && scaleClose.type === "leaf" && scaleClose.action.name === "harmonizeVoicing");
+    assert.strictEqual((scaleClose.action.args as unknown[])[0], "scaleClose");
+    for (const oldKey of ["c", "k", "s"]) {
+      assert.ok(resolveKey(DEFAULT_KEYMAP.transform, ["g"], oldKey), `the key g ${oldKey} must stay`);
+    }
+  });
+
   it("returns undefined for an unknown key or path", () => {
     assert.strictEqual(resolveKey(DEFAULT_KEYMAP.select, [], "@"), undefined);
     assert.strictEqual(resolveKey(DEFAULT_KEYMAP.select, ["c"], "x"), undefined);

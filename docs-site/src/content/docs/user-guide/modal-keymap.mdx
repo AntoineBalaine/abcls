@@ -111,59 +111,60 @@ A key that ends with `›` in the tables opens a smaller menu, and the keys of t
 
 ### Keys of the transform menu
 
-| Key          | What it does                                 | Category    |
-| ------------ | -------------------------------------------- | ----------- |
-| `t`          | octave up                                    | pitch       |
-| `T`          | octave down                                  | pitch       |
-| `<c-up>`     | octave up                                    | pitch       |
-| `<c-down>`   | octave down                                  | pitch       |
-| `+`          | semitone up                                  | pitch       |
-| `-`          | semitone down                                | pitch       |
-| `<c-S-up>`   | harmonize octave up                          | harmonize   |
-| `<c-S-down>` | harmonize octave down                        | harmonize   |
-| `<a-t>`      | harmonize octave up                          | harmonize   |
-| `<a-T>`      | harmonize octave down                        | harmonize   |
-| `p`          | harmonize up (diatonic)                      | harmonize   |
-| `P`          | harmonize down (diatonic)                    | harmonize   |
-| `*`          | multiply length                              | rhythm      |
-| `/`          | divide length                                | rhythm      |
-| `a`          | add sharp                                    | accidentals |
-| `A`          | add flat                                     | accidentals |
-| `e`          | enharmonize                                  | accidentals |
-| `E`          | enharmonize to key                           | accidentals |
-| `<`          | go to select mode                            | mode switch |
-| `>`          | go to transform mode                         | mode switch |
-| `<tab>`      | switch mode                                  | mode switch |
-| `v`          | V:1 to [V:1]                                 | voices      |
-| `V`          | [V:1] to V:1                                 | voices      |
-| `o`          | add voice (prompts)                          | voices      |
-| `O`          | insert voice line (prompts)                  | voices      |
-| `x`          | explode chords                               | voices      |
-| `r`          | to rest                                      | rests       |
-| `R`          | consolidate rests                            | rests       |
-| `l`          | legato (extend through rests)                | rests       |
-| `h`          | close voicing, 4 voices                      | voicings    |
-| `H`          | close voicing, 5 voices                      | voicings    |
-| `<a-h>`      | close voicing, 6 voices                      | voicings    |
-| `g`          | voicing menu (count = voices) ›              | voicings    |
-| `g 2`        | drop 2 (revoices chords)                     | voicings    |
-| `g 3`        | drop 3 (revoices chords)                     | voicings    |
-| `g 4`        | drop 2-4 (revoices chords)                   | voicings    |
-| `g c`        | close voicing                                | voicings    |
-| `g k`        | cluster voicing                              | voicings    |
-| `g s`        | spread voicing (new, not in Kakoune)         | voicings    |
-| `y`          | parallel diatonic //&lt;-prev                | parallel    |
-| `Y`          | parallel diatonic //->next                   | parallel    |
-| `{`          | parallel chromatic //&lt;-prev               | parallel    |
-| `<a-Y>`      | parallel chromatic //->next                  | parallel    |
-| `s`          | split system at cursor (new, not in Kakoune) | systems     |
-| `j`          | join system with next (new, not in Kakoune)  | systems     |
-| `i`          | interleave voices (new, not in Kakoune)      | systems     |
-| `m`          | export to MIDI                               | MIDI        |
-| `M`          | import from MIDI (prompts)                   | MIDI        |
-| `(`          | wrap crescendo (new, not in Kakoune)         | dynamics    |
-| `)`          | wrap decrescendo (new, not in Kakoune)       | dynamics    |
-| `u`          | undo (new, not in Kakoune)                   | history     |
+| Key          | What it does                                    | Category    |
+| ------------ | ----------------------------------------------- | ----------- |
+| `t`          | octave up                                       | pitch       |
+| `T`          | octave down                                     | pitch       |
+| `<c-up>`     | octave up                                       | pitch       |
+| `<c-down>`   | octave down                                     | pitch       |
+| `+`          | semitone up                                     | pitch       |
+| `-`          | semitone down                                   | pitch       |
+| `<c-S-up>`   | harmonize octave up                             | harmonize   |
+| `<c-S-down>` | harmonize octave down                           | harmonize   |
+| `<a-t>`      | harmonize octave up                             | harmonize   |
+| `<a-T>`      | harmonize octave down                           | harmonize   |
+| `p`          | harmonize up (diatonic)                         | harmonize   |
+| `P`          | harmonize down (diatonic)                       | harmonize   |
+| `*`          | multiply length                                 | rhythm      |
+| `/`          | divide length                                   | rhythm      |
+| `a`          | add sharp                                       | accidentals |
+| `A`          | add flat                                        | accidentals |
+| `e`          | enharmonize                                     | accidentals |
+| `E`          | enharmonize to key                              | accidentals |
+| `<`          | go to select mode                               | mode switch |
+| `>`          | go to transform mode                            | mode switch |
+| `<tab>`      | switch mode                                     | mode switch |
+| `v`          | V:1 to [V:1]                                    | voices      |
+| `V`          | [V:1] to V:1                                    | voices      |
+| `o`          | add voice (prompts)                             | voices      |
+| `O`          | insert voice line (prompts)                     | voices      |
+| `x`          | explode chords                                  | voices      |
+| `r`          | to rest                                         | rests       |
+| `R`          | consolidate rests                               | rests       |
+| `l`          | legato (extend through rests)                   | rests       |
+| `h`          | close voicing, 4 voices                         | voicings    |
+| `H`          | close voicing, 5 voices                         | voicings    |
+| `<a-h>`      | close voicing, 6 voices                         | voicings    |
+| `g`          | voicing menu (count = voices) ›                 | voicings    |
+| `g 2`        | drop 2 (revoices chords)                        | voicings    |
+| `g 3`        | drop 3 (revoices chords)                        | voicings    |
+| `g 4`        | drop 2-4 (revoices chords)                      | voicings    |
+| `g c`        | close voicing                                   | voicings    |
+| `g k`        | cluster voicing                                 | voicings    |
+| `g s`        | spread voicing (new, not in Kakoune)            | voicings    |
+| `g t`        | chord scale close voicing (new, not in Kakoune) | voicings    |
+| `y`          | parallel diatonic //&lt;-prev                   | parallel    |
+| `Y`          | parallel diatonic //->next                      | parallel    |
+| `{`          | parallel chromatic //&lt;-prev                  | parallel    |
+| `<a-Y>`      | parallel chromatic //->next                     | parallel    |
+| `s`          | split system at cursor (new, not in Kakoune)    | systems     |
+| `j`          | join system with next (new, not in Kakoune)     | systems     |
+| `i`          | interleave voices (new, not in Kakoune)         | systems     |
+| `m`          | export to MIDI                                  | MIDI        |
+| `M`          | import from MIDI (prompts)                      | MIDI        |
+| `(`          | wrap crescendo (new, not in Kakoune)            | dynamics    |
+| `)`          | wrap decrescendo (new, not in Kakoune)          | dynamics    |
+| `u`          | undo (new, not in Kakoune)                      | history     |
 
 {/* keymap-tables:end */}
 

@@ -115,6 +115,10 @@ export const DEFAULT_KEYMAP: Keymap = {
         c: leaf("close voicing", "voicing", "transform", "harmonizeVoicing", ["close", count(4, 1), null]),
         k: leaf("cluster voicing", "voicing", "transform", "harmonizeVoicing", ["cluster", count(4, 1), null]),
         s: leaf("spread voicing", "voicing", "transform", "harmonizeVoicing", ["spread", count(4, 1), null], { isNew: true }),
+        t: leaf("chord scale close voicing", "voicing", "transform", "harmonizeVoicing", ["scaleClose", count(4, 1), null], {
+          short: "scale close",
+          isNew: true,
+        }),
       },
       "voicings ›"
     ),

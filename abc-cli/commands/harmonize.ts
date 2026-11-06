@@ -6,7 +6,7 @@ import { blockChords, harmonizeVoices, LeadKind, TopNoteRule, VoicingType } from
 import { Command } from "commander";
 import { readAbcFile, writeFile } from "../utils/shared";
 
-const VOICINGS = new Set(["close", "cluster", "spread"]);
+const VOICINGS = new Set(["close", "cluster", "spread", "scaleClose"]);
 const TOP_NOTE_RULES = new Set(["nearest", "voicing"]);
 const LEAD_KINDS = new Set(["guide-tones", "tensions"]);
 
@@ -16,14 +16,14 @@ export const harmonizeCommand = new Command("harmonize")
   .option("--from <voice>", "Id of the voice that carries the melody, to harmonize note by note")
   .option("--chords-from <voice>", "Id of the voice that carries the chord symbols, to write one block chord per symbol")
   .requiredOption("--into <ids>", "Comma-separated ids of the new voices, from the highest part to the lowest")
-  .option("--voicing <type>", "Voicing of the chords: close, cluster or spread", "close")
+  .option("--voicing <type>", "Voicing of the chords: close, cluster, spread or scaleClose", "close")
   .option("--top-note <rule>", "With --chords-from: how the top note of each chord is chosen: nearest or voicing", "nearest")
   .option("--prefer-lead <kinds>", "With --chords-from: prefer these kinds of top note: guide-tones, tensions, or both (comma-separated)")
   .option("-w, --write", "Write the result back to the file")
   .action(
     (file: string, options: { from?: string; chordsFrom?: string; into: string; voicing: string; topNote: string; preferLead?: string; write?: boolean }) => {
       if (!VOICINGS.has(options.voicing)) {
-        console.error(`Error: --voicing must be one of close, cluster, spread (got "${options.voicing}")`);
+        console.error(`Error: --voicing must be one of close, cluster, spread, scaleClose (got "${options.voicing}")`);
         process.exit(1);
       }
 

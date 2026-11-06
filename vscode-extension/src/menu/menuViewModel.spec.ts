@@ -20,9 +20,9 @@ describe("buildViewModel", () => {
     const model = buildViewModel(DEFAULT_KEYMAP, { ...openMenu("transform"), path: ["g"] });
     assert.deepStrictEqual(model.breadcrumb, ["transform", "voicing menu (count = voices)"]);
     const notations = model.rows.map((row) => row.notation);
-    for (const key of ["2", "3", "4", "c", "k", "s"]) assert.ok(notations.includes(key), key);
+    for (const key of ["2", "3", "4", "c", "k", "s", "t"]) assert.ok(notations.includes(key), key);
     for (const key of ["<", ">", "<tab>"]) assert.ok(notations.includes(key), key);
-    assert.ok(!notations.includes("t"), "the other keys of the root must not be listed inside a group");
+    assert.ok(!notations.includes("+"), "the other keys of the root must not be listed inside a group");
   });
 
   it("carries the typed count and the open state", () => {
