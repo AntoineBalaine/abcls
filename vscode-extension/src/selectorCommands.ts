@@ -21,6 +21,17 @@ function getSelectionRanges(editor: vscode.TextEditor): Range[] | undefined {
   }));
 }
 
+/**
+ * Lists every selection of the editor, the empty carets included.
+ * Because moving to the next note starts from the caret, the navigators need the carets that getSelectionRanges leaves out.
+ */
+function getAllSelections(editor: vscode.TextEditor): Range[] {
+  return editor.selections.map((s) => ({
+    start: { line: s.start.line, character: s.start.character },
+    end: { line: s.end.line, character: s.end.character },
+  }));
+}
+
 function applySelectionsToEditor(editor: vscode.TextEditor, ranges: ApplySelectorResult["ranges"]): void {
   if (ranges.length === 0) {
     vscode.window.showInformationMessage("No matches found.");
@@ -65,6 +76,7 @@ export async function applySelectorByName(client: LanguageClient, selectorName: 
       selector: selectorName,
       ...(args.length > 0 ? { args } : {}),
       ranges,
+      selections: getAllSelections(editor),
     });
 
     if (result.ranges.length > 0) {

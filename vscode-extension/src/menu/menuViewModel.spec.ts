@@ -10,7 +10,7 @@ describe("buildViewModel", () => {
   it("lists the keys of the root of select mode, with the groups and the mode keys", () => {
     const model = buildViewModel(DEFAULT_KEYMAP, openMenu("select"));
     const notations = model.rows.map((row) => row.notation);
-    assert.ok(notations.includes("c") && notations.includes("1") && notations.includes("<tab>"));
+    assert.ok(notations.includes("c") && notations.includes("f") && notations.includes("<tab>"));
     assert.ok(model.rows.find((row) => row.notation === "i")?.isGroup);
     assert.deepStrictEqual(model.breadcrumb, ["select"]);
     assert.strictEqual(model.open, true);
@@ -21,7 +21,8 @@ describe("buildViewModel", () => {
     assert.deepStrictEqual(model.breadcrumb, ["transform", "voicing menu (count = voices)"]);
     const notations = model.rows.map((row) => row.notation);
     for (const key of ["2", "3", "4", "c", "k", "s", "t"]) assert.ok(notations.includes(key), key);
-    for (const key of ["<", ">", "<tab>"]) assert.ok(notations.includes(key), key);
+    // Because k is bound inside the group g (the cluster voicing), only Tab of the mode keys of the root still works there.
+    assert.ok(notations.includes("<tab>"));
     assert.ok(!notations.includes("+"), "the other keys of the root must not be listed inside a group");
   });
 

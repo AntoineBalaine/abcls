@@ -10,7 +10,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { lookupSelector } from "../../abc-lsp-server/src/selectorLookup";
+import { lookupNavigator, lookupSelector } from "../../abc-lsp-server/src/selectorLookup";
 import { lookupTransform } from "../../editor/src/runner/transformLookup";
 import { DEFAULT_KEYMAP } from "../src/keymap/defaultKeymap";
 import { Group, Keymap } from "../src/keymap/types";
@@ -36,7 +36,7 @@ function collectProblems(group: Group, where: string, known: Set<string>, proble
       continue;
     }
     const { kind, name } = node.action;
-    if (kind === "selector" && lookupSelector(name) === null) problems.push(`${here}: the selector "${name}" does not exist`);
+    if (kind === "selector" && lookupSelector(name) === null && lookupNavigator(name) === null) problems.push(`${here}: the selector "${name}" does not exist`);
     if (kind === "transform" && lookupTransform(name) === null) problems.push(`${here}: the transform "${name}" does not exist`);
     if (kind === "command" && !known.has(name) && !BUILT_IN_COMMANDS.includes(name) && !BUILT_IN_PREFIXES.some((prefix) => name.startsWith(prefix))) {
       problems.push(`${here}: the command "${name}" is not contributed by package.json`);

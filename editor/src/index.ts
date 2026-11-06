@@ -29,6 +29,18 @@ export { toAst } from "./csTree/toAst";
 
 // Selectors
 export {
+  collectNoteRanges,
+  collectChordRanges,
+  findAdjacentRange,
+  moveSelectionsToNote,
+  moveSelectionsToChord,
+  moveSelectionsAmong,
+} from "./selectors/noteNavigation";
+export { extendAround } from "./selectors/aroundExtension";
+export { collectContainerRanges, selectContaining } from "./selectors/containingSelectors";
+export type { ContainerKind } from "./selectors/containingSelectors";
+export type { NavigationDirection } from "./selectors/noteNavigation";
+export {
   selectChords,
   selectNotes,
   selectNonChordNotes,

@@ -98,16 +98,16 @@ export function resolveLayer(cap: KeyCap, level: LayerLevel, mode: MenuState["mo
   const dead = cap[4]?.dead?.[level] === true;
   const typed = dead || !own ? undefined : bindings.get(canonical(own));
   if (level < 2 || typed) {
-    return finish(level, symbol, typed?.key ?? symbol, typed?.node, dead, mode);
+    return finish(level, symbol, typed?.key ?? symbol, typed?.node, dead);
   }
   const chord = bindings.get(canonical(`<a-${cap[(level - 2) as 0 | 1]}>`));
-  return finish(level, symbol, chord?.key ?? `<a-${cap[(level - 2) as 0 | 1]}>`, chord?.node, dead, mode);
+  return finish(level, symbol, chord?.key ?? `<a-${cap[(level - 2) as 0 | 1]}>`, chord?.node, dead);
 }
 
-function finish(level: LayerLevel, symbol: string, notation: string, node: KeymapNode | undefined, dead: boolean, mode: MenuState["mode"]): LayerView {
+function finish(level: LayerLevel, symbol: string, notation: string, node: KeymapNode | undefined, dead: boolean): LayerView {
   if (node) return { level, symbol, notation, state: "bound", row: toRow(notation, node) };
   if (dead) return { level, symbol, notation, state: "dead" };
-  if (mode === "transform" && level < 2 && isDigit(symbol)) return { level, symbol, notation, state: "count" };
+  if (level < 2 && isDigit(symbol)) return { level, symbol, notation, state: "count" };
   return { level, symbol, notation, state: "unbound" };
 }
 

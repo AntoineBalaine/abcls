@@ -33,7 +33,7 @@ export async function runLeaf(leaf: Leaf, count: number | undefined, deps: Dispa
       // Because a transform acts on the selection, a bare cursor leaves it nothing to work on, and the command would return without a word.
       if (hasNothingSelected()) {
         vscode.window.showInformationMessage(
-          "Nothing is selected, so there is nothing to transform. Switch to the select menu with < or Tab, choose what to select, and switch back with > or Tab."
+          "Nothing is selected, so there is nothing to transform. Switch to the select menu with k or Tab, choose what to select, and switch back with h or Tab."
         );
         return;
       }

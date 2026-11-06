@@ -73,7 +73,7 @@ suite("The modal menu", () => {
     await key("5");
     await key("g");
     assert.deepStrictEqual(await state(), { open: true, mode: "transform", path: ["g"], count: "5" });
-    await key("<");
+    await key("<tab>");
     assert.deepStrictEqual(await state(), { open: true, mode: "select", path: [], count: "5" });
   });
 

@@ -36,8 +36,8 @@ function validateLeaf(node: KeymapNode & { type: "leaf" }, here: string, errors:
   for (const arg of action.args) {
     if (isCountLike(arg) && !isCountTemplate(arg)) errors.push(`${here}: a count argument needs a numeric default and a numeric multiplier`);
   }
-  if (action.args.some(isCountTemplate) && action.kind !== "transform") {
-    errors.push(`${here}: a count argument is only meaningful on a transform`);
+  if (action.args.some(isCountTemplate) && action.kind !== "transform" && action.kind !== "selector") {
+    errors.push(`${here}: a count argument is only meaningful on a transform or a selector`);
   }
 }
 

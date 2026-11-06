@@ -39,6 +39,13 @@ const SHIFTED_SYMBOLS: Record<string, string> = {
   "~": "`",
 };
 
+/** The chords that type < and > on the BÉPO layout, where AltGr is the Option key of a Mac. */
+const BEPO_ALTGR_LESS = "alt+2";
+const BEPO_ALTGR_GREATER = "alt+3";
+/** The chords that type [ and ] on the BÉPO layout. */
+const BEPO_ALTGR_OPEN_BRACKET = "alt+4";
+const BEPO_ALTGR_CLOSE_BRACKET = "alt+5";
+
 const NAMED_TO_VSCODE: Record<string, string> = {
   up: "up",
   down: "down",
@@ -72,11 +79,23 @@ function baseKeyStrings(notation: Notation): string[] | undefined {
   if (key.length !== 1) return undefined;
   if (key >= "a" && key <= "z") return [key];
   if (key >= "A" && key <= "Z") return [`shift+${key.toLowerCase()}`];
+  if (key === "[" || key === "]") {
+    // Because the BÉPO layout types the square brackets with AltGr on the keys 4 and 5, those chords are bound too.
+    const keys = [key];
+    if (!notation.ctrl && !notation.shift && !notation.alt) keys.push(key === "[" ? BEPO_ALTGR_OPEN_BRACKET : BEPO_ALTGR_CLOSE_BRACKET);
+    return keys;
+  }
   if (DIGITS.includes(key) || PLAIN_SYMBOLS.includes(key)) return [key];
   if (key in SHIFTED_SYMBOLS) {
     const shifted = [`shift+${SHIFTED_SYMBOLS[key]}`];
     // Because the angle brackets sit on other keys on other layouts, the character itself is bound as well.
     if (key === "<" || key === ">") shifted.push(key);
+    // Because the BÉPO layout types the angle brackets with AltGr (the Option key of a Mac) on the keys 2 and 3, those chords are bound too.
+    // A notation with a modifier of its own would get the modifier twice, so only the bare angle brackets get them.
+    if (!notation.ctrl && !notation.shift && !notation.alt) {
+      if (key === "<") shifted.push(BEPO_ALTGR_LESS);
+      if (key === ">") shifted.push(BEPO_ALTGR_GREATER);
+    }
     return shifted;
   }
   return undefined;

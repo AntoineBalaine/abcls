@@ -33,9 +33,10 @@ describe("buildKeyboardModel on QWERTY", () => {
     assert.strictEqual(capWith(model, "c")?.layers[1].row?.label, "chord notes");
   });
 
-  it("marks the digits as count digits in the transform menu, and as bound in the select menu", () => {
+  it("marks the digits as count digits in both menus, and as bound inside the group p of the select menu", () => {
     assert.strictEqual(capWith(buildKeyboardModel(DEFAULT_KEYMAP, openMenu("transform"), QWERTY), "5")?.layers[0].state, "count");
-    assert.strictEqual(capWith(buildKeyboardModel(DEFAULT_KEYMAP, openMenu("select"), QWERTY), "5")?.layers[0].state, "bound");
+    assert.strictEqual(capWith(buildKeyboardModel(DEFAULT_KEYMAP, openMenu("select"), QWERTY), "5")?.layers[0].state, "count");
+    assert.strictEqual(capWith(buildKeyboardModel(DEFAULT_KEYMAP, { ...openMenu("select"), path: ["f"] }, QWERTY), "5")?.layers[0].state, "bound");
   });
 
   it("has the number of keys of an ANSI keyboard, with no ISO key", () => {
@@ -55,20 +56,27 @@ describe("buildKeyboardModel on QWERTY", () => {
 });
 
 describe("buildKeyboardModel on BÉPO", () => {
-  it("resolves the digits of the select menu on the Shift layer, where BÉPO types them", () => {
+  it("resolves the digits of the select menu on the Shift layer, where BÉPO types them, as count digits", () => {
     const model = buildKeyboardModel(DEFAULT_KEYMAP, openMenu("select"), BEPO);
+    const one = capWith(model, "1", 1);
+    assert.ok(one);
+    assert.strictEqual(one.layers[1].state, "count");
+  });
+
+  it("binds the digits to the positions from the top inside the group p", () => {
+    const model = buildKeyboardModel(DEFAULT_KEYMAP, { ...openMenu("select"), path: ["f"] }, BEPO);
     const one = capWith(model, "1", 1);
     assert.ok(one);
     assert.strictEqual(one.layers[1].state, "bound");
     assert.strictEqual(one.layers[1].row?.label, "top note (same as t)");
   });
 
-  it("puts the mode switches on the AltGr layers that type < and >", () => {
+  it("puts the keys of the previous and the next note on the AltGr layers that type < and >", () => {
     const model = buildKeyboardModel(DEFAULT_KEYMAP, openMenu("select"), BEPO);
     const less = capWith(model, "<", 2);
     assert.ok(less);
     assert.strictEqual(less.layers[2].state, "bound");
-    assert.strictEqual(less.layers[2].row?.label, "go to select mode");
+    assert.strictEqual(less.layers[2].row?.label, "previous note (count = notes)");
     assert.ok(!model.tray.some((row) => row.notation === "<"), "a key that a cap carries is not in the tray");
   });
 

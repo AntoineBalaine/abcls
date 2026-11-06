@@ -40,9 +40,13 @@ describe("renderModel", () => {
     assert.strictEqual(root.querySelectorAll(".crumb .current").length, 1);
   });
 
-  it("shows the count in the transform mode only", () => {
+  it("shows the count in both modes", () => {
     assert.ok(render().root.querySelector(".count")?.textContent?.includes("5"));
-    assert.strictEqual(render({ ...MODEL, mode: "select" }).root.querySelector(".count"), null);
+    assert.ok(
+      render({ ...MODEL, mode: "select" })
+        .root.querySelector(".count")
+        ?.textContent?.includes("5")
+    );
   });
 
   it("groups the rows by category, in the order of the table, and puts an unknown category last", () => {

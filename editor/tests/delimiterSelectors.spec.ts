@@ -3,6 +3,7 @@ import { expect } from "chai";
 import * as fc from "fast-check";
 import { describe, it } from "mocha";
 import { CSNode, TAGS, isTokenNode, getTokenData } from "../src/csTree/types";
+import { resolveRanges } from "../src/runner/selectionRangeResolver";
 import { Selection } from "../src/selection";
 import {
   selectInsideChord,
@@ -364,6 +365,21 @@ describe("delimiterSelectors", () => {
       const sel: Selection = { root, cursors: [new Set([chords[0].id])] };
       const result = selectInsideChord(sel);
       expect(result.cursors.length).to.equal(0);
+    });
+  });
+
+  describe("resolved ranges", () => {
+    // Line 2: "C [DFA] E |". The bracket is at 2, D at 3, F at 4, A at 5, the closing bracket at 6.
+    const source = "X:1\nK:C\nC [DFA] E |\n";
+
+    it("resolves the inside of a chord to one range that spans all its notes, and not to its first note", () => {
+      const result = selectInsideChord(selectChords(toSelection(source)));
+      expect(resolveRanges({ selector: "selectInsideChord" }, result)).to.deep.equal([{ start: { line: 2, character: 3 }, end: { line: 2, character: 6 } }]);
+    });
+
+    it("resolves the around of a chord to the chord with its brackets", () => {
+      const result = selectAroundChord(selectChords(toSelection(source)));
+      expect(resolveRanges({ selector: "selectAroundChord" }, result)).to.deep.equal([{ start: { line: 2, character: 2 }, end: { line: 2, character: 7 } }]);
     });
   });
 });

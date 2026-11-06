@@ -1046,12 +1046,12 @@
     ],
     "keybindings": [
       {
-        "key": "h",
+        "key": "k",
         "command": "abc.menu.select",
         "when": "editorLangId == abc && editorTextFocus && !abc.modeMenuOpen && (vim.mode == 'Normal' || vim.mode == 'Visual' || vim.mode == 'VisualLine')"
       },
       {
-        "key": "k",
+        "key": "h",
         "command": "abc.menu.transform",
         "when": "editorLangId == abc && editorTextFocus && !abc.modeMenuOpen && (vim.mode == 'Normal' || vim.mode == 'Visual' || vim.mode == 'VisualLine')"
       },
@@ -1992,7 +1992,23 @@
         "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
       },
       {
+        "key": "alt+4",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "["
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
         "key": "]",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "]"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+5",
         "command": "abc.menu.key",
         "args": {
           "notation": "]"
@@ -2208,6 +2224,14 @@
         "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
       },
       {
+        "key": "alt+2",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
         "key": "shift+.",
         "command": "abc.menu.key",
         "args": {
@@ -2217,6 +2241,14 @@
       },
       {
         "key": ">",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": ">"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+3",
         "command": "abc.menu.key",
         "args": {
           "notation": ">"

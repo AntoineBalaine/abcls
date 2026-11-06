@@ -34,9 +34,18 @@ describe("toVsCodeKey", () => {
     assert.strictEqual(toVsCodeKey("("), "shift+9");
   });
 
-  it("binds the angle brackets as the US spelling and as the character itself", () => {
-    assert.deepStrictEqual(toVsCodeKeys("<"), ["shift+,", "<"]);
-    assert.deepStrictEqual(toVsCodeKeys(">"), ["shift+.", ">"]);
+  it("binds the angle brackets as the US spelling, as the character itself, and as the AltGr chords of the BÉPO layout", () => {
+    assert.deepStrictEqual(toVsCodeKeys("<"), ["shift+,", "<", "alt+2"]);
+    assert.deepStrictEqual(toVsCodeKeys(">"), ["shift+.", ">", "alt+3"]);
+  });
+
+  it("binds the square brackets as themselves and as the AltGr chords of the BÉPO layout", () => {
+    assert.deepStrictEqual(toVsCodeKeys("["), ["[", "alt+4"]);
+    assert.deepStrictEqual(toVsCodeKeys("]"), ["]", "alt+5"]);
+  });
+
+  it("does not add the BÉPO chords to a notation that has a modifier of its own", () => {
+    assert.ok(!toVsCodeKeys("<a-<>").some((key) => key.includes("alt+alt")));
   });
 
   it("gives no default keybinding to an accented letter, which VS Code does not accept in a contributed keybinding", () => {

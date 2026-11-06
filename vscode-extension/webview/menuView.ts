@@ -58,7 +58,7 @@ function renderHeader(doc: Document, model: ViewModel): HTMLElement {
     crumb.append(element(doc, "span", index === model.breadcrumb.length - 1 ? "node current" : "node", label));
   });
   header.append(crumb);
-  if (model.mode === "transform") header.append(element(doc, "span", "count", `count ${model.count === "" ? "–" : model.count}`));
+  header.append(element(doc, "span", "count", `count ${model.count === "" ? "–" : model.count}`));
   return header;
 }
 

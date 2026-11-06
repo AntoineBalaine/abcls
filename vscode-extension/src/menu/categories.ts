@@ -8,6 +8,7 @@ export const CATEGORY_NAMES: Record<string, string> = {
   selectRhythm: "select rhythm",
   selectStructure: "select structure",
   selectPosition: "select by position",
+  selectMove: "move to the previous / next",
   selectDelimiter: "select inside / around",
   pitch: "pitch",
   harmony: "harmonize",

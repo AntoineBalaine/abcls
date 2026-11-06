@@ -37,11 +37,11 @@ describe("the menu keybindings of package.json", () => {
     }
   });
 
-  it("open the select menu with h and the transform menu with k, only outside a menu and in an abc file", () => {
+  it("open the select menu with k and the transform menu with h, only outside a menu and in an abc file", () => {
     const select = contributed.find((entry) => entry.command === "abc.menu.select");
     const transform = contributed.find((entry) => entry.command === "abc.menu.transform");
-    assert.strictEqual(select?.key, "h");
-    assert.strictEqual(transform?.key, "k");
+    assert.strictEqual(select?.key, "k");
+    assert.strictEqual(transform?.key, "h");
     for (const entry of [select, transform]) {
       assert.ok(entry?.when.includes("editorLangId == abc"));
       assert.ok(entry?.when.includes("!abc.modeMenuOpen"));

@@ -20,8 +20,8 @@ export interface KeybindingEntry {
  */
 export const ENTRY_WHEN = `editorLangId == abc && editorTextFocus && !${MENU_OPEN_CONTEXT} && (vim.mode == 'Normal' || vim.mode == 'Visual' || vim.mode == 'VisualLine')`;
 
-export const SELECT_ENTRY_KEY = "h";
-export const TRANSFORM_ENTRY_KEY = "k";
+export const SELECT_ENTRY_KEY = "k";
+export const TRANSFORM_ENTRY_KEY = "h";
 
 export function buildMenuKeybindings(): KeybindingEntry[] {
   const entries: KeybindingEntry[] = [

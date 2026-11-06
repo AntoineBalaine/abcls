@@ -73,7 +73,7 @@ function isDigit(notation: string): boolean {
  *
  * The rules, in order: Esc closes; Backspace goes back by one count digit, then one group, then closes;
  * a key bound at the current path wins, so that a bound digit is never taken for a count, and a mode key of the root works inside a group;
- * an unbound digit in transform mode extends the count; anything else is ignored and the menu stays open.
+ * an unbound digit extends the count, in both menus; anything else is ignored and the menu stays open.
  * A leaf runs and closes the menu, unless the menu is sticky, which keeps it open for the next key.
  */
 export function step(state: MenuState, keymap: Keymap, input: MenuInput, sticky = false): StepResult {
@@ -87,7 +87,7 @@ export function step(state: MenuState, keymap: Keymap, input: MenuInput, sticky 
 
   const node = resolveKey(keymap[state.mode], state.path, input.notation) ?? rootModeKey(keymap, state, input.notation);
   if (node === undefined) {
-    if (state.mode === "transform" && isDigit(input.notation) && state.count.length < MAX_COUNT_DIGITS) {
+    if (isDigit(input.notation) && state.count.length < MAX_COUNT_DIGITS) {
       // A count that starts with zero means nothing, so the first zero is ignored.
       if (state.count === "" && input.notation === "0") return { state, effect: NOTHING };
       return { state: { ...state, count: state.count + input.notation }, effect: NOTHING };

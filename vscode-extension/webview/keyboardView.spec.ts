@@ -151,9 +151,9 @@ describe("the keyboard view", () => {
     assert.ok(root.querySelectorAll(".row").length > 0);
   });
 
-  it("draws the BÉPO digits of the select menu in the Shift cell", () => {
+  it("draws the BÉPO digits of the select menu in the Shift cell, as count digits", () => {
     const { root } = render("select", "bepo");
-    const cells = Array.from(root.querySelectorAll(".cell.tl.b"));
+    const cells = Array.from(root.querySelectorAll(".cell.tl.count"));
     assert.ok(cells.some((cell) => cell.querySelector(".q")?.textContent === "1"));
   });
 });

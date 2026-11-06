@@ -1,4 +1,9 @@
 import {
+  CSNode,
+  moveSelectionsToNote,
+  moveSelectionsToChord,
+  selectContaining,
+  ContainerKind,
   Selection,
   selectChords,
   selectNotes,
@@ -26,6 +31,7 @@ import {
   selectVoices,
   selectSystem,
 } from "abcls-editor";
+import { Range } from "vscode-languageserver/node";
 
 type SelectorFn = (sel: Selection, ...args: (number | string)[]) => Selection;
 
@@ -57,6 +63,42 @@ const SELECTOR_MAP: Record<string, SelectorFn> = {
   selectVoices: (sel, voiceIds) => selectVoices(sel, voiceIds as string),
   selectSystem: (sel) => selectSystem(sel),
 };
+
+/**
+ * A navigator moves the selections of the editor, which may be empty carets, and so it works on ranges and not on a selection of nodes.
+ */
+type NavigatorFn = (root: CSNode, selections: Range[], lines: string[], ...args: (number | string)[]) => Range[];
+
+const NAVIGATOR_MAP: Record<string, NavigatorFn> = {
+  selectNextNote: (root, selections, _lines, steps) => moveSelectionsToNote(root, selections, "next", Number(steps ?? 1)),
+  selectPreviousNote: (root, selections, _lines, steps) => moveSelectionsToNote(root, selections, "previous", Number(steps ?? 1)),
+  // The elements that hold the caret: the note under it, the measure around it, the system that it is in.
+  selectNextChord: (root, selections, _lines, steps) => moveSelectionsToChord(root, selections, "next", Number(steps ?? 1)),
+  selectPreviousChord: (root, selections, _lines, steps) => moveSelectionsToChord(root, selections, "previous", Number(steps ?? 1)),
+};
+
+/** The elements that hold the caret, with the key suffix of the selector that names each one. */
+const CONTAINER_SELECTORS: Record<string, ContainerKind> = {
+  Note: "note",
+  Measure: "measure",
+  System: "system",
+  Tune: "tune",
+  Annotation: "annotation",
+  Decoration: "decoration",
+  Beam: "beam",
+  Directive: "directive",
+  Comment: "comment",
+};
+
+// Because the selector of an element that holds the caret comes in two forms, inside gives the element and around widens it with the text.
+for (const [suffix, kind] of Object.entries(CONTAINER_SELECTORS)) {
+  NAVIGATOR_MAP[`selectInside${suffix}`] = (root, selections) => selectContaining(root, selections, kind);
+  NAVIGATOR_MAP[`selectAround${suffix}`] = (root, selections, lines) => selectContaining(root, selections, kind, lines);
+}
+
+export function lookupNavigator(name: string): NavigatorFn | null {
+  return NAVIGATOR_MAP[name] ?? null;
+}
 
 export function lookupSelector(name: string): SelectorFn | null {
   return SELECTOR_MAP[name] ?? null;

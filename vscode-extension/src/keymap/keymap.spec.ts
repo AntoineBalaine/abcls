@@ -297,17 +297,46 @@ describe("the default keymap", () => {
     assert.deepStrictEqual(validateKeymap(DEFAULT_KEYMAP), []);
   });
 
-  it("has the three mode switches in both menus", () => {
-    for (const mode of [DEFAULT_KEYMAP.select, DEFAULT_KEYMAP.transform]) {
-      for (const key of ["<", ">", "<tab>"]) {
+  it("has Tab and one key to the other menu as the mode switches: h in the select menu and k in the transform menu", () => {
+    const switches: Array<[typeof DEFAULT_KEYMAP.select, string[]]> = [
+      [DEFAULT_KEYMAP.select, ["h", "<tab>"]],
+      [DEFAULT_KEYMAP.transform, ["k", "<tab>"]],
+    ];
+    for (const [mode, keys] of switches) {
+      for (const key of keys) {
         const node = resolveKey(mode, [], key);
         assert.ok(node && node.type === "leaf" && node.action.kind === "mode", key);
       }
     }
+    const toTransform = resolveKey(DEFAULT_KEYMAP.select, [], "h");
+    const toSelect = resolveKey(DEFAULT_KEYMAP.transform, [], "k");
+    assert.ok(toTransform && toTransform.type === "leaf" && toTransform.action.name === "transform");
+    assert.ok(toSelect && toSelect.type === "leaf" && toSelect.action.name === "select");
   });
 
-  it("selects the top note with 1 and with t", () => {
-    const one = resolveKey(DEFAULT_KEYMAP.select, [], "1");
+  it("moves to the previous note with < and to the next note with > in the select menu only", () => {
+    const previous = resolveKey(DEFAULT_KEYMAP.select, [], "<");
+    const next = resolveKey(DEFAULT_KEYMAP.select, [], ">");
+    assert.ok(previous && previous.type === "leaf" && previous.action.kind === "selector" && previous.action.name === "selectPreviousNote");
+    assert.ok(next && next.type === "leaf" && next.action.kind === "selector" && next.action.name === "selectNextNote");
+    assert.strictEqual(resolveKey(DEFAULT_KEYMAP.transform, [], "<"), undefined);
+    assert.strictEqual(resolveKey(DEFAULT_KEYMAP.transform, [], ">"), undefined);
+  });
+
+  it("selects the note, the measure and the system around the caret with i n, i m and i s", () => {
+    for (const [key, name] of [
+      ["n", "selectInsideNote"],
+      ["m", "selectInsideMeasure"],
+      ["s", "selectInsideSystem"],
+    ]) {
+      const node = resolveKey(DEFAULT_KEYMAP.select, ["i"], key);
+      assert.ok(node && node.type === "leaf" && node.action.kind === "selector" && node.action.name === name, key);
+    }
+  });
+
+  it("selects the top note with f 1 and with t, and keeps the digits of the root free for a count", () => {
+    assert.strictEqual(resolveKey(DEFAULT_KEYMAP.select, [], "1"), undefined);
+    const one = resolveKey(DEFAULT_KEYMAP.select, ["f"], "1");
     assert.ok(one && one.type === "leaf" && one.action.name === "selectNthFromTop" && one.action.args[0] === 0);
     const t = resolveKey(DEFAULT_KEYMAP.select, [], "t");
     assert.ok(t && t.type === "leaf" && t.action.name === "selectTop");
@@ -359,8 +388,10 @@ describe("validateKeymap", () => {
     assert.ok(errors.some((m) => m.includes("numeric default")));
   });
 
-  it("reports a count argument on something that is not a transform", () => {
+  it("reports a count argument on something that is neither a transform nor a selector, and accepts it on a selector", () => {
     const leaf: KeymapNode = { type: "leaf", label: "c", category: "pitch", action: { kind: "command", name: "abc.x", args: [COUNT_TWELVE] } };
     assert.ok(validateKeymap(withTransform({ c: leaf })).some((m) => m.includes("count")));
+    const selector: KeymapNode = { type: "leaf", label: "c", category: "pitch", action: { kind: "selector", name: "selectNextNote", args: [COUNT_TWELVE] } };
+    assert.deepStrictEqual(validateKeymap(withTransform({ c: selector })), []);
   });
 });

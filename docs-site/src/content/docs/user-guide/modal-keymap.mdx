@@ -9,7 +9,7 @@ The keys are not the same as those of the Kakoune plugin. The tables further dow
 
 ## Opening a menu
 
-With the VSCodeVim extension, `h` opens the select menu and `k` opens the transform menu in the Normal, Visual and Visual Line modes of an ABC file, when no menu is open yet. Both keys replace the Vim motions of the same name, and the VSCodeVim modes are the only place where they open a menu by default. Without VSCodeVim there is no default key, because `h` and `k` would stop typing in every ABC file.
+With the VSCodeVim extension, `k` opens the select menu and `h` opens the transform menu in the Normal, Visual and Visual Line modes of an ABC file, when no menu is open yet. Both keys replace the Vim motions of the same name, and the VSCodeVim modes are the only place where they open a menu by default. Without VSCodeVim there is no default key, because `h` and `k` would stop typing in every ABC file.
 
 The two keys are the keybindings of the commands `abc.menu.select` and `abc.menu.transform`, so you change them in `keybindings.json` like any other key:
 
@@ -22,17 +22,17 @@ The two keys are the keybindings of the commands `abc.menu.select` and `abc.menu
 
 ## Using a menu
 
-While a menu is open, every key goes to it. These keys work in both menus:
+While a menu is open, every key goes to it. These keys switch menus, close a menu, or edit the count:
 
 | Key         | What it does                                                                 |
 | ----------- | ---------------------------------------------------------------------------- |
-| `<`         | Go to the select menu                                                        |
-| `>`         | Go to the transform menu                                                     |
 | `Tab`       | Switch to the other menu (written `<tab>` in the tables)                     |
+| `h`         | In the select menu, go to the transform menu                                 |
+| `k`         | In the transform menu, go to the select menu                                 |
 | `Backspace` | Remove the last digit of the count, or go back from a smaller menu, or close |
 | `Esc`       | Close the menu                                                               |
 
-The transform menu takes a count of up to three digits, and a leading zero is ignored. Type it before the command: `5 g c` is a close voicing with five voices, and the count of a voicing is its number of voices, 4, 5 or 6. A digit that is itself bound in the menu is a command, not a count, so inside the `g` menu the digits `2`, `3` and `4` choose a drop voicing, and a count can only be typed before `g`. In the select menu the digits `1` to `9` select the note that many places from the top, and `t` is the same as `1`.
+Both menus take a count of up to three digits, and a leading zero is ignored. Type it before the command: `5 g c` in the transform menu is a close voicing with five voices, and the count of a voicing is its number of voices, 4, 5 or 6. In the select menu, `3 >` moves to the third note after the selection and `3 <` to the third note before it, stopping at the last note that exists. A digit that is itself bound in a menu is a command, not a count, so inside the `g` menu of the transform menu the digits `2`, `3` and `4` choose a drop voicing, and a count can only be typed before `g`. In the select menu, the digits `1` to `9` of the `p` menu select the note that many places from the top, and `t` is the same as `p 1`.
 
 A key written as `<a-t>` is Alt plus `t`, `<c-up>` is Ctrl plus the up arrow, and `<c-S-up>` is Ctrl plus Shift plus the up arrow. An uppercase letter is typed with Shift.
 
@@ -67,47 +67,69 @@ A key that ends with `›` in the tables opens a smaller menu, and the keys of t
 
 ### Keys of the select menu
 
-| Key     | What it does                      | Category               |
-| ------- | --------------------------------- | ---------------------- |
-| `c`     | chords                            | select by type         |
-| `n`     | notes                             | select by type         |
-| `N`     | non-chord notes                   | select by type         |
-| `C`     | chord notes                       | select by type         |
-| `z`     | rests                             | select by type         |
-| `A`     | annotations (new, not in Kakoune) | select by type         |
-| `r`     | rhythm                            | select rhythm          |
-| `R`     | rhythm parents                    | select rhythm          |
-| `x`     | tune                              | select structure       |
-| `m`     | measures                          | select structure       |
-| `s`     | system                            | select structure       |
-| `v`     | voices (prompts for ids)          | select structure       |
-| `1`     | top note (same as t)              | select by position     |
-| `2`     | 2nd from top                      | select by position     |
-| `3`     | 3rd from top                      | select by position     |
-| `4`     | 4th from top                      | select by position     |
-| `5`     | 5th from top                      | select by position     |
-| `6`     | 6th from top                      | select by position     |
-| `7`     | 7th from top                      | select by position     |
-| `8`     | 8th from top                      | select by position     |
-| `9`     | 9th from top                      | select by position     |
-| `t`     | top note                          | select by position     |
-| `T`     | all but top                       | select by position     |
-| `b`     | bottom note                       | select by position     |
-| `B`     | all but bottom                    | select by position     |
-| `i`     | inside ›                          | select inside / around |
-| `i c`   | inside chord                      | select inside / around |
-| `i g`   | inside grace group                | select inside / around |
-| `i f`   | inside inline field               | select inside / around |
-| `i p`   | inside grouping                   | select inside / around |
-| `a`     | around ›                          | select inside / around |
-| `a c`   | around chord                      | select inside / around |
-| `a g`   | around grace group                | select inside / around |
-| `a f`   | around inline field               | select inside / around |
-| `a p`   | around grouping                   | select inside / around |
-| `<`     | go to select mode                 | mode switch            |
-| `>`     | go to transform mode              | mode switch            |
-| `<tab>` | switch mode                       | mode switch            |
-| `u`     | undo (new, not in Kakoune)        | history                |
+| Key     | What it does                                                             | Category                    |
+| ------- | ------------------------------------------------------------------------ | --------------------------- |
+| `c`     | chords                                                                   | select by type              |
+| `n`     | notes                                                                    | select by type              |
+| `N`     | non-chord notes                                                          | select by type              |
+| `C`     | chord notes                                                              | select by type              |
+| `z`     | rests                                                                    | select by type              |
+| `A`     | annotations (new, not in Kakoune)                                        | select by type              |
+| `r`     | rhythm                                                                   | select rhythm               |
+| `R`     | rhythm parents                                                           | select rhythm               |
+| `x`     | tune                                                                     | select structure            |
+| `m`     | measures                                                                 | select structure            |
+| `s`     | system                                                                   | select structure            |
+| `v`     | voices (prompts for ids)                                                 | select structure            |
+| `f`     | from the top ›                                                           | select by position          |
+| `f 1`   | top note (same as t)                                                     | select by position          |
+| `f 2`   | 2nd from top                                                             | select by position          |
+| `f 3`   | 3rd from top                                                             | select by position          |
+| `f 4`   | 4th from top                                                             | select by position          |
+| `f 5`   | 5th from top                                                             | select by position          |
+| `f 6`   | 6th from top                                                             | select by position          |
+| `f 7`   | 7th from top                                                             | select by position          |
+| `f 8`   | 8th from top                                                             | select by position          |
+| `f 9`   | 9th from top                                                             | select by position          |
+| `t`     | top note                                                                 | select by position          |
+| `T`     | all but top                                                              | select by position          |
+| `b`     | bottom note                                                              | select by position          |
+| `B`     | all but bottom                                                           | select by position          |
+| `<`     | previous note (count = notes) (new, not in Kakoune)                      | move to the previous / next |
+| `>`     | next note (count = notes) (new, not in Kakoune)                          | move to the previous / next |
+| `[`     | previous chord (count = chords) (new, not in Kakoune)                    | move to the previous / next |
+| `]`     | next chord (count = chords) (new, not in Kakoune)                        | move to the previous / next |
+| `i`     | inside ›                                                                 | select inside / around      |
+| `i c`   | inside chord                                                             | select inside / around      |
+| `i g`   | inside grace group                                                       | select inside / around      |
+| `i f`   | inside inline field                                                      | select inside / around      |
+| `i p`   | inside grouping                                                          | select inside / around      |
+| `i n`   | inside note (the note under the caret) (new, not in Kakoune)             | select inside / around      |
+| `i m`   | inside measure (the measure around the caret) (new, not in Kakoune)      | select inside / around      |
+| `i d`   | inside decoration (the decoration under the caret) (new, not in Kakoune) | select inside / around      |
+| `i b`   | inside beam (the beam around the caret) (new, not in Kakoune)            | select inside / around      |
+| `i D`   | inside directive (the %% line with the caret) (new, not in Kakoune)      | select inside / around      |
+| `i %`   | inside comment (the comment under the caret) (new, not in Kakoune)       | select inside / around      |
+| `i t`   | inside tune (the tune with the caret) (new, not in Kakoune)              | select inside / around      |
+| `i a`   | inside annotation (the annotation under the caret) (new, not in Kakoune) | select inside / around      |
+| `i s`   | inside system (the system with the caret) (new, not in Kakoune)          | select inside / around      |
+| `a`     | around ›                                                                 | select inside / around      |
+| `a c`   | around chord                                                             | select inside / around      |
+| `a g`   | around grace group                                                       | select inside / around      |
+| `a f`   | around inline field                                                      | select inside / around      |
+| `a p`   | around grouping                                                          | select inside / around      |
+| `a n`   | around note (with the spaces after it) (new, not in Kakoune)             | select inside / around      |
+| `a m`   | around measure (with its closing bar line) (new, not in Kakoune)         | select inside / around      |
+| `a s`   | around system (with its line break) (new, not in Kakoune)                | select inside / around      |
+| `a t`   | around tune (with the blank lines after it) (new, not in Kakoune)        | select inside / around      |
+| `a a`   | around annotation (with the spaces after it) (new, not in Kakoune)       | select inside / around      |
+| `a d`   | around decoration (with the spaces after it) (new, not in Kakoune)       | select inside / around      |
+| `a b`   | around beam (with the spaces after it) (new, not in Kakoune)             | select inside / around      |
+| `a D`   | around directive (the whole line) (new, not in Kakoune)                  | select inside / around      |
+| `a %`   | around comment (with the spaces before it) (new, not in Kakoune)         | select inside / around      |
+| `h`     | go to transform mode                                                     | mode switch                 |
+| `<tab>` | switch mode                                                              | mode switch                 |
+| `u`     | undo (new, not in Kakoune)                                               | history                     |
 
 ### Keys of the transform menu
 
@@ -131,8 +153,7 @@ A key that ends with `›` in the tables opens a smaller menu, and the keys of t
 | `A`          | add flat                                         | accidentals |
 | `e`          | enharmonize                                      | accidentals |
 | `E`          | enharmonize to key                               | accidentals |
-| `<`          | go to select mode                                | mode switch |
-| `>`          | go to transform mode                             | mode switch |
+| `k`          | go to select mode                                | mode switch |
 | `<tab>`      | switch mode                                      | mode switch |
 | `v`          | V:1 to [V:1]                                     | voices      |
 | `V`          | [V:1] to V:1                                     | voices      |

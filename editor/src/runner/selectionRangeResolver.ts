@@ -81,9 +81,15 @@ export function resolveRanges(
   },
   newSelection: Selection
 ) {
-  return params.selector === "selectVoices" || params.selector === "selectMeasures" || params.selector === "selectSystem"
-    ? resolveContiguousRanges(newSelection)
-    : resolveSelectionRanges(newSelection);
+  // Because the inside and around selectors put all the nodes of one delimiter pair in a single cursor (the notes of a chord, say),
+  // they need the range that spans the whole cursor, and not the range of its first node.
+  const spansCursor =
+    params.selector === "selectVoices" ||
+    params.selector === "selectMeasures" ||
+    params.selector === "selectSystem" ||
+    params.selector.startsWith("selectInside") ||
+    params.selector.startsWith("selectAround");
+  return spansCursor ? resolveContiguousRanges(newSelection) : resolveSelectionRanges(newSelection);
 }
 
 /**

@@ -1,8 +1,8 @@
 /**
  * The default keymap of the select and transform menus.
  *
- * The keys are in the notation of notation.ts. Both menus also hold the mode switches
- * (< and > and Tab), which are leaves of kind "mode".
+ * The keys are in the notation of notation.ts. Both menus also hold the mode switches, which are leaves of kind "mode":
+ * Tab switches to the other menu, h goes from the select menu to the transform menu, and k goes back.
  */
 
 import { ArgTemplate, CountTemplate, Group, Keymap, Leaf } from "./types";
@@ -28,18 +28,12 @@ function group(label: string, category: string, children: Group["children"], sho
 
 export const DEFAULT_KEYMAP: Keymap = {
   select: group("select", "selectType", {
-    "<": leaf("go to select mode", "mode", "mode", "select", [], { short: "to select" }),
-    ">": leaf("go to transform mode", "mode", "mode", "transform", [], { short: "to transform" }),
+    h: leaf("go to transform mode", "mode", "mode", "transform", [], { short: "to transform" }),
     "<tab>": leaf("switch mode", "mode", "mode", "toggle", []),
-    "1": leaf("top note (same as t)", "selectPosition", "selector", "selectNthFromTop", [0], { short: "top (as t)" }),
-    "2": leaf("2nd from top", "selectPosition", "selector", "selectNthFromTop", [1]),
-    "3": leaf("3rd from top", "selectPosition", "selector", "selectNthFromTop", [2]),
-    "4": leaf("4th from top", "selectPosition", "selector", "selectNthFromTop", [3]),
-    "5": leaf("5th from top", "selectPosition", "selector", "selectNthFromTop", [4]),
-    "6": leaf("6th from top", "selectPosition", "selector", "selectNthFromTop", [5]),
-    "7": leaf("7th from top", "selectPosition", "selector", "selectNthFromTop", [6]),
-    "8": leaf("8th from top", "selectPosition", "selector", "selectNthFromTop", [7]),
-    "9": leaf("9th from top", "selectPosition", "selector", "selectNthFromTop", [8]),
+    "<": leaf("previous note (count = notes)", "selectMove", "selector", "selectPreviousNote", [count(1, 1)], { short: "prev. note", isNew: true }),
+    ">": leaf("next note (count = notes)", "selectMove", "selector", "selectNextNote", [count(1, 1)], { short: "next note", isNew: true }),
+    "[": leaf("previous chord (count = chords)", "selectMove", "selector", "selectPreviousChord", [count(1, 1)], { short: "prev. chord", isNew: true }),
+    "]": leaf("next chord (count = chords)", "selectMove", "selector", "selectNextChord", [count(1, 1)], { short: "next chord", isNew: true }),
     c: leaf("chords", "selectType", "selector", "selectChords", []),
     n: leaf("notes", "selectType", "selector", "selectNotes", []),
     N: leaf("non-chord notes", "selectType", "selector", "selectNonChordNotes", [], { short: "non-chord" }),
@@ -53,6 +47,22 @@ export const DEFAULT_KEYMAP: Keymap = {
     s: leaf("system", "selectStructure", "selector", "selectSystem", []),
     v: leaf("voices (prompts for ids)", "selectStructure", "command", "abc.selectVoices", [], { short: "voices…" }),
     u: leaf("undo", "history", "command", "undo", [], { isNew: true }),
+    f: group(
+      "from the top…",
+      "selectPosition",
+      {
+        "1": leaf("top note (same as t)", "selectPosition", "selector", "selectNthFromTop", [0], { short: "top (as t)" }),
+        "2": leaf("2nd from top", "selectPosition", "selector", "selectNthFromTop", [1]),
+        "3": leaf("3rd from top", "selectPosition", "selector", "selectNthFromTop", [2]),
+        "4": leaf("4th from top", "selectPosition", "selector", "selectNthFromTop", [3]),
+        "5": leaf("5th from top", "selectPosition", "selector", "selectNthFromTop", [4]),
+        "6": leaf("6th from top", "selectPosition", "selector", "selectNthFromTop", [5]),
+        "7": leaf("7th from top", "selectPosition", "selector", "selectNthFromTop", [6]),
+        "8": leaf("8th from top", "selectPosition", "selector", "selectNthFromTop", [7]),
+        "9": leaf("9th from top", "selectPosition", "selector", "selectNthFromTop", [8]),
+      },
+      "from top ›"
+    ),
     t: leaf("top note", "selectPosition", "selector", "selectTop", []),
     T: leaf("all but top", "selectPosition", "selector", "selectAllButTop", []),
     b: leaf("bottom note", "selectPosition", "selector", "selectBottom", []),
@@ -62,17 +72,55 @@ export const DEFAULT_KEYMAP: Keymap = {
       g: leaf("inside grace group", "selectDelimiter", "selector", "selectInsideGraceGroup", [], { short: "in. grace" }),
       f: leaf("inside inline field", "selectDelimiter", "selector", "selectInsideInlineField", [], { short: "in. field" }),
       p: leaf("inside grouping", "selectDelimiter", "selector", "selectInsideGrouping", [], { short: "in. group" }),
+      n: leaf("inside note (the note under the caret)", "selectDelimiter", "selector", "selectInsideNote", [], { short: "in. note", isNew: true }),
+      m: leaf("inside measure (the measure around the caret)", "selectDelimiter", "selector", "selectInsideMeasure", [], { short: "in. measure", isNew: true }),
+      d: leaf("inside decoration (the decoration under the caret)", "selectDelimiter", "selector", "selectInsideDecoration", [], {
+        short: "in. decor.",
+        isNew: true,
+      }),
+      b: leaf("inside beam (the beam around the caret)", "selectDelimiter", "selector", "selectInsideBeam", [], { short: "in. beam", isNew: true }),
+      D: leaf("inside directive (the %% line with the caret)", "selectDelimiter", "selector", "selectInsideDirective", [], {
+        short: "in. directive",
+        isNew: true,
+      }),
+      "%": leaf("inside comment (the comment under the caret)", "selectDelimiter", "selector", "selectInsideComment", [], {
+        short: "in. comment",
+        isNew: true,
+      }),
+      t: leaf("inside tune (the tune with the caret)", "selectDelimiter", "selector", "selectInsideTune", [], { short: "in. tune", isNew: true }),
+      a: leaf("inside annotation (the annotation under the caret)", "selectDelimiter", "selector", "selectInsideAnnotation", [], {
+        short: "in. annot.",
+        isNew: true,
+      }),
+      s: leaf("inside system (the system with the caret)", "selectDelimiter", "selector", "selectInsideSystem", [], { short: "in. system", isNew: true }),
     }),
     a: group("around…", "selectDelimiter", {
       c: leaf("around chord", "selectDelimiter", "selector", "selectAroundChord", []),
       g: leaf("around grace group", "selectDelimiter", "selector", "selectAroundGraceGroup", [], { short: "around grace" }),
       f: leaf("around inline field", "selectDelimiter", "selector", "selectAroundInlineField", [], { short: "around field" }),
       p: leaf("around grouping", "selectDelimiter", "selector", "selectAroundGrouping", [], { short: "around group" }),
+      n: leaf("around note (with the spaces after it)", "selectDelimiter", "selector", "selectAroundNote", [], { short: "around note", isNew: true }),
+      m: leaf("around measure (with its closing bar line)", "selectDelimiter", "selector", "selectAroundMeasure", [], { short: "around measure", isNew: true }),
+      s: leaf("around system (with its line break)", "selectDelimiter", "selector", "selectAroundSystem", [], { short: "around system", isNew: true }),
+      t: leaf("around tune (with the blank lines after it)", "selectDelimiter", "selector", "selectAroundTune", [], { short: "around tune", isNew: true }),
+      a: leaf("around annotation (with the spaces after it)", "selectDelimiter", "selector", "selectAroundAnnotation", [], {
+        short: "around annot.",
+        isNew: true,
+      }),
+      d: leaf("around decoration (with the spaces after it)", "selectDelimiter", "selector", "selectAroundDecoration", [], {
+        short: "around decor.",
+        isNew: true,
+      }),
+      b: leaf("around beam (with the spaces after it)", "selectDelimiter", "selector", "selectAroundBeam", [], { short: "around beam", isNew: true }),
+      D: leaf("around directive (the whole line)", "selectDelimiter", "selector", "selectAroundDirective", [], { short: "around directive", isNew: true }),
+      "%": leaf("around comment (with the spaces before it)", "selectDelimiter", "selector", "selectAroundComment", [], {
+        short: "around comment",
+        isNew: true,
+      }),
     }),
   }),
   transform: group("transform", "pitch", {
-    "<": leaf("go to select mode", "mode", "mode", "select", [], { short: "to select" }),
-    ">": leaf("go to transform mode", "mode", "mode", "transform", [], { short: "to transform" }),
+    k: leaf("go to select mode", "mode", "mode", "select", [], { short: "to select" }),
     "<tab>": leaf("switch mode", "mode", "mode", "toggle", []),
     t: leaf("octave up", "pitch", "transform", "transpose", [count(1, 12)]),
     T: leaf("octave down", "pitch", "transform", "transpose", [count(1, -12)]),

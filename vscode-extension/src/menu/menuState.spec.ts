@@ -46,13 +46,20 @@ describe("step", () => {
     assert.strictEqual(effect.kind === "run" && effect.count, undefined);
   });
 
-  it("selects the top note with 1 in the select menu, where digits are bound", () => {
-    const { effect, state } = press(openMenu("select"), "1");
+  it("selects the top note with f 1 in the select menu, where the digits of the group f are bound", () => {
+    const { effect, state } = press(openMenu("select"), "f", "1");
     assert.ok(effect.kind === "run" && effect.leaf.action.name === "selectNthFromTop" && effect.leaf.action.args[0] === 0);
     assert.strictEqual(state.count, "");
   });
 
-  it("ignores an unbound digit in the select menu", () => {
+  it("takes a count in the select menu, and gives it to the next note key", () => {
+    const { effect, state } = press(openMenu("select"), "3", ">");
+    assert.ok(effect.kind === "run" && effect.leaf.action.name === "selectNextNote" && effect.count === 3);
+    assert.strictEqual(state.count, "");
+    assert.strictEqual(press(openMenu("select"), "1", "2").state.count, "12");
+  });
+
+  it("ignores a leading zero in the select menu", () => {
     const { state, effect } = press(openMenu("select"), "0");
     assert.strictEqual(effect.kind, "none");
     assert.strictEqual(state.count, "");
@@ -69,12 +76,13 @@ describe("step", () => {
   });
 
   it("switches the mode with the mode keys, clears the path and keeps the count", () => {
-    const { state } = press(openMenu("transform"), "7", "g", "<");
+    const { state } = press(openMenu("transform"), "7", "g", "<tab>");
     assert.strictEqual(state.mode, "select");
     assert.deepStrictEqual(state.path, []);
     assert.strictEqual(state.count, "7");
     assert.strictEqual(state.open, true);
-    assert.strictEqual(press(openMenu("select"), ">").state.mode, "transform");
+    assert.strictEqual(press(openMenu("select"), "h").state.mode, "transform");
+    assert.strictEqual(press(openMenu("transform"), "k").state.mode, "select");
     assert.strictEqual(press(openMenu("select"), "<tab>").state.mode, "transform");
     assert.strictEqual(press(openMenu("transform"), "<tab>").state.mode, "select");
   });

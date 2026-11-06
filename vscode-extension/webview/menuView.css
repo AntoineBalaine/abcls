@@ -45,6 +45,9 @@ body {
 .c-selectPosition {
   --cat: #7fcf7f;
 }
+.c-selectMove {
+  --cat: #5fd0a0;
+}
 .c-selectDelimiter {
   --cat: #c79ae0;
 }
