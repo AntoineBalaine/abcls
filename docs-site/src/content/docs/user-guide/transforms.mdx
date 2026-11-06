@@ -138,6 +138,22 @@ Before: C2 D2 E2 F2
 After (divideRhythm 2): C D E F
 ```
 
+### autoBeam
+
+Beams the notes of the selected bars by the meter, so that notes can be typed or entered with no thought for the spaces between them. It appears in VS Code as the command "ABC: meter-aware formatting", with the key `b` in the transform menu. Because it rewrites the beaming that the composer wrote in the bars that it works on, select the bars first.
+
+- A note or a chord shorter than a quarter note is beamed to the one before it when both begin in the same group of the bar. A rest, a quarter note or a longer one, and the start of a new group begin a new beam.
+- The groups follow the meter. `4/4`, `3/4` and `2/4` group by quarter notes, `2/2` by half notes, `6/8`, `9/8` and `12/8` by three eighth notes, `3/8` is one group, `5/8` is 3+2 and `7/8` is 2+2+3.
+- A meter that gives its groups overrides these defaults: `M:(2+3)/8` and `M:5/8 (2/8+3/8)` group by two and then three, and `M:6/8 (3/8+3/8)` differs from `M:6/8 (2/8+2/8+2/8)`.
+- A decoration, a chord symbol, a grace group and a tuplet mark stay with the note that follows them.
+- A tune with no `M:` line is left as it is, and so is a gap that holds anything other than spaces, such as a broken rhythm sign.
+
+```
+M:6/8 (2/8+2/8+2/8)
+Before: cdefga|
+After:  cd ef ga|
+```
+
 ### multiplyRhythmRebar and divideRhythmRebar
 
 Because multiplyRhythm and divideRhythm only change the numbers, the music then no longer fits its bars: after a multiplication every bar holds two bars of music. These two transforms change the lengths and the bars together. They appear in VS Code as the commands "ABC: Double Rhythm Length and Re-bar" and "ABC: Halve Rhythm Length and Re-bar", and on the command line as the `--rebar` flag of `multiplyRhythm` and `divideRhythm`. Select whole bars before running them.

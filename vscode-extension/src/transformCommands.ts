@@ -91,6 +91,7 @@ export function registerTransformCommands(context: vscode.ExtensionContext, clie
     // Because these two also cut the bars to the length of the meter (or merge them again), the selection should cover whole bars.
     ["abc.multiplyRhythmRebar", "multiplyRhythmRebar"],
     ["abc.divideRhythmRebar", "divideRhythmRebar"],
+    ["abc.autoBeam", "autoBeam"],
     ["abc.addSharp", "addSharp"],
     ["abc.addFlat", "addFlat"],
     ["abc.legato", "legato"],

@@ -140,6 +140,7 @@ export {
   divideRhythm,
   multiplyRhythmRebar,
   divideRhythmRebar,
+  autoBeam,
   consolidateTiedNotes,
   legato,
   toSlashNotation,

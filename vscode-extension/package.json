@@ -438,6 +438,11 @@
         "category": "ABC"
       },
       {
+        "command": "abc.autoBeam",
+        "title": "ABC: meter-aware formatting",
+        "category": "ABC"
+      },
+      {
         "command": "abc.addSharp",
         "title": "ABC: Add Sharp",
         "category": "ABC"
@@ -767,6 +772,10 @@
         },
         {
           "command": "abc.divideRhythmRebar",
+          "when": "editorLangId == abc"
+        },
+        {
+          "command": "abc.autoBeam",
           "when": "editorLangId == abc"
         },
         {

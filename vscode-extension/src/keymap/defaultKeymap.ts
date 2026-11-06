@@ -147,6 +147,7 @@ export const DEFAULT_KEYMAP: Keymap = {
     A: leaf("add flat", "accidental", "transform", "addFlat", []),
     e: leaf("enharmonize", "accidental", "transform", "enharmonize", [], { short: "enharm." }),
     E: leaf("enharmonize to key", "accidental", "transform", "enharmonizeToKey", [], { short: "enharm. key" }),
+    b: leaf("beam the bars by the meter", "rhythm", "transform", "autoBeam", [], { short: "beam by meter", isNew: true }),
     "*": leaf("multiply length", "rhythm", "transform", "multiplyRhythm", [count(2, 1)], { short: "multiply" }),
     "/": leaf("divide length", "rhythm", "transform", "divideRhythm", [count(2, 1)]),
     r: leaf("to rest", "rest", "transform", "toRest", []),
