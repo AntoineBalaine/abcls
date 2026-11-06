@@ -40,6 +40,16 @@ C z D z2 E
   ^   ^
 ```
 
+### selectComments
+
+Selects all comment nodes (text that starts with `%`, whether it is alone on its line or follows the music) within the current scope.
+
+```
+% a comment line
+C D E % trailing
+      ^^^^^^^^^^
+```
+
 ### selectAnnotations
 
 Selects all annotation nodes (quoted text such as `"^text"`) within the current scope.

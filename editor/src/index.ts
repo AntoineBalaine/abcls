@@ -49,6 +49,7 @@ export {
   selectRhythm,
   selectRhythmParent,
   selectAnnotations,
+  selectComments,
 } from "./selectors/typeSelectors";
 export { selectTune } from "./selectors/structureSelectors";
 export { selectTop, selectBottom, selectNthFromTop, selectAllButTop, selectAllButBottom } from "./selectors/chordSelectors";

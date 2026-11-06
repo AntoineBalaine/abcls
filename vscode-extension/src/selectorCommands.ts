@@ -101,6 +101,7 @@ export function registerSelectorCommands(context: vscode.ExtensionContext, clien
     ["abc.selectChordNotes", "selectChordNotes"],
     ["abc.selectRests", "selectRests"],
     ["abc.selectAnnotations", "selectAnnotations"],
+    ["abc.selectComments", "selectComments"],
     ["abc.selectTune", "selectTune"],
     ["abc.selectTop", "selectTop"],
     ["abc.selectBottom", "selectBottom"],

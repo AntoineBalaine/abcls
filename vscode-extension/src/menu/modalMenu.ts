@@ -123,7 +123,7 @@ export function reloadKeymap(ctx: MenuContext): void {
   notify(ctx);
 }
 
-/** Tells the keybindings whether the BÉPO layout is chosen, because the digit row of that layout sends other keys than the US one. */
+/** Tells the keybindings whether the BÉPO layout is chosen, because the number row of that layout sends other keys than the US one. */
 function updateBepoContext(): void {
   const layout = vscode.workspace.getConfiguration("abc").get<string>("keyboardLayout", "qwerty");
   void vscode.commands.executeCommand("setContext", MENU_BEPO_CONTEXT, layout === "bepo");

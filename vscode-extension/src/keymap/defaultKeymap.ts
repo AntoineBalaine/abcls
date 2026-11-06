@@ -40,6 +40,7 @@ export const DEFAULT_KEYMAP: Keymap = {
     C: leaf("chord notes", "selectType", "selector", "selectChordNotes", []),
     z: leaf("rests", "selectType", "selector", "selectRests", []),
     A: leaf("annotations", "selectType", "selector", "selectAnnotations", [], { isNew: true }),
+    "%": leaf("comments (% lines and trailing comments)", "selectType", "selector", "selectComments", [], { short: "comments", isNew: true }),
     r: leaf("rhythm", "selectRhythm", "selector", "selectRhythm", []),
     R: leaf("rhythm parents", "selectRhythm", "selector", "selectRhythmParent", [], { short: "rhythm parent" }),
     x: leaf("tune", "selectStructure", "selector", "selectTune", []),

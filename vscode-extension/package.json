@@ -157,6 +157,11 @@
         "category": "ABC"
       },
       {
+        "command": "abc.selectComments",
+        "title": "ABC: Select Comments",
+        "category": "ABC"
+      },
+      {
         "command": "abc.selectTune",
         "title": "ABC: Select Tune",
         "category": "ABC"
@@ -533,6 +538,10 @@
           "when": "editorLangId == abc"
         },
         {
+          "command": "abc.selectComments",
+          "when": "editorLangId == abc"
+        },
+        {
           "command": "abc.selectTune",
           "when": "editorLangId == abc"
         },
@@ -887,7 +896,7 @@
             "The BÉPO layout."
           ],
           "default": "qwerty",
-          "description": "The layout that the keyboard view of the select and transform menus draws. With bepo, the digit row of the menus also reads the keys of the BÉPO layout, so that * and the digits of a count are the ones that the keys type.",
+          "description": "The layout that the keyboard view of the select and transform menus draws. With bepo, the number row of the menus also reads the keys of the BÉPO layout, so that *, % and the digits of a count are the ones that the keys type.",
           "scope": "application"
         },
         "abc.keyboardGeometry": {
@@ -1973,7 +1982,7 @@
         "args": {
           "notation": "-"
         },
-        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
       },
       {
         "key": "=",
@@ -1981,7 +1990,7 @@
         "args": {
           "notation": "="
         },
-        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
       },
       {
         "key": "[",
@@ -2157,7 +2166,7 @@
         "args": {
           "notation": "_"
         },
-        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
       },
       {
         "key": "shift+=",
@@ -2165,7 +2174,7 @@
         "args": {
           "notation": "+"
         },
-        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
       },
       {
         "key": "shift+[",
@@ -2540,6 +2549,30 @@
         "command": "abc.menu.key",
         "args": {
           "notation": "0"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "-",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "="
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "=",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "%"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "shift+=",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "`"
         },
         "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
       }

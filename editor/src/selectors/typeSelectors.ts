@@ -1,4 +1,4 @@
-import { isAnnotation, isChord, isNote, isRest, isRhythm, isRhythmParent } from "../csTree/types";
+import { isAnnotation, isChord, isComment, isNote, isRest, isRhythm, isRhythmParent } from "../csTree/types";
 import { Selection } from "../selection";
 import { fanOutByPredicate } from "./fanOut";
 
@@ -32,6 +32,10 @@ export function selectRhythmParent(input: Selection): Selection {
 
 export function selectNotesOrChords(input: Selection): Selection {
   return fanOutByPredicate(input, (node) => isNote(node) || isChord(node), "skipChordChildren");
+}
+
+export function selectComments(input: Selection): Selection {
+  return fanOutByPredicate(input, isComment, "all");
 }
 
 export function selectAnnotations(input: Selection): Selection {
