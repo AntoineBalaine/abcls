@@ -1666,7 +1666,7 @@ export function repairGuideTone(voices: VoicedNote[], guideTone: VoicedNote): Vo
  * Builds a close voicing from the chord scale by walking down from the lead.
  * Each new voice is the nearest unused note of the chord scale below the voice that was placed last, and the second voice
  * lies more than 2 semitones below the lead. When the scale has no unused note left, the walk continues with the chord tones
- * available again, so that a doubling is the nearest chord tone below the lowest voice. When the third or the seventh is missing, the lowest tension is replaced by it.
+ * available again, so that a doubling is the nearest chord tone below the lowest voice. No voice has the pitch class that lies a minor 2nd below the lead. When the third or the seventh is missing, the lowest tension is replaced by it.
  *
  * @param rootPosChord The root-position chord from buildChord
  * @param tensions The available tensions from getAvailableTensions
@@ -1698,6 +1698,10 @@ export function buildScaleCloseVoicing(
   };
   context.unused.delete(leadMidi % 12);
 
+  // Because a note a minor 2nd below the lead forms a minor 2nd or a minor 9th with it, whatever the octave, no voice may have that pitch class.
+  const forbiddenPitchClass = (leadMidi + 11) % 12;
+  context.unused.delete(forbiddenPitchClass);
+
   let canPlace = true;
   while (context.voices.length < voiceCount && canPlace) canPlace = placeNextScaleVoice(context);
 
@@ -1705,6 +1709,7 @@ export function buildScaleCloseVoicing(
   // The missing voices are then doublings of the nearest chord tone below the lowest voice, which keeps them close to the other voices.
   const chordTonePitchClasses = new Set<number>();
   for (const chordTone of rootPosChord) chordTonePitchClasses.add(chordTone.midi % 12);
+  chordTonePitchClasses.delete(forbiddenPitchClass);
   canPlace = true;
   while (context.voices.length < voiceCount && canPlace) {
     context.unused = new Set(chordTonePitchClasses);
@@ -1714,7 +1719,7 @@ export function buildScaleCloseVoicing(
   let voices = context.voices.slice().sort(byMidiAscending);
   for (const func of [3, 7]) {
     const guideTone = findByFunction(rootPosChord, func);
-    if (guideTone === undefined) continue;
+    if (guideTone === undefined || guideTone.midi % 12 === forbiddenPitchClass) continue;
     if (!hasPitchClass(voices, guideTone.midi % 12)) voices = repairGuideTone(voices, guideTone);
   }
   return voices;

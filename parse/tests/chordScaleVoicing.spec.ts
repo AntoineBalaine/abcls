@@ -214,6 +214,11 @@ describe("the chord scale close voicing", () => {
       expect(letters(voices!)).to.equal("DBGFCB");
     });
 
+    it("leaves the 13th out of B7 under its 7th A, because it would lie a minor 9th below the lead: B7 in E with six voices", () => {
+      const voices = scaleClose(makeChord(KeyRoot.B, KeyAccidental.None, ChordQuality.Dominant, 7), 81, 6, makeKey(KeyRoot.E));
+      expect(letters(voices!)).to.equal("AFDCBA");
+    });
+
     it("returns null when the lead is not in the chord scale", () => {
       expect(scaleClose(makeChord(KeyRoot.C, KeyAccidental.None, ChordQuality.Major, 7), 77, 4)).to.equal(null);
     });
@@ -252,6 +257,16 @@ describe("the chord scale close voicing", () => {
           const voices = build(input);
           if (voices === null) return true;
           return input.leadMidi - voices[voices.length - 2].midi > 2;
+        })
+      );
+    });
+
+    it("never puts a voice a minor 2nd (or a minor 9th) below the lead", () => {
+      fc.assert(
+        fc.property(voicingArb, (input) => {
+          const voices = build(input);
+          if (voices === null) return true;
+          return voices.every((voice) => (input.leadMidi - voice.midi) % 12 !== 1);
         })
       );
     });
