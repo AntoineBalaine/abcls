@@ -20,6 +20,10 @@ Language features for [ABC music notation](https://abcnotation.com/)
 - Export to HTML and SVG
 - Print preview
 
+## Modal keymap
+
+Two key menus select and transform musical elements, like the user modes of the Kakoune plugin. With VSCodeVim, press `h` for the select menu or `k` for the transform menu in an ABC file, then keys to run commands until `Esc`. A view beside the editor shows the keys of the menu and a keyboard with the four layers of every key. The setting `abc.keymap` changes the keys. See the documentation page Modal Keymap in VS Code for the keys and the settings.
+
 ## ABCx Support
 
 ABCx is a simplified ABC format designed for chord sheets and lead sheets. Instead of writing full musical notation, you write chord symbols directly in the tune body. The extension automatically converts `.abcx` files to standard ABC for rendering.

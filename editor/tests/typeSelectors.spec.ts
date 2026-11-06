@@ -12,6 +12,7 @@ import {
   selectRhythm,
   selectRhythmParent,
   selectAnnotations,
+  selectComments,
 } from "../src/selectors/typeSelectors";
 import { toSelection, toCSTree, findById, findByTag, genAbcTune, genAbcWithChords, genAbcWithMultiMeasureRests } from "./helpers";
 
@@ -355,6 +356,25 @@ describe("selectRhythmParent", () => {
     it("C D E F| selects no annotations", () => {
       const result = selectAnnotations(toSelection("X:1\nK:C\nC D E F|\n"));
       expect(result.cursors.length).to.equal(0);
+    });
+  });
+
+  describe("selectComments", () => {
+    it("selects a comment line and a trailing comment", () => {
+      const result = selectComments(toSelection("X:1\nK:C\n% alone\nC D | E F % trailing\n"));
+      expect(result.cursors.length).to.equal(2);
+    });
+
+    it("every cursor contains exactly 1 ID of a Comment CSNode", () => {
+      const result = selectComments(toSelection("X:1\nK:C\n% alone\nC D | E F % trailing\n"));
+      for (const cursor of result.cursors) {
+        expect(cursor.size).to.equal(1);
+        expect(findById(result.root, [...cursor][0])?.tag).to.equal(TAGS.Comment);
+      }
+    });
+
+    it("C D E F| selects no comments", () => {
+      expect(selectComments(toSelection("X:1\nK:C\nC D E F|\n")).cursors.length).to.equal(0);
     });
   });
 });

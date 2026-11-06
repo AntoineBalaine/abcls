@@ -29,6 +29,20 @@ export { toAst } from "./csTree/toAst";
 
 // Selectors
 export {
+  collectNoteRanges,
+  collectChordRanges,
+  collectElementRanges,
+  moveSelectionsToElement,
+  findAdjacentRange,
+  moveSelectionsToNote,
+  moveSelectionsToChord,
+  moveSelectionsAmong,
+} from "./selectors/noteNavigation";
+export { extendAround } from "./selectors/aroundExtension";
+export { collectContainerRanges, selectContaining } from "./selectors/containingSelectors";
+export type { ContainerKind } from "./selectors/containingSelectors";
+export type { NavigationDirection } from "./selectors/noteNavigation";
+export {
   selectChords,
   selectNotes,
   selectNonChordNotes,
@@ -37,6 +51,7 @@ export {
   selectRhythm,
   selectRhythmParent,
   selectAnnotations,
+  selectComments,
 } from "./selectors/typeSelectors";
 export { selectTune } from "./selectors/structureSelectors";
 export { selectTop, selectBottom, selectNthFromTop, selectAllButTop, selectAllButBottom } from "./selectors/chordSelectors";
@@ -125,6 +140,7 @@ export {
   divideRhythm,
   multiplyRhythmRebar,
   divideRhythmRebar,
+  autoBeam,
   consolidateTiedNotes,
   legato,
   toSlashNotation,

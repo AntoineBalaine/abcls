@@ -60,3 +60,10 @@ export function rangesOverlap(a: Range, b: Range): boolean {
 
   return true;
 }
+
+/** True when the range outer contains the whole of the range inner. */
+export function rangeCovers(outer: Range, inner: Range): boolean {
+  const startsBefore = outer.start.line < inner.start.line || (outer.start.line === inner.start.line && outer.start.character <= inner.start.character);
+  const endsAfter = outer.end.line > inner.end.line || (outer.end.line === inner.end.line && outer.end.character >= inner.end.character);
+  return startsBefore && endsAfter;
+}

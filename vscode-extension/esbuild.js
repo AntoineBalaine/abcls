@@ -1,4 +1,5 @@
 const esbuild = require("esbuild");
+const fs = require("fs");
 
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
@@ -19,6 +20,22 @@ const esbuildProblemMatcherPlugin = {
         console.error(`    ${location.file}:${location.line}:${location.column}:`);
       });
       console.log("[watch] build finished");
+    });
+  },
+};
+
+/**
+ * Copies the style sheet of the menu view next to its script after every build, so that a change of the style sheet
+ * also reaches the extension in watch mode.
+ * @type {import('esbuild').Plugin}
+ */
+const copyStylePlugin = {
+  name: "copy-menu-view-style",
+
+  setup(build) {
+    build.onEnd(() => {
+      fs.mkdirSync("dist/webview", { recursive: true });
+      fs.copyFileSync("webview/menuView.css", "dist/webview/menuView.css");
     });
   },
 };
@@ -59,14 +76,31 @@ async function main() {
     },
   });
 
+  // The script of the menu view runs in a webview, which is a browser page, so it is bundled for the browser.
+  const webviewCtx = await esbuild.context({
+    entryPoints: ["webview/menuView.ts"],
+    bundle: true,
+    format: "iife",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: !production,
+    platform: "browser",
+    outfile: "dist/webview/menuView.js",
+    logLevel: "silent",
+    plugins: [esbuildProblemMatcherPlugin, copyStylePlugin],
+  });
+
   if (watch) {
     await ctx.watch();
     await serverCtx.watch();
+    await webviewCtx.watch();
   } else {
     await ctx.rebuild();
     await serverCtx.rebuild();
+    await webviewCtx.rebuild();
     await ctx.dispose();
     await serverCtx.dispose();
+    await webviewCtx.dispose();
   }
 }
 

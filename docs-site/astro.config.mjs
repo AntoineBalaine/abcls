@@ -49,6 +49,7 @@ export default defineConfig({
             { label: "iReal Pro Export", slug: "user-guide/ireal-export" },
             { label: "MusicXML", slug: "user-guide/musicxml" },
             { label: "Kakoune Integration", slug: "user-guide/kakoune" },
+            { label: "Modal Keymap in VS Code", slug: "user-guide/modal-keymap" },
           ],
         },
         { label: "Directives Reference", slug: "directives-reference" },

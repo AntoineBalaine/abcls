@@ -23,7 +23,7 @@ const TOLERANCE = 1e-9;
 /**
  * One bar of one line of music: the leaves between two separators (a bar line, the end of the line or a voice marker).
  */
-interface Bar {
+export interface Bar {
   /** The notes, rests, chords, annotations and other leaves of the bar, in document order. Beams are entered, their children are listed. */
   leaves: CSNode[];
   /** The bar line that closes the bar, or null when the line ends or the voice changes first. */
@@ -44,7 +44,7 @@ interface BarWalk {
 /**
  * A note, a rest or a chord of a bar, with the position where it starts and where it ends, in units of the default note length.
  */
-interface TimedLeaf {
+export interface TimedLeaf {
   node: CSNode;
   start: number;
   end: number;
@@ -107,7 +107,7 @@ function collectBars(node: CSNode, walk: BarWalk): void {
   }
 }
 
-function barsOf(root: CSNode): Bar[] {
+export function barsOf(root: CSNode): Bar[] {
   const walk: BarWalk = { bars: [], current: [], lineIndex: 0 };
   collectBars(root, walk);
   closeBar(walk, null);
@@ -117,7 +117,7 @@ function barsOf(root: CSNode): Bar[] {
 /**
  * Lists the ids of every node that a selection holds, whatever its cursor.
  */
-function selectedIds(selection: Selection): Set<number> {
+export function selectedIds(selection: Selection): Set<number> {
   const ids = new Set<number>();
   for (const cursor of selection.cursors) {
     for (const id of cursor) ids.add(id);
@@ -125,7 +125,7 @@ function selectedIds(selection: Selection): Set<number> {
   return ids;
 }
 
-function isSelectedBar(bar: Bar, ids: Set<number>): boolean {
+export function isSelectedBar(bar: Bar, ids: Set<number>): boolean {
   return bar.leaves.some((leaf) => ids.has(leaf.id));
 }
 
@@ -135,7 +135,7 @@ function isSelectedBar(bar: Bar, ids: Set<number>): boolean {
  *
  * @returns The timed leaves, and the total length of the bar
  */
-function timeBar(bar: Bar): { timed: TimedLeaf[]; total: number } {
+export function timeBar(bar: Bar): { timed: TimedLeaf[]; total: number } {
   const clock: VoiceClock = { bar: 0, offset: 0, hasContent: false, nextMultiplier: 1, tupletRatio: 1, tupletNotesLeft: 0 };
   const timed: TimedLeaf[] = [];
   for (const leaf of bar.leaves) {
@@ -174,7 +174,7 @@ function barLengthInUnits(bar: Bar, snapshots: DocumentSnapshots): number {
   const snapshot = getSnapshotAtPosition(snapshots, encode(line, char));
   const meter = snapshot.meter.value !== undefined && snapshot.meter.value.length > 0 ? snapshot.meter.value[0] : createRational(1, 1);
   const noteLength = snapshot.noteLength;
-  return (meter.numerator / meter.denominator) / (noteLength.numerator / noteLength.denominator);
+  return meter.numerator / meter.denominator / (noteLength.numerator / noteLength.denominator);
 }
 
 function createBarLine(ctx: ABCContext): CSNode {
@@ -340,7 +340,14 @@ function edgeLeaves(bar: Bar): { first: CSNode; last: CSNode } | null {
 function hasLeavesBefore(bar: Bar, first: CSNode): boolean {
   for (const leaf of bar.leaves) {
     if (leaf === first) return false;
-    if (leaf.tag === TAGS.Annotation || leaf.tag === TAGS.Decoration || leaf.tag === TAGS.Grace_group || leaf.tag === TAGS.Inline_field || leaf.tag === TAGS.Info_line) return true;
+    if (
+      leaf.tag === TAGS.Annotation ||
+      leaf.tag === TAGS.Decoration ||
+      leaf.tag === TAGS.Grace_group ||
+      leaf.tag === TAGS.Inline_field ||
+      leaf.tag === TAGS.Info_line
+    )
+      return true;
   }
   return false;
 }

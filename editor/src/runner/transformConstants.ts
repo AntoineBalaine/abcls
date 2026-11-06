@@ -48,5 +48,6 @@ export const TRANSFORM_NODE_TAGS: Record<string, string[]> = {
   // Because a bar of rest (X) must be repeated too, the re-barring versions also select the multi-measure rests.
   multiplyRhythmRebar: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER, TAGS.MultiMeasureRest],
   divideRhythmRebar: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER, TAGS.MultiMeasureRest],
+  autoBeam: [TAGS.Note, TAGS.Chord, TAGS.Rest],
   divideRhythm: [TAGS.Note, TAGS.Chord, TAGS.Rest, TAGS.YSPACER],
 };

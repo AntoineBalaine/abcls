@@ -2,7 +2,24 @@
  * Copyright (c) Microsoft Corporation. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
-import { fromAst, createSelection, Selection, CSNode, TAGS, selectRange, GROUPED_CURSOR_TRANSFORMS, POSITION_BASED_TRANSFORMS, TRANSFORM_NODE_TAGS, serializeCSTree, findNodesInRange, resolveRanges, resolveSelectionRanges, resolveSelectionRangesInText, lookupTransform, CONTEXT_AWARE_TRANSFORMS } from "abcls-editor";
+import {
+  fromAst,
+  createSelection,
+  Selection,
+  CSNode,
+  TAGS,
+  selectRange,
+  GROUPED_CURSOR_TRANSFORMS,
+  POSITION_BASED_TRANSFORMS,
+  TRANSFORM_NODE_TAGS,
+  serializeCSTree,
+  findNodesInRange,
+  resolveRanges,
+  resolveSelectionRanges,
+  resolveSelectionRangesInText,
+  lookupTransform,
+  CONTEXT_AWARE_TRANSFORMS,
+} from "abcls-editor";
 import { File_structure, Scanner, parse, ABCContext, SemanticAnalyzer } from "abcls-parser";
 import { ChordPositionCollector } from "abcls-parser/interpreter/ChordPositionCollector";
 import {
@@ -24,6 +41,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { AbcDocument } from "./AbcDocument";
 import { AbcLspServer } from "./AbcLspServer";
+import { CARET_AWARE_SELECTORS, expandCarets } from "./caretScope";
 import {
   DECORATION_SYMBOLS,
   getDirectiveCompletionContext,
@@ -49,11 +67,10 @@ import {
 import { collectSurvivingCursorIds, computeCursorRangesFromFreshTree } from "./cursorPreservation";
 import { computeFoldingRanges, DEFAULT_FOLDING_CONFIG } from "./foldingRangeProvider";
 import { PreviewManager } from "./PreviewManager";
-import { lookupSelector } from "./selectorLookup";
+import { lookupNavigator, lookupSelector } from "./selectorLookup";
 import { standardTokenScopes } from "./server_helpers";
 import { SocketHandler, computeSocketPath, validateImportMidiParams } from "./socketHandler";
 import { computeTextEditsFromDiff } from "./textEditFromDiff";
-
 
 // ============================================================================
 // CLI Argument Parsing
@@ -80,6 +97,8 @@ interface ApplySelectorParams {
   selector: string;
   args?: number[];
   ranges?: Range[];
+  /** All the selections of the editor, empty carets included. Only the navigators read it. */
+  selections?: Range[];
 }
 
 interface ApplySelectorResult {
@@ -251,16 +270,27 @@ connection.onRequest("abc.applySelector", (params: ApplySelectorParams): ApplySe
 
   const root = getCsTree(doc.AST, doc.ctx);
 
+  // Because moving to the next note starts from the caret, a navigator reads every selection of the editor, empty ones included.
+  const navigator = lookupNavigator(params.selector);
+  if (navigator) {
+    const selections = params.selections ?? params.ranges ?? [];
+    return { ranges: selections.length > 0 ? navigator(root, selections, doc.document.getText().split(/\r?\n/), ...(params.args ?? [])) : [] };
+  }
+
   const selectorFn = lookupSelector(params.selector);
   if (!selectorFn) {
     throw new ResponseError(-1, `Unknown selector: "${params.selector}"`);
   }
 
+  // Because a delimiter selector needs a node inside the delimiters, a caret that selects no text stands for the character under it.
+  const scopeRanges =
+    CARET_AWARE_SELECTORS.has(params.selector) && params.selections && params.selections.length > 0 ? expandCarets(params.selections) : params.ranges;
+
   let selection: Selection;
-  if (params.ranges && params.ranges.length > 0) {
+  if (scopeRanges && scopeRanges.length > 0) {
     // Constrain to nodes within the provided ranges
     const allCursors: Set<number>[] = [];
-    for (const range of params.ranges) {
+    for (const range of scopeRanges) {
       const baseSelection = createSelection(root);
       const narrowed = selectRange(baseSelection, range.start.line, range.start.character, range.end.line, range.end.character);
       allCursors.push(...narrowed.cursors);

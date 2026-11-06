@@ -21,6 +21,16 @@
   "contributes": {
     "commands": [
       {
+        "command": "abc.menu.showView",
+        "title": "Show the menu view",
+        "category": "ABC"
+      },
+      {
+        "command": "abc.menu.hideView",
+        "title": "Hide the menu view",
+        "category": "ABC"
+      },
+      {
         "command": "abc.startMIDIInput",
         "title": "abc: MIDI Input: Start MIDI input",
         "group": "MIDI Input",
@@ -37,6 +47,42 @@
         "title": "abc: MIDI Input: Set input device",
         "group": "MIDI Input",
         "description": "Set workspace-folder specific MIDI input device for input. You can also change this manually (for more scopes) in settings under `abc › Midi Input: Input`."
+      },
+      {
+        "command": "abc.writeMIDIInputRest",
+        "title": "abc: MIDI Input: Write a rest",
+        "group": "MIDI Input",
+        "description": "Writes a rest (z) and selects it, so that Page Up and Page Down change its length. Bind it to a key, such as a key that a pedal sends. A MIDI control can also do it, see `abc.midiInput.controllerActions` and `abc.midiInput.restNote`."
+      },
+      {
+        "command": "abc.writeMIDIInputBarLine",
+        "title": "abc: MIDI Input: Write a bar line",
+        "group": "MIDI Input",
+        "description": "Writes a bar line after the notes that were just written."
+      },
+      {
+        "command": "abc.undoMIDIInput",
+        "title": "abc: MIDI Input: Undo the last input",
+        "group": "MIDI Input",
+        "description": "Undoes the last edit of the editor, which is the last note or rest that the input wrote, or the last change of a rhythm."
+      },
+      {
+        "command": "abc.toggleMIDIInputSelectLatest",
+        "title": "abc: MIDI Input: toggle select input notes during midi input",
+        "group": "MIDI Input",
+        "description": "Switches `abc.midiInput.selectLatestInput`. While it is on, the notes that the MIDI input just wrote are selected, so that Page Up and Page Down can divide and multiply their length."
+      },
+      {
+        "command": "abc.setMIDIInputPedalMode",
+        "title": "abc: MIDI Input: Set the pedal mode",
+        "group": "MIDI Input",
+        "description": "Chooses how a pedal switches the MIDI input: off, hold (notes are written while the pedal is down) or toggle (each press switches the writing on or off). The choice is saved in `abc.midiInput.pedalMode`."
+      },
+      {
+        "command": "abc.toggleMIDIInputGate",
+        "title": "abc: MIDI Input: Switch the writing of notes on and off (toggle pedal mode)",
+        "group": "MIDI Input",
+        "description": "Switches the MIDI input on and off when `abc.midiInput.pedalMode` is `toggle`. Bind it to the key that a footswitch sends, such as a Bluetooth page turner."
       },
       {
         "command": "abc.restartMIDIInput",
@@ -144,6 +190,11 @@
       {
         "command": "abc.selectAnnotations",
         "title": "ABC: Select Annotations",
+        "category": "ABC"
+      },
+      {
+        "command": "abc.selectComments",
+        "title": "ABC: Select Comments",
         "category": "ABC"
       },
       {
@@ -387,6 +438,11 @@
         "category": "ABC"
       },
       {
+        "command": "abc.autoBeam",
+        "title": "ABC: meter-aware formatting",
+        "category": "ABC"
+      },
+      {
         "command": "abc.addSharp",
         "title": "ABC: Add Sharp",
         "category": "ABC"
@@ -520,6 +576,10 @@
         },
         {
           "command": "abc.selectAnnotations",
+          "when": "editorLangId == abc"
+        },
+        {
+          "command": "abc.selectComments",
           "when": "editorLangId == abc"
         },
         {
@@ -715,6 +775,10 @@
           "when": "editorLangId == abc"
         },
         {
+          "command": "abc.autoBeam",
+          "when": "editorLangId == abc"
+        },
+        {
           "command": "abc.addSharp",
           "when": "editorLangId == abc"
         },
@@ -804,14 +868,160 @@
         "editor.semanticHighlighting.enabled": true
       }
     },
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "abcKeys",
+          "title": "ABC keys",
+          "icon": "$(keyboard)"
+        }
+      ]
+    },
+    "views": {
+      "abcKeys": [
+        {
+          "type": "webview",
+          "id": "abcMenuView",
+          "name": "ABC keys",
+          "when": "config.abc.menuView.location == panel"
+        }
+      ]
+    },
     "configuration": {
       "title": "abc",
       "properties": {
+        "abc.keyboardIsoKeys": {
+          "type": "boolean",
+          "default": false,
+          "description": "Draw the keys that only ISO keyboards have (the key next to the left Shift, and the key above Enter) in the keyboard view of the select and transform menus.",
+          "scope": "application"
+        },
+        "abc.menu.sticky": {
+          "type": "boolean",
+          "default": true,
+          "description": "Keep the select or transform menu open after a command, so that the next key runs another command. Esc closes it. With false, a command closes the menu, like a user mode of the Kakoune plugin.",
+          "scope": "application"
+        },
+        "abc.menuView.autoOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the view of the select and transform menus every time a menu opens or the mode switches. With false, open it with the command abc: Show the menu view.",
+          "scope": "application"
+        },
+        "abc.menuView.location": {
+          "type": "string",
+          "enum": [
+            "below",
+            "beside",
+            "panel"
+          ],
+          "enumDescriptions": [
+            "In a row below the editor, as wide as the window. The editor area is split in two rows when it has one group.",
+            "In an editor column beside the current one.",
+            "In the bottom panel, which is as wide as the window. It does not open by itself: open the tab ABC keys once."
+          ],
+          "default": "below",
+          "description": "Where the view of the select and transform menus lives.",
+          "scope": "application"
+        },
+        "abc.keymap": {
+          "type": "object",
+          "default": {},
+          "description": "Changes to the keys of the select and transform menus. The keys \"select\" and \"transform\" each hold an object that maps a key, written in the Kakoune notation (for example \"d\", \"<a-t>\" or \"<c-up>\"), to a binding that is merged into the default one, or to null to remove it.",
+          "scope": "window"
+        },
+        "abc.keyboardLayout": {
+          "type": "string",
+          "enum": [
+            "qwerty",
+            "bepo"
+          ],
+          "enumDescriptions": [
+            "The US QWERTY layout.",
+            "The BÉPO layout."
+          ],
+          "default": "qwerty",
+          "description": "The layout that the keyboard view of the select and transform menus draws. With bepo, the number row of the menus also reads the keys of the BÉPO layout, so that *, % and the digits of a count are the ones that the keys type.",
+          "scope": "application"
+        },
+        "abc.keyboardGeometry": {
+          "type": "string",
+          "enum": [
+            "staggered",
+            "ortholinear"
+          ],
+          "enumDescriptions": [
+            "The rows are shifted against each other, as on most keyboards.",
+            "The keys are in aligned columns."
+          ],
+          "default": "staggered",
+          "description": "The geometry that the keyboard view of the select and transform menus draws.",
+          "scope": "application"
+        },
         "abc.midiInput.input": {
           "type": "string",
           "default": "",
           "group": "MIDI Input",
           "description": "MIDI Device used for input. If none specified, the first valid device is used. After changing, please run the `abc: MIDI Input: Restart MIDI Input` command. You can alternatively use the command `abc: MIDI Input: Set output device` to select a device from a list.",
+          "scope": "resource"
+        },
+        "abc.midiInput.pedalMode": {
+          "type": "string",
+          "enum": [
+            "off",
+            "hold",
+            "toggle"
+          ],
+          "enumDescriptions": [
+            "The notes you play are always written.",
+            "The notes are written only while the pedal is down.",
+            "Each press of the pedal switches the writing of notes on or off."
+          ],
+          "default": "off",
+          "group": "MIDI Input",
+          "description": "Lets a pedal decide when the notes that you play are written. The pedal is a control change message on the MIDI input, the sustain pedal of a keyboard by default.",
+          "scope": "resource"
+        },
+        "abc.midiInput.pedalController": {
+          "type": "number",
+          "default": 64,
+          "minimum": 0,
+          "maximum": 127,
+          "group": "MIDI Input",
+          "description": "The number of the control change that the pedal sends: 64 is the sustain pedal, 66 the sostenuto pedal and 67 the soft pedal.",
+          "scope": "resource"
+        },
+        "abc.midiInput.selectLatestInput": {
+          "type": "boolean",
+          "default": false,
+          "group": "MIDI Input",
+          "description": "Select the notes that were just written, so that a key can change their rhythm: while the MIDI input runs, Page Up divides and Page Down multiplies the length of the selected notes, as the keys of a page turner pedal send them. The next notes are still written after the selection. With VSCodeVim, the selection puts the editor in Visual mode.",
+          "scope": "resource"
+        },
+        "abc.midiInput.restNote": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "default": null,
+          "minimum": 0,
+          "maximum": 127,
+          "group": "MIDI Input",
+          "description": "The number of a MIDI note that writes a rest when you press it, a keyswitch of the keyboard (21 is the lowest key of an 88-key piano). Null means that no note does.",
+          "scope": "resource"
+        },
+        "abc.midiInput.controllerActions": {
+          "type": "object",
+          "default": {},
+          "group": "MIDI Input",
+          "description": "What each control change number does while the MIDI input runs. The keys are controller numbers and the values are `rest`, `barLine`, `undo` or `toggleGate`. For example, { \"20\": \"rest\", \"21\": \"barLine\", \"22\": \"undo\", \"23\": \"toggleGate\" } for a four-button footswitch. A rest and a bar line are written only while the pedal gate is open. Do not use the number of `abc.midiInput.pedalController`.",
+          "scope": "resource"
+        },
+        "abc.midiInput.controlInput": {
+          "type": "string",
+          "default": "",
+          "group": "MIDI Input",
+          "description": "The name of a second MIDI device, such as a footswitch, whose control changes work the controls above and the pedal. Empty means that the controls come on the same device as the notes. After changing, run `abc: MIDI Input: Restart MIDI Input`.",
           "scope": "resource"
         },
         "abc.midiInput.chordMode": {
@@ -946,22 +1156,1558 @@
         "scopeName": "source.abc",
         "path": "./abcjs-renderer/abc.tmGrammar.json"
       }
+    ],
+    "keybindings": [
+      {
+        "key": "pageup",
+        "command": "abc.divideRhythm",
+        "when": "editorLangId == abc && editorTextFocus && abc.midiInputActive"
+      },
+      {
+        "key": "pagedown",
+        "command": "abc.multiplyRhythm",
+        "when": "editorLangId == abc && editorTextFocus && abc.midiInputActive"
+      },
+      {
+        "key": "k",
+        "command": "abc.menu.select",
+        "when": "editorLangId == abc && editorTextFocus && !abc.modeMenuOpen && (vim.mode == 'Normal' || vim.mode == 'Visual' || vim.mode == 'VisualLine')"
+      },
+      {
+        "key": "h",
+        "command": "abc.menu.transform",
+        "when": "editorLangId == abc && editorTextFocus && !abc.modeMenuOpen && (vim.mode == 'Normal' || vim.mode == 'Visual' || vim.mode == 'VisualLine')"
+      },
+      {
+        "key": "a",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "a"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+a",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "A"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+a",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-a>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+a",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-A>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "b",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "b"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+b",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "B"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+b",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-b>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+b",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-B>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "c",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "c"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+c",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "C"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+c",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-c>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+c",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-C>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "d",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "d"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+d",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "D"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+d",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-d>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+d",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-D>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "e",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "e"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+e",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "E"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+e",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-e>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+e",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-E>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "f",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "f"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+f",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "F"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+f",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-f>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+f",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-F>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "g",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "g"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+g",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "G"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+g",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-g>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+g",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-G>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "h",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "h"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+h",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "H"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+h",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-h>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+h",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-H>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "i",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "i"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+i",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "I"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+i",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-i>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+i",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-I>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "j",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "j"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+j",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "J"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+j",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-j>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+j",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-J>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "k",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "k"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+k",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "K"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+k",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-k>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+k",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-K>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "l",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "l"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+l",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "L"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+l",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-l>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+l",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-L>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "m",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "m"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+m",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "M"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+m",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-m>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+m",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-M>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "n",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "n"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+n",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "N"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+n",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-n>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+n",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-N>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "o",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "o"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+o",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "O"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+o",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-o>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+o",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-O>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "p",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "p"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+p",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "P"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+p",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-p>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+p",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-P>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "q",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "q"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+q",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "Q"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+q",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-q>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+q",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-Q>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "r",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "r"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+r",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "R"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+r",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-r>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+r",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-R>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "s",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "s"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+s",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "S"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+s",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-s>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+s",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-S>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "t",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "t"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+t",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "T"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+t",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-t>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+t",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-T>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "u",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "u"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+u",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "U"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+u",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-u>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+u",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-U>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "v",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "v"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+v",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "V"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+v",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-v>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+v",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-V>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "w",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "w"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+w",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "W"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+w",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-w>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+w",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-W>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "x",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "x"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+x",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "X"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+x",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-x>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+x",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-X>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "y",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "y"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+y",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "Y"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+y",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-y>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+y",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-Y>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "z",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "z"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+z",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "Z"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+z",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-z>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+shift+z",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<a-Z>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "0",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "0"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "1",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "1"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "2",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "2"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "3",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "3"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "4",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "4"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "5",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "5"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "6",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "6"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "7",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "7"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "8",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "8"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "9",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "9"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "-",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "-"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "=",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "="
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "[",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "["
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+4",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "["
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "]",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "]"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+5",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "]"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "\\",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "\\"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": ";",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": ";"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "'",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "'"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": ",",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": ","
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": ".",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "."
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "/",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "/"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "`",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "`"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+1",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "!"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "shift+2",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "@"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "shift+3",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "#"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "shift+4",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "$"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "shift+5",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "%"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "shift+6",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "^"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "shift+7",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "&"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "shift+8",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "*"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "shift+9",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "("
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "shift+0",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": ")"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "shift+-",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "_"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "shift+=",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "+"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && !abc.menuBepo"
+      },
+      {
+        "key": "shift+[",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "{"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+]",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "}"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+\\",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "|"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+;",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": ":"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+'",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "\""
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+,",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "<",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+2",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+.",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": ">"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": ">",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": ">"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "alt+3",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": ">"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+/",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "?"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "shift+`",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "~"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "ctrl+up",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<c-up>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "ctrl+shift+up",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<c-S-up>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "ctrl+down",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<c-down>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "ctrl+shift+down",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<c-S-down>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "ctrl+left",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<c-left>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "ctrl+shift+left",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<c-S-left>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "ctrl+right",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<c-right>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "ctrl+shift+right",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<c-S-right>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "tab",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<tab>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "escape",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<esc>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "backspace",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<bs>"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc"
+      },
+      {
+        "key": "1",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "\""
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "shift+1",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "1"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "shift+2",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "2"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "alt+2",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "<"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "shift+3",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "3"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "alt+3",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": ">"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "4",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "("
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "shift+4",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "4"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "alt+4",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "["
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "5",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": ")"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "shift+5",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "5"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "alt+5",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "]"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "6",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "@"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "shift+6",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "6"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "alt+6",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "^"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "7",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "+"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "shift+7",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "7"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "8",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "-"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "shift+8",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "8"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "9",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "/"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "shift+9",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "9"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "0",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "*"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "shift+0",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "0"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "-",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "="
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "=",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "%"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      },
+      {
+        "key": "shift+=",
+        "command": "abc.menu.key",
+        "args": {
+          "notation": "`"
+        },
+        "when": "abc.modeMenuOpen && editorTextFocus && editorLangId == abc && abc.menuBepo"
+      }
     ]
   },
   "scripts": {
     "vscode:prepublish": "npm run copy-jazz-midi && npm run package-bundle",
     "copy-jazz-midi": "node -e \"const fs=require('fs');const src=require('path').join('..','node_modules','jazz-midi');const dest=require('path').join('node_modules','jazz-midi');if(fs.existsSync(src)){fs.cpSync(src,dest,{recursive:true});console.log('Copied jazz-midi');}else{console.warn('jazz-midi not found');}\"",
-    "build": "tsc -p ./ && node esbuild.js",
-    "build:production": "tsc -p ./ && node esbuild.js --production",
+    "generate-keybindings": "tsx scripts/generateMenuKeybindings.ts",
+    "check-keymap": "tsx scripts/checkDefaultKeymap.ts",
+    "build": "npm run generate-keybindings && npm run check-keymap && tsc -p ./ && tsc -p webview && node esbuild.js",
+    "build:production": "npm run generate-keybindings && npm run check-keymap && tsc -p ./ && tsc -p webview && node esbuild.js --production",
     "compile": "tsc -p ./",
     "watch": "npm run watch-bundle",
     "watch-bundle": "node esbuild.js --watch",
     "package-bundle": "node esbuild.js --production",
     "copy-binary": "node -e \"const fs=require('fs');const path=require('path');const os=require('os');const binDir='bin';const srcDir=path.join('..','native','build');const binaryName=os.platform()==='win32'?'mscore.exe':'mscore';fs.mkdirSync(binDir,{recursive:true});const src=path.join(srcDir,binaryName);const dest=path.join(binDir,binaryName);if(fs.existsSync(src)){fs.copyFileSync(src,dest);fs.chmodSync(dest,0o755);console.log('Copied',binaryName,'to',binDir);}else{console.warn('Warning:',src,'not found. Build native package first.');}\"",
     "pretest": "npm run compile && npm run lint",
-    "test": "mocha --require tsx 'src/**/*.spec.ts'",
-    "lint": "eslint src --ext ts",
-    "lint:fix": "eslint src --ext ts --fix",
+    "test": "mocha --require tsx 'src/**/*.spec.ts' 'webview/**/*.spec.ts'",
+    "lint": "eslint src webview scripts --ext ts",
+    "lint:fix": "eslint src webview scripts --ext ts --fix",
     "_test": "node ../out/vscode-extension/test/runTest.js",
     "package": "vsce package --out ..",
     "publish": "vsce publish"

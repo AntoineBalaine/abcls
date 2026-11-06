@@ -11,6 +11,9 @@ import {
   getAvailableTensions,
   buildChordScale,
   buildClusterVoicing,
+  buildScaleCloseVoicing,
+  buildScaleSpreadVoicing,
+  swapChordForRootLead,
   substituteTensions,
   descendScale,
   deriveDiatonicChord,
@@ -270,7 +273,7 @@ export function harmonize(selection: Selection, steps: number, ctx: ABCContext):
  * written, rather than building one under a lead note, so they live in
  * dropVoicing/DropVoicing (./revoice) instead of here.
  */
-export type VoicingType = "close" | "cluster" | "spread";
+export type VoicingType = "close" | "cluster" | "spread" | "scaleClose" | "scaleSpread";
 
 /**
  * Snapshot of the harmonic context at a given position.
@@ -483,7 +486,10 @@ export function toCSChord(
  * or a spread voicing that finds no placement). This is the voicing step of harmonizeVoicing, exported so that a caller
  * can test candidate leads before writing any note.
  *
- * @param chord The chord to voice
+ * Because a lead on the root of a major seventh chord (or of a minor-major seventh chord) would sit a minor 2nd above the seventh,
+ * the chord is voiced as a sixth chord in that case, whatever the voicing and the voice count.
+ *
+ * @param writtenChord The chord to voice, as it is written in the score
  * @param lead The lead note, which stays on top
  * @param voicing The voicing type
  * @param voiceCount The number of voices (4, 5 or 6)
@@ -491,20 +497,35 @@ export function toCSChord(
  * @param prevMidi The pitches of the previous chord of the same voice, for the voice leading of the spread voicing
  */
 export function voiceChord(
-  chord: ParsedChord,
+  writtenChord: ParsedChord,
   lead: { letter: NoteLetter; midi: number; alteration: number },
   voicing: VoicingType,
   voiceCount: number,
   key: KeySignature,
   prevMidi: number[] | null
 ): VoicedNote[] | null {
+  const chord = swapChordForRootLead(writtenChord, lead.midi % 12);
   // Build root position chord with lead on top
   const rootPosChord = buildChord(chord, lead.midi);
   let tensions: Map<9 | 11 | 13, VoicedNote> | null = null;
   let leadTension: VoicedNote | null = null;
   let voicedChord: VoicedNote[];
 
-  if (voicing === "cluster") {
+  if (voicing === "scaleSpread") {
+    // Chord scale spread voicing: push the voices of the chord scale close voicing down by octaves
+    if (!isChordScaleTone(lead.midi, rootPosChord, chord, key)) return null;
+    tensions = getAvailableTensions(rootPosChord, chord, key);
+    const spreadVoicing = buildScaleSpreadVoicing(rootPosChord, tensions, lead.midi, voiceCount);
+    if (spreadVoicing === null) return null;
+    voicedChord = spreadVoicing;
+  } else if (voicing === "scaleClose") {
+    // Chord scale close voicing: walk down the chord scale from the lead
+    if (!isChordScaleTone(lead.midi, rootPosChord, chord, key)) return null;
+    tensions = getAvailableTensions(rootPosChord, chord, key);
+    const scaleVoicing = buildScaleCloseVoicing(rootPosChord, tensions, lead.midi, voiceCount);
+    if (scaleVoicing === null) return null;
+    voicedChord = scaleVoicing;
+  } else if (voicing === "cluster") {
     // Cluster voicing: build from chord scale
     if (!isChordScaleTone(lead.midi, rootPosChord, chord, key)) return null;
     tensions = getAvailableTensions(rootPosChord, chord, key);
@@ -737,8 +758,14 @@ export function harmonizeVoicing(
           tieState.tiedChords.set(csNode.id, chordCsNode);
         }
         replace(csNode, chordCsNode);
-        tieState.pitchesByNodeId.set(csNode.id, voicedChord.map((note) => note.midi));
-        previousVoicings.set(contextSnapshot.voiceId, voicedChord.map((note) => note.midi));
+        tieState.pitchesByNodeId.set(
+          csNode.id,
+          voicedChord.map((note) => note.midi)
+        );
+        previousVoicings.set(
+          contextSnapshot.voiceId,
+          voicedChord.map((note) => note.midi)
+        );
       }
 
       // Update local accidentals for subsequent notes in the same transform pass

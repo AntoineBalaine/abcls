@@ -31,6 +31,26 @@ const registerMidiInputs = (context: vscode.ExtensionContext) => {
   });
   context.subscriptions.push(restartMIDIInputCmd);
 
+  const setPedalModeCmd = vscode.commands.registerCommand("abc.setMIDIInputPedalMode", () => {
+    MIDIIn.setPedalMode();
+  });
+  context.subscriptions.push(setPedalModeCmd);
+
+  const writeRestCmd = vscode.commands.registerCommand("abc.writeMIDIInputRest", () => MIDIIn.writeRest());
+  const writeBarLineCmd = vscode.commands.registerCommand("abc.writeMIDIInputBarLine", () => MIDIIn.writeBarLine());
+  const undoInputCmd = vscode.commands.registerCommand("abc.undoMIDIInput", () => MIDIIn.undoInput());
+  context.subscriptions.push(writeRestCmd, writeBarLineCmd, undoInputCmd);
+
+  const toggleSelectLatestInputCmd = vscode.commands.registerCommand("abc.toggleMIDIInputSelectLatest", () => {
+    MIDIIn.toggleSelectLatestInput();
+  });
+  context.subscriptions.push(toggleSelectLatestInputCmd);
+
+  const toggleMIDIInputGateCmd = vscode.commands.registerCommand("abc.toggleMIDIInputGate", () => {
+    MIDIIn.toggleInputGate();
+  });
+  context.subscriptions.push(toggleMIDIInputGateCmd);
+
   // status bar items for MIDI playback
   MIDIIn.initMIDIStatusBarItems();
 };

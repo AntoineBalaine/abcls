@@ -1075,6 +1075,23 @@ export function isChordTone(midi: number, rootPosChord: VoicedNote[]): boolean {
 }
 
 /**
+ * Tells whether a pitch class lies a minor 2nd (or a minor 9th) above one of the chord tones.
+ * Because a dominant chord accepts the b9 above its root, the root is the only chord tone that a dominant chord does not guard.
+ *
+ * @param pitchClass The pitch class (0 to 11) of the tension
+ * @param rootPosChord The root-position chord, whose first note is the root
+ * @param quality The quality of the chord
+ */
+export function isMinorSecondAboveChordTone(pitchClass: number, rootPosChord: VoicedNote[], quality: ChordQuality): boolean {
+  for (let index = 0; index < rootPosChord.length; index++) {
+    const isUnguardedRoot = index === 0 && quality === ChordQuality.Dominant;
+    if (isUnguardedRoot) continue;
+    if ((pitchClass - (rootPosChord[index].midi % 12) + 12) % 12 === 1) return true;
+  }
+  return false;
+}
+
+/**
  * Calculates which tensions (9, 11, 13) are available for a chord.
  * A tension is unavailable (an "avoid note") if it forms a minor 2nd (1 semitone)
  * above a guide tone (3rd or 7th).
@@ -1089,8 +1106,6 @@ export function isChordTone(midi: number, rootPosChord: VoicedNote[]): boolean {
  * @returns Map from tension degree (9, 11, or 13) to VoicedNote
  */
 export function getAvailableTensions(rootPosChord: VoicedNote[], chord: ParsedChord, key: KeySignature): Map<9 | 11 | 13, VoicedNote> {
-  const thirdMidi = rootPosChord[1].midi;
-  const seventhMidi = rootPosChord[3].midi;
   const root = rootPosChord[0];
   const rootMidi = root.midi;
   const rootIndex = LETTERS.indexOf(root.spelling.letter);
@@ -1127,20 +1142,9 @@ export function getAvailableTensions(rootPosChord: VoicedNote[], chord: ParsedCh
     const interval = tensionIntervals[degree];
     const tensionMidi = rootMidi + interval;
 
-    // Avoid note check: minor 2nd above 3rd or 7th
-    // We compute (tensionPitchClass - guideTonePitchClass + 12) % 12 === 1
-    const tensionPitchClass = tensionMidi % 12;
-    const thirdPitchClass = thirdMidi % 12;
-    const seventhPitchClass = seventhMidi % 12;
-    const rootPitchClass = rootMidi % 12;
-
-    const isMinor2ndAboveThird = (tensionPitchClass - thirdPitchClass + 12) % 12 === 1;
-    const isMinor2ndAboveSeventh = (tensionPitchClass - seventhPitchClass + 12) % 12 === 1;
-    // Minor 9th (minor 2nd above root) is an avoid note, except on dominant chords
-    const isMinor9th = degree === 9 && (tensionPitchClass - rootPitchClass + 12) % 12 === 1;
-    const isMinor9thAvoid = isMinor9th && chord.quality !== ChordQuality.Dominant;
-
-    const isAvoidNote = isMinor2ndAboveThird || isMinor2ndAboveSeventh || isMinor9thAvoid;
+    // Because a tension that lies a minor 2nd (or a minor 9th) above a chord tone clashes with it, the tension is an avoid note.
+    // A major 9th is virtual here, since it folds into a major 2nd, so only the half step makes a tension unavailable.
+    const isAvoidNote = isMinorSecondAboveChordTone(tensionMidi % 12, rootPosChord, chord.quality);
 
     if (!isAvoidNote) {
       const spelling = spellFromRoot(rootIndex, rootSemitone, TENSION_SCALE_STEPS[degree], interval % 12);
@@ -1524,4 +1528,354 @@ export function deriveDiatonicChord(rootLetter: "C" | "D" | "E" | "F" | "G" | "A
     addedTones: [],
     bass: null,
   };
+}
+
+// ============================================================================
+// Sixth chord swap and chord scale close voicing
+// ============================================================================
+
+/**
+ * Turns a major seventh chord into a major sixth chord, and a minor-major seventh chord into a minor sixth chord,
+ * when the lead is the root of the chord.
+ * Because the seventh would sit a minor 2nd below a lead that is the root, the sixth takes its place.
+ * Any other chord is returned as it is.
+ *
+ * @param chord The parsed chord
+ * @param leadPitchClass The pitch class (0 to 11) of the lead note
+ */
+export function swapChordForRootLead(chord: ParsedChord, leadPitchClass: number): ParsedChord {
+  const rootLetter = keyRootToLetter(chord.root);
+  const rootPitchClass = (NATURAL_SEMITONES[rootLetter] + keyAccidentalToSemitones(chord.rootAccidental) + 12) % 12;
+  if (leadPitchClass !== rootPitchClass) return chord;
+
+  const hasSixth = chord.extension === 6 || chord.extension === 69;
+  if (chord.quality === ChordQuality.Major && !hasSixth) return { ...chord, extension: 6 };
+  if (chord.quality === ChordQuality.MinorMajor7) return { ...chord, quality: ChordQuality.Minor, extension: 6 };
+  return chord;
+}
+
+/**
+ * Returns the highest MIDI pitch that lies strictly below the ceiling and has the given pitch class.
+ *
+ * @param ceilingMidi The pitch that the result must stay below
+ * @param pitchClass The pitch class (0 to 11) of the result
+ */
+export function highestMidiBelow(ceilingMidi: number, pitchClass: number): number {
+  let midi = ceilingMidi - 1;
+  while (((midi % 12) + 12) % 12 !== pitchClass) midi--;
+  return midi;
+}
+
+/**
+ * Compares two voiced notes so that the lower one comes first.
+ */
+export function byMidiAscending(a: VoicedNote, b: VoicedNote): number {
+  return a.midi - b.midi;
+}
+
+/**
+ * Finds the note of a chord that has the given function, or undefined when the chord has none.
+ */
+export function findByFunction(chord: VoicedNote[], func: number): VoicedNote | undefined {
+  for (const note of chord) {
+    if (note.func === func) return note;
+  }
+  return undefined;
+}
+
+/**
+ * Tells whether one of the voices has the given pitch class.
+ */
+export function hasPitchClass(voices: VoicedNote[], pitchClass: number): boolean {
+  for (const voice of voices) {
+    if (voice.midi % 12 === pitchClass) return true;
+  }
+  return false;
+}
+
+/**
+ * The state that the walk of the chord scale close voicing modifies.
+ */
+export interface ScaleWalkContext {
+  /** The chord scale, by pitch class. */
+  scale: Map<number, VoicedNote>;
+  /** The voices that the walk has placed, from the lead downward. */
+  voices: VoicedNote[];
+  /** The pitch classes of the scale that no voice uses yet. */
+  unused: Set<number>;
+}
+
+/**
+ * Places the next voice of the walk: the nearest unused scale note below the lowest voice.
+ * Because a second under the lead clashes with it, the second voice must lie more than 2 semitones below the lead,
+ * and a note that is too close stays unused for a later turn of the walk.
+ * Returns false when no unused scale note remains.
+ */
+export function placeNextScaleVoice(context: ScaleWalkContext): boolean {
+  const lowest = context.voices[context.voices.length - 1];
+  const lead = context.voices[0];
+  const isSecondVoice = context.voices.length === 1;
+  for (let midi = lowest.midi - 1; midi > lowest.midi - 13; midi--) {
+    const pitchClass = ((midi % 12) + 12) % 12;
+    if (!context.unused.has(pitchClass)) continue;
+    if (isSecondVoice && lead.midi - midi <= 2) continue;
+    context.voices.push({ ...context.scale.get(pitchClass)!, midi });
+    context.unused.delete(pitchClass);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * The chord functions that the repair of a missing guide tone replaces, from the first choice to the last.
+ * A tension is a function of 9 or more, and the chord tones that are not guide tones are the fifth and the root.
+ */
+export const REPAIR_REPLACEMENT_ORDER: Array<(func: number) => boolean> = [isTensionFunction, (func) => func === 5, (func) => func === 8];
+
+/**
+ * Tells whether a chord function is a tension (9, 11 or 13).
+ */
+export function isTensionFunction(func: number): boolean {
+  return func >= 9;
+}
+
+/**
+ * Replaces a voice by the guide tone that the voicing misses, placed just below the voice above the replaced voice.
+ * Because a tension is the least needed note, the lowest tension goes first, and then the lowest fifth and the lowest root.
+ * Because the lead is never replaced, a voicing that has nothing else to replace stays as it is.
+ * The voices must be sorted from the lowest to the highest.
+ */
+export function repairGuideTone(voices: VoicedNote[], guideTone: VoicedNote): VoicedNote[] {
+  const topIndex = voices.length - 1;
+  for (const isReplaceable of REPAIR_REPLACEMENT_ORDER) {
+    for (let index = 0; index < topIndex; index++) {
+      if (!isReplaceable(voices[index].func)) continue;
+      // Because a second under the lead clashes with it, a replacement for the second voice lies more than 2 semitones below the lead.
+      const isSecondVoice = index + 1 === topIndex;
+      const ceiling = isSecondVoice ? voices[topIndex].midi - 2 : voices[index + 1].midi;
+      const midi = highestMidiBelow(ceiling, guideTone.midi % 12);
+      const repaired = voices.slice();
+      repaired[index] = { ...guideTone, midi };
+      return repaired.sort(byMidiAscending);
+    }
+  }
+  return voices;
+}
+
+/**
+ * Builds a close voicing from the chord scale by walking down from the lead.
+ * Each new voice is the nearest unused note of the chord scale below the voice that was placed last, and the second voice
+ * lies more than 2 semitones below the lead. When the scale has no unused note left, the walk continues with the chord tones
+ * available again, so that a doubling is the nearest chord tone below the lowest voice. No voice has the pitch class that lies a minor 2nd below the lead. When the third or the seventh is missing, the lowest tension is replaced by it.
+ *
+ * @param rootPosChord The root-position chord from buildChord
+ * @param tensions The available tensions from getAvailableTensions
+ * @param leadMidi The pitch of the lead note
+ * @param voiceCount The number of voices (4, 5 or 6)
+ * @returns The voices from the lowest to the highest, or null when the lead is not in the chord scale
+ */
+export function buildScaleCloseVoicing(
+  rootPosChord: VoicedNote[],
+  tensions: Map<9 | 11 | 13, VoicedNote>,
+  leadMidi: number,
+  voiceCount: number
+): VoicedNote[] | null {
+  const scale = new Map<number, VoicedNote>();
+  for (const chordTone of rootPosChord) {
+    if (!scale.has(chordTone.midi % 12)) scale.set(chordTone.midi % 12, chordTone);
+  }
+  for (const tension of tensions.values()) {
+    if (!scale.has(tension.midi % 12)) scale.set(tension.midi % 12, tension);
+  }
+
+  const leadScaleNote = scale.get(leadMidi % 12);
+  if (leadScaleNote === undefined) return null;
+
+  const context: ScaleWalkContext = {
+    scale,
+    voices: [{ ...leadScaleNote, midi: leadMidi }],
+    unused: new Set(scale.keys()),
+  };
+  context.unused.delete(leadMidi % 12);
+
+  // Because a note a minor 2nd below the lead forms a minor 2nd or a minor 9th with it, whatever the octave, no voice may have that pitch class.
+  const forbiddenPitchClass = (leadMidi + 11) % 12;
+  context.unused.delete(forbiddenPitchClass);
+
+  let canPlace = true;
+  while (context.voices.length < voiceCount && canPlace) canPlace = placeNextScaleVoice(context);
+
+  // Because the walk stops when the scale is exhausted, it continues with the chord tones available again.
+  // The missing voices are then doublings of the nearest chord tone below the lowest voice, which keeps them close to the other voices.
+  const chordTonePitchClasses = new Set<number>();
+  for (const chordTone of rootPosChord) chordTonePitchClasses.add(chordTone.midi % 12);
+  chordTonePitchClasses.delete(forbiddenPitchClass);
+  canPlace = true;
+  while (context.voices.length < voiceCount && canPlace) {
+    context.unused = new Set(chordTonePitchClasses);
+    canPlace = placeNextScaleVoice(context);
+  }
+
+  let voices = context.voices.slice().sort(byMidiAscending);
+  for (const func of [3, 7]) {
+    const guideTone = findByFunction(rootPosChord, func);
+    if (guideTone === undefined || guideTone.midi % 12 === forbiddenPitchClass) continue;
+    if (!hasPitchClass(voices, guideTone.midi % 12)) voices = repairGuideTone(voices, guideTone);
+  }
+  return voices;
+}
+
+// ============================================================================
+// Chord scale spread voicing
+// ============================================================================
+
+/**
+ * The largest interval, in semitones, between the bass and the voice above it in a chord scale spread voicing (a 10th).
+ */
+export const MAX_BASS_GAP = 16;
+
+/**
+ * The state of the loop that pushes the voices of a close voicing down by octaves.
+ */
+export interface SpreadState {
+  /** The lead, which stays on top. */
+  lead: VoicedNote;
+  /** The voices that have not moved yet, from the top to the bottom. They stay close under the lead. */
+  unmoved: VoicedNote[];
+  /** The voices that have moved, from the top to the bottom. The last one is the bass. */
+  stack: VoicedNote[];
+}
+
+/**
+ * Lists the voices of a state from the lowest to the highest.
+ */
+export function spreadStateVoices(state: SpreadState): VoicedNote[] {
+  return [...state.stack.slice().reverse(), ...state.unmoved.slice().reverse(), state.lead];
+}
+
+/**
+ * Tells whether a spread voicing respects the spacing limits.
+ * Because the upper voices must stay connected to the melody, two of them are at most an octave apart.
+ * The bass is at most a 10th below the voice above it, and it must respect the low interval limits for that interval.
+ *
+ * @param voices The voices from the lowest to the highest
+ */
+export function isSpreadStateValid(voices: VoicedNote[]): boolean {
+  if (voices.length < 2) return false;
+  const bassGap = voices[1].midi - voices[0].midi;
+  if (bassGap < 1 || bassGap > MAX_BASS_GAP) return false;
+  const minBass = LOW_INTERVAL_LIMITS[bassGap];
+  if (minBass !== undefined && voices[0].midi < minBass) return false;
+  return maxUpperGap(voices) <= MAX_UPPER_GAP;
+}
+
+/**
+ * Moves the voice right under the lead to the bottom part of the voicing.
+ * The voice lands at the nearest occurrence of its pitch class below the lowest voice that has not moved yet,
+ * and the voices that moved before are pushed down by whole octaves until they lie below it.
+ * Because the shift is the same for all of them, their intervals stay the same and the root stays the lowest voice.
+ * Returns null when fewer than two voices have not moved.
+ */
+export function moveNextSpreadVoice(state: SpreadState): SpreadState | null {
+  if (state.unmoved.length < 2) return null;
+  const voice = state.unmoved[0];
+  const unmoved = state.unmoved.slice(1);
+  const landing = highestMidiBelow(unmoved[unmoved.length - 1].midi, voice.midi % 12);
+
+  let shift = 0;
+  while (state.stack[0].midi - shift >= landing) shift += 12;
+  const stack: VoicedNote[] = [{ ...voice, midi: landing }];
+  for (const moved of state.stack) stack.push({ ...moved, midi: moved.midi - shift });
+
+  return { lead: state.lead, unmoved, stack };
+}
+
+/**
+ * Lowers the bass by one octave when it lies a 3rd (3 or 4 semitones) below the voice above it, which turns the 3rd into a 10th.
+ * Because the moved voices shift down as one block, a 3rd at the bottom would otherwise stay a 3rd while the whole bottom of the voicing
+ * goes down, so the bass is corrected as soon as the 3rd appears. The limits of a valid state still apply to the new bass.
+ */
+export function lowerBassFromThird(state: SpreadState): SpreadState {
+  const voices = spreadStateVoices(state);
+  const gap = voices[1].midi - voices[0].midi;
+  if (gap !== 3 && gap !== 4) return state;
+  const stack = state.stack.slice();
+  const bass = stack[stack.length - 1];
+  stack[stack.length - 1] = { ...bass, midi: bass.midi - 12 };
+  return { lead: state.lead, unmoved: state.unmoved, stack };
+}
+
+/**
+ * Moves the next voice and then corrects the bass. Returns null when no voice can move.
+ */
+export function advanceSpreadState(state: SpreadState): SpreadState | null {
+  const moved = moveNextSpreadVoice(state);
+  return moved === null ? null : lowerBassFromThird(moved);
+}
+
+/**
+ * Picks the voice that makes room for the bass when the close voicing has no root: the lowest tension, or else the lowest fifth.
+ * Returns the index in the voices, which are sorted from the top to the bottom, or -1 when no voice can go.
+ */
+export function pickVoiceToRemoveForBass(others: VoicedNote[]): number {
+  for (let index = others.length - 1; index >= 0; index--) {
+    if (isTensionFunction(others[index].func)) return index;
+  }
+  for (let index = others.length - 1; index >= 0; index--) {
+    if (others[index].func === 5) return index;
+  }
+  return -1;
+}
+
+/**
+ * Builds a spread voicing from the chord scale close voicing, by pushing its voices down by octaves, one at a time.
+ * The root goes to the bottom first. Then the voice right under the lead drops below the voices that stay, and the voices that
+ * moved earlier are pushed down. Because the voices that stay behind remain close, the closest intervals are in the upper voices.
+ * Whenever the bass lies a 3rd below the voice above it, the bass drops one more octave, so that the interval becomes a 10th.
+ * The loop stops before the first step that breaks a spacing limit, so the result is the last valid step.
+ *
+ * @param rootPosChord The root-position chord from buildChord
+ * @param tensions The available tensions from getAvailableTensions
+ * @param leadMidi The pitch of the lead note
+ * @param voiceCount The number of voices (4, 5 or 6)
+ * @returns The voices from the lowest to the highest, or null when the lead is not in the chord scale or no valid voicing exists
+ */
+export function buildScaleSpreadVoicing(
+  rootPosChord: VoicedNote[],
+  tensions: Map<9 | 11 | 13, VoicedNote>,
+  leadMidi: number,
+  voiceCount: number
+): VoicedNote[] | null {
+  const close = buildScaleCloseVoicing(rootPosChord, tensions, leadMidi, voiceCount);
+  const root = findByFunction(rootPosChord, 8);
+  if (close === null || root === undefined) return null;
+
+  const rootPitchClass = root.midi % 12;
+  const lead = close[close.length - 1];
+  const others = close.slice(0, -1).reverse();
+
+  // Because the bass is the root, the voicing needs exactly one voice that is the bass.
+  let bassIndex = -1;
+  for (let index = others.length - 1; index >= 0; index--) {
+    if (others[index].midi % 12 === rootPitchClass) {
+      bassIndex = index;
+      break;
+    }
+  }
+  if (bassIndex === -1) bassIndex = pickVoiceToRemoveForBass(others);
+  if (bassIndex === -1) return null;
+  others.splice(bassIndex, 1);
+
+  const ceiling = others.length > 0 ? others[others.length - 1].midi : lead.midi;
+  const bass: VoicedNote = { ...root, midi: highestMidiBelow(ceiling, rootPitchClass) };
+
+  let state = lowerBassFromThird({ lead, unmoved: others, stack: [bass] });
+  if (!isSpreadStateValid(spreadStateVoices(state))) return null;
+
+  let next = advanceSpreadState(state);
+  while (next !== null && isSpreadStateValid(spreadStateVoices(next))) {
+    state = next;
+    next = advanceSpreadState(state);
+  }
+  return spreadStateVoices(state);
 }

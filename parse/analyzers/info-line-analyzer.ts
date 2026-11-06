@@ -16,6 +16,7 @@ import {
   KeyRoot,
   KeyAccidental,
   Mode,
+  Meter,
   MeterType,
   ClefProperties,
   ClefType,
@@ -446,6 +447,12 @@ export function analyzeMeterInfo(expr: Info_line, analyzer: SemanticAnalyzer): I
     if (result) return result;
   }
 
+  // Check for a meter with a grouping: (2+3)/8, or 5/8 (3/8+2/8)
+  const grouped = parseGroupedMeter(values);
+  if (grouped) {
+    return { type: "meter", data: grouped };
+  }
+
   // Check for Binary expression (4/4)
   if (firstItem instanceof Binary) {
     const fractions = parseMeterBinary(firstItem);
@@ -561,6 +568,76 @@ function parseSpecialMeter(lexeme: string): InfoLineUnion | null {
   }
 
   return null;
+}
+
+/**
+ * Lists the lexemes of an expression in the order of the text, so that a grouping can be read again as the text that it came from.
+ * Because the parser applies the precedence of the operators to the text of a grouping, the shape of its tree does not follow the meter.
+ */
+function collectLexemes(expr: Expr | Token): string[] {
+  if (isToken(expr)) return [(expr as Token).lexeme];
+  if (expr instanceof Binary) return [...collectLexemes(expr.left), (expr.operator as Token).lexeme, ...collectLexemes(expr.right)];
+  if (expr instanceof Grouping) return collectLexemes(expr.expression);
+  return [];
+}
+
+/**
+ * Splits the lexemes of a grouping at its plus signs, so that (3+2) gives the terms [3] and [2].
+ */
+function splitTerms(lexemes: string[]): string[][] {
+  const terms: string[][] = [[]];
+  for (const lexeme of lexemes) {
+    if (lexeme === "+") terms.push([]);
+    else terms[terms.length - 1].push(lexeme);
+  }
+  return terms;
+}
+
+function isWholeNumber(lexeme: string): boolean {
+  return /^\d+$/.test(lexeme);
+}
+
+/**
+ * Reads a meter whose beats are grouped, in the two ways that it is written:
+ * (3+2)/8, the form of the ABC standard, and 5/8 (3/8+2/8), where the groups follow the meter.
+ * The value holds the whole meter, as for a meter without groups, and beat_division holds the groups.
+ *
+ * @returns The meter, or null when the text is not a meter with groups, or when the groups do not add up to the meter
+ */
+function parseGroupedMeter(values: Array<Expr | Token>): Meter | null {
+  const first = values[0];
+  if (!(first instanceof Binary) || !isToken(first.operator) || (first.operator as Token).lexeme !== "/") return null;
+
+  if (first.left instanceof Grouping) {
+    const denominator = extractNumber(first.right);
+    const terms = splitTerms(collectLexemes(first.left));
+    if (denominator === null || denominator <= 0 || terms.length < 2 || !terms.every((term) => term.length === 1 && isWholeNumber(term[0]))) return null;
+    const numerators = terms.map((term) => parseInt(term[0]));
+    const total = numerators.reduce((sum, n) => sum + n, 0);
+    return {
+      type: MeterType.Specified,
+      value: [{ numerator: total, denominator }],
+      beat_division: numerators.map((numerator) => ({ numerator, denominator })),
+    };
+  }
+
+  const second = values[1];
+  const numerator = extractNumber(first.left);
+  const denominator = extractNumber(first.right);
+  if (!(second instanceof Grouping) || numerator === null || denominator === null || denominator <= 0) return null;
+  const groups: IRational[] = [];
+  for (const term of splitTerms(collectLexemes(second))) {
+    // Each group is written as a fraction: three lexemes, a number, a slash and a number.
+    if (term.length !== 3 || !isWholeNumber(term[0]) || term[1] !== "/" || !isWholeNumber(term[2])) return null;
+    groups.push({ numerator: parseInt(term[0]), denominator: parseInt(term[2]) });
+  }
+  // Because a group that does not fit the meter would give a wrong beaming, the sum of the groups must be the meter: a/b sums to n/d.
+  const sum = groups.reduce(
+    (acc, g) => ({ numerator: acc.numerator * g.denominator + g.numerator * acc.denominator, denominator: acc.denominator * g.denominator }),
+    { numerator: 0, denominator: 1 }
+  );
+  if (sum.numerator * denominator !== numerator * sum.denominator) return null;
+  return { type: MeterType.Specified, value: [{ numerator, denominator }], beat_division: groups };
 }
 
 function parseMeterBinary(binary: Binary): IRational[] {

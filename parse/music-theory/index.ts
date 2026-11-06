@@ -113,6 +113,12 @@ export {
   substituteTensions,
   buildChordScale,
   buildClusterVoicing,
+  buildScaleCloseVoicing,
+  buildScaleSpreadVoicing,
+  lowerBassFromThird,
+  MAX_BASS_GAP,
+  swapChordForRootLead,
+  isMinorSecondAboveChordTone,
   // Phase 4: Diatonic Chord Derivation
   DIATONIC_QUALITIES,
   descendScale,
@@ -134,3 +140,5 @@ export { findPreviousChordInVoice, findNextChordInVoice } from "./voiceLeading";
 
 // Re-export chord position collector types
 export { ChordPositionCollector, ChordPosition, ChordCollectorConfig } from "../interpreter/ChordPositionCollector";
+
+export { BeamItem, beamJoins, groupStarts } from "./beaming";

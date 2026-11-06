@@ -7,6 +7,8 @@ import * as vscode from "vscode";
 import { ExtensionContext } from "vscode";
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from "vscode-languageclient/node";
 import { registerCommands } from "./extensionCommands";
+import { registerMenuView } from "./menu/menuView";
+import { registerModalMenu } from "./menu/modalMenu";
 import { registerRendererCommands, setLspClient } from "./renderer";
 import { registerSelectorCommands } from "./selectorCommands";
 import { registerTransformCommands } from "./transformCommands";
@@ -88,6 +90,10 @@ export async function activate(context: ExtensionContext) {
 
   // Register transform commands (depends on client being ready)
   registerTransformCommands(context, client, statusBarItem);
+
+  // Register the modal menu of the select and transform keys (depends on the selector and transform commands)
+  const menu = registerModalMenu(context, client, statusBarItem);
+  registerMenuView(context, menu);
 }
 
 export function deactivate(): Thenable<void> | undefined {

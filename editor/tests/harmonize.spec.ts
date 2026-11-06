@@ -14,6 +14,7 @@ import { buildChordTimeline } from "../src/transforms/chordTimeline";
 import {
   harmonize,
   harmonizeVoicing,
+  VoicingType,
   repairChordTies,
   TieRepairState,
   pitchToDiatonic,
@@ -665,7 +666,7 @@ describe("harmonize", () => {
 
   describe("harmonizeVoicing end-to-end", () => {
     // This helper mirrors production: harmonizeVoicing needs snapshotAccidentals: true
-    function harmonizeClose(input: string, noteIndex: number = -1): string {
+    function harmonizeClose(input: string, noteIndex: number = -1, voicing: VoicingType = "close", voiceCount: number = 4): string {
       const ctx = new ABCContext();
       const tokens = Scanner(input, ctx);
       const ast = parse(tokens, ctx);
@@ -685,7 +686,7 @@ describe("harmonize", () => {
       // Select specific note by index, or last note if -1
       const targetIndex = noteIndex === -1 ? notes.length - 1 : noteIndex;
       const sel: Selection = { root, cursors: [new Set([notes[targetIndex].id])] };
-      harmonizeVoicing(sel, "close", 4, null, ctx, snapshots);
+      harmonizeVoicing(sel, voicing, voiceCount, null, ctx, snapshots);
 
       return formatSelection(sel);
     }
@@ -720,9 +721,34 @@ describe("harmonize", () => {
       expect(result).to.equal('X:1\nK:C\n"Fm7b5"[_E,F,_A,_C]|\n');
     });
 
-    it('"C"c -> "C"[EGBc] (a lead that is the root C stays on top of the chord)', () => {
+    it('"C"c -> "C"[EGAc] (a lead that is the root C stays on top, and the chord becomes C6 because the B would sit a half step below the lead)', () => {
       const result = harmonizeClose('X:1\nK:C\n"C"c|\n');
-      expect(result).to.equal('X:1\nK:C\n"C"[EGBc]|\n');
+      expect(result).to.equal('X:1\nK:C\n"C"[EGAc]|\n');
+    });
+
+    it('"C"c in 4 voices with the chord scale close voicing -> "C"[EGAc] (the same sixth chord swap applies)', () => {
+      const result = harmonizeClose('X:1\nK:C\n"C"c|\n', -1, "scaleClose", 4);
+      expect(result).to.equal('X:1\nK:C\n"C"[EGAc]|\n');
+    });
+
+    it('"G#m"d in K:E with 6 voices doubles the third below the 11th, and not the lead an octave and more below', () => {
+      const result = harmonizeClose('X:1\nK:E\n"G#m"d|\n', -1, "scaleClose", 6);
+      expect(result).to.equal('X:1\nK:E\n"G#m"[B,CFGBd]|\n');
+    });
+
+    it('"G#m"d in K:E with 6 voices doubles the third below the 11th, and not the lead far below', () => {
+      const result = harmonizeClose('X:1\nK:E\n"G#m"d|\n', -1, "scaleClose", 6);
+      expect(result).to.equal('X:1\nK:E\n"G#m"[B,CFGBd]|\n');
+    });
+
+    it('"C"e with the chord scale spread voicing and 5 voices gives E A G B C from the top, with the closest intervals in the upper voices', () => {
+      const result = harmonizeClose('X:1\nK:C\n"C"e|\n', -1, "scaleSpread", 5);
+      expect(result).to.equal('X:1\nK:C\n"C"[C,B,GAe]|\n');
+    });
+
+    it('"C"e in 6 voices with the chord scale close voicing walks down the chord scale from the lead', () => {
+      const result = harmonizeClose('X:1\nK:C\n"C"e|\n', -1, "scaleClose", 6);
+      expect(result).to.equal('X:1\nK:C\n"C"[DGABce]|\n');
     });
 
     it('"Bb6"D -> "Bb6"[F,GB,D] (the sixth chord holds a G, not an A natural)', () => {
@@ -803,17 +829,17 @@ describe("harmonize", () => {
     });
 
     describe("rhythm and tie of the harmonized note", () => {
-      it("keeps a plain duration: \"Cm7\"_B3 -> \"Cm7\"[C_EG_B]3", () => {
+      it('keeps a plain duration: "Cm7"_B3 -> "Cm7"[C_EG_B]3', () => {
         const result = harmonizeClose('X:1\nK:C\n"Cm7"_B3|\n');
         expect(result).to.equal('X:1\nK:C\n"Cm7"[C_EG_B]3|\n');
       });
 
-      it("keeps a fractional duration: \"Cm7\"_B3/ -> \"Cm7\"[C_EG_B]3/", () => {
+      it('keeps a fractional duration: "Cm7"_B3/ -> "Cm7"[C_EG_B]3/', () => {
         const result = harmonizeClose('X:1\nK:C\n"Cm7"_B3/|\n');
         expect(result).to.equal('X:1\nK:C\n"Cm7"[C_EG_B]3/|\n');
       });
 
-      it("keeps a broken rhythm marker: \"Cm7\"_B2> -> \"Cm7\"[C_EG_B]2>", () => {
+      it('keeps a broken rhythm marker: "Cm7"_B2> -> "Cm7"[C_EG_B]2>', () => {
         const result = harmonizeClose('X:1\nK:C\n"Cm7"_B2>c|\n', 0);
         expect(result).to.equal('X:1\nK:C\n"Cm7"[C_EG_B]2>c|\n');
       });
@@ -824,7 +850,7 @@ describe("harmonize", () => {
         expect(result).to.equal('X:1\nK:C\n"C" [GBce]4- e4 |\n');
       });
 
-      it("keeps a tie: \"Cm7\"_B2- -> \"Cm7\"[C_EG_B]2-", () => {
+      it('keeps a tie: "Cm7"_B2- -> "Cm7"[C_EG_B]2-', () => {
         const result = harmonizeClose('X:1\nK:C\n"Cm7"_B2-|\n');
         expect(result).to.equal('X:1\nK:C\n"Cm7"[C_EG_B]2-|\n');
       });
