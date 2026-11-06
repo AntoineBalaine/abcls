@@ -236,10 +236,10 @@ describe("mergeKeymap", () => {
     const node = resolveKey(keymap.select, [], "q");
     assert.ok(node && node.type === "leaf");
     assert.deepStrictEqual(node.action.args, [{ count: { default: 1, multiplier: 1 } }]);
-    const octave = resolveKey(keymap.transform, [], "t");
+    const octave = resolveKey(keymap.transform, [], ">");
     assert.ok(octave && octave.type === "leaf");
     (octave.action.args[0] as { count: { default: number } }).count.default = 77;
-    const original = resolveKey(DEFAULT_KEYMAP.transform, [], "t");
+    const original = resolveKey(DEFAULT_KEYMAP.transform, [], ">");
     assert.ok(original && original.type === "leaf");
     assert.strictEqual((original.action.args[0] as { count: { default: number } }).count.default, 1);
   });
@@ -319,8 +319,11 @@ describe("the default keymap", () => {
     const next = resolveKey(DEFAULT_KEYMAP.select, [], ">");
     assert.ok(previous && previous.type === "leaf" && previous.action.kind === "selector" && previous.action.name === "selectPreviousNote");
     assert.ok(next && next.type === "leaf" && next.action.kind === "selector" && next.action.name === "selectNextNote");
-    assert.strictEqual(resolveKey(DEFAULT_KEYMAP.transform, [], "<"), undefined);
-    assert.strictEqual(resolveKey(DEFAULT_KEYMAP.transform, [], ">"), undefined);
+    // Because the transform menu keeps the same two keys for the octaves, they must not be the note moves.
+    const down = resolveKey(DEFAULT_KEYMAP.transform, [], "<");
+    const up = resolveKey(DEFAULT_KEYMAP.transform, [], ">");
+    assert.ok(down && down.type === "leaf" && down.action.kind === "transform" && down.action.name === "transpose");
+    assert.ok(up && up.type === "leaf" && up.action.kind === "transform" && up.action.name === "transpose");
   });
 
   it("selects the note, the measure and the system around the caret with i n, i m and i s", () => {

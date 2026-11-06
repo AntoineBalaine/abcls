@@ -35,7 +35,7 @@ describe("step", () => {
     const result = step(grouped, DEFAULT_KEYMAP, { notation: "c" }, true);
     assert.ok(result.effect.kind === "run" && result.effect.count === 5);
     assert.deepStrictEqual(result.state, { open: true, mode: "transform", path: [], count: "" });
-    const next = step(result.state, DEFAULT_KEYMAP, { notation: "t" }, true);
+    const next = step(result.state, DEFAULT_KEYMAP, { notation: ">" }, true);
     assert.ok(next.effect.kind === "run" && next.effect.leaf.action.name === "transpose");
     assert.strictEqual(step(next.state, DEFAULT_KEYMAP, { notation: "<esc>" }, true).state.open, false);
   });
@@ -131,10 +131,7 @@ function allKeySequences(group: Group, prefix: string[], out: Array<{ keys: stri
 }
 
 describe("step properties", () => {
-  const anyKey = fc.oneof(
-    fc.constantFrom("c", "g", "2", "5", "0", "<", ">", "<tab>", "<esc>", "<bs>", "<a-t>", "<c-up>", "t", "@"),
-    fc.string({ maxLength: 3 })
-  );
+  const anyKey = fc.oneof(fc.constantFrom("c", "g", "2", "5", "0", "<", ">", "<tab>", "<esc>", "<bs>", "]", "<c-up>", "t", "@"), fc.string({ maxLength: 3 }));
 
   it("never throws and always leaves a count of at most three digits", () => {
     fc.assert(

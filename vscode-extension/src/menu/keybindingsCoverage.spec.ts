@@ -32,7 +32,7 @@ describe("the menu keybindings of package.json", () => {
         const entry = contributed.find((candidate) => candidate.key === key && candidate.command === "abc.menu.key");
         assert.ok(entry, `${notation} (${key})`);
         assert.strictEqual(entry.args?.notation, notation);
-        assert.strictEqual(entry.when, MENU_KEY_WHEN);
+        assert.ok(entry.when.startsWith(MENU_KEY_WHEN), `${notation} (${key})`);
       }
     }
   });
@@ -63,5 +63,26 @@ describe("the menu keybindings of package.json", () => {
       assert.ok(!seen.has(id), id);
       seen.add(id);
     }
+  });
+});
+
+describe("the BÉPO keybindings of the digit row", () => {
+  const entries = buildMenuKeybindings();
+  const notationOf = (key: string): string | undefined => entries.find((entry) => entry.key === key && entry.when.endsWith("&& abc.menuBepo"))?.args?.notation;
+
+  it("reads the key that types * as * and the key that types 0 as 0, while the BÉPO layout is chosen", () => {
+    assert.strictEqual(notationOf("0"), "*");
+    assert.strictEqual(notationOf("shift+0"), "0");
+    assert.strictEqual(notationOf("shift+5"), "5");
+  });
+
+  it("keeps the US keybindings of the digit row away from the BÉPO layout", () => {
+    const us = entries.find((entry) => entry.key === "0" && entry.args?.notation === "0");
+    assert.ok(us && us.when.includes("!abc.menuBepo"));
+  });
+
+  it("leaves the keys outside the digit row for every layout", () => {
+    const comma = entries.find((entry) => entry.key === "shift+," && entry.args?.notation === "<");
+    assert.ok(comma && !comma.when.includes("abc.menuBepo"));
   });
 });

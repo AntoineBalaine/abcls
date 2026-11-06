@@ -13,7 +13,7 @@ import { mergeKeymap } from "../keymap/loadKeymap";
 import { Keymap, MenuMode } from "../keymap/types";
 import { validateKeymap } from "../keymap/validate";
 import { runLeaf } from "./dispatch";
-import { MENU_OPEN_CONTEXT, outsideSupersetWarning } from "./keybindingKeys";
+import { MENU_BEPO_CONTEXT, MENU_OPEN_CONTEXT, outsideSupersetWarning } from "./keybindingKeys";
 import { MenuState, closedState, openMenu, step } from "./menuState";
 
 /** What the engine tells the view after every change. */
@@ -123,6 +123,12 @@ export function reloadKeymap(ctx: MenuContext): void {
   notify(ctx);
 }
 
+/** Tells the keybindings whether the BÉPO layout is chosen, because the digit row of that layout sends other keys than the US one. */
+function updateBepoContext(): void {
+  const layout = vscode.workspace.getConfiguration("abc").get<string>("keyboardLayout", "qwerty");
+  void vscode.commands.executeCommand("setContext", MENU_BEPO_CONTEXT, layout === "bepo");
+}
+
 /**
  * Registers the menu commands and returns the context, so that the view can listen to it.
  * The commands are abc.menu.select, abc.menu.transform, abc.menu.close and abc.menu.key (with the argument { notation }).
@@ -146,6 +152,7 @@ export function registerModalMenu(context: vscode.ExtensionContext, client: Lang
   reloadKeymap(ctx);
   // Because the workbench keeps a context key across a restart of the extension host, the key is reset, so that no stale open menu survives.
   void vscode.commands.executeCommand("setContext", MENU_OPEN_CONTEXT, false);
+  updateBepoContext();
 
   context.subscriptions.push(
     vscode.commands.registerCommand("abc.menu.select", () => openMode(ctx, "select")),
@@ -165,6 +172,7 @@ export function registerModalMenu(context: vscode.ExtensionContext, client: Lang
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("abc.keymap")) reloadKeymap(ctx);
+      if (event.affectsConfiguration("abc.keyboardLayout")) updateBepoContext();
     })
   );
   return ctx;

@@ -32,7 +32,7 @@ While a menu is open, every key goes to it. These keys switch menus, close a men
 | `Backspace` | Remove the last digit of the count, or go back from a smaller menu, or close |
 | `Esc`       | Close the menu                                                               |
 
-Both menus take a count of up to three digits, and a leading zero is ignored. Type it before the command: `5 g c` in the transform menu is a close voicing with five voices, and the count of a voicing is its number of voices, 4, 5 or 6. In the select menu, `3 >` moves to the third note after the selection and `3 <` to the third note before it, stopping at the last note that exists. A digit that is itself bound in a menu is a command, not a count, so inside the `g` menu of the transform menu the digits `2`, `3` and `4` choose a drop voicing, and a count can only be typed before `g`. In the select menu, the digits `1` to `9` of the `p` menu select the note that many places from the top, and `t` is the same as `p 1`.
+Both menus take a count of up to three digits, and a leading zero is ignored. Type it before the command: `5 g c` in the transform menu is a close voicing with five voices, and the count of a voicing is its number of voices, 4, 5 or 6. In the select menu, `3 >` moves to the third note after the selection and `3 <` to the third note before it, stopping at the last note that exists. A digit that is itself bound in a menu is a command, not a count, so inside the `g` menu of the transform menu the digits `2`, `3` and `4` choose a drop voicing, and a count can only be typed before `g`. In the select menu, the digits `1` to `9` of the `f` menu select the note that many places from the top, and `t` is the same as `f 1`.
 
 A key written as `<a-t>` is Alt plus `t`, `<c-up>` is Ctrl plus the up arrow, and `<c-S-up>` is Ctrl plus Shift plus the up arrow. An uppercase letter is typed with Shift.
 
@@ -135,16 +135,16 @@ A key that ends with `›` in the tables opens a smaller menu, and the keys of t
 
 | Key          | What it does                                     | Category    |
 | ------------ | ------------------------------------------------ | ----------- |
-| `t`          | octave up                                        | pitch       |
-| `T`          | octave down                                      | pitch       |
+| `>`          | octave up                                        | pitch       |
+| `<`          | octave down                                      | pitch       |
 | `<c-up>`     | octave up                                        | pitch       |
 | `<c-down>`   | octave down                                      | pitch       |
 | `+`          | semitone up                                      | pitch       |
 | `-`          | semitone down                                    | pitch       |
 | `<c-S-up>`   | harmonize octave up                              | harmonize   |
 | `<c-S-down>` | harmonize octave down                            | harmonize   |
-| `<a-t>`      | harmonize octave up                              | harmonize   |
-| `<a-T>`      | harmonize octave down                            | harmonize   |
+| `]`          | harmonize octave up                              | harmonize   |
+| `[`          | harmonize octave down                            | harmonize   |
 | `p`          | harmonize up (diatonic)                          | harmonize   |
 | `P`          | harmonize down (diatonic)                        | harmonize   |
 | `*`          | multiply length                                  | rhythm      |

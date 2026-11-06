@@ -5,7 +5,8 @@
  * Nothing here imports vscode.
  */
 
-import { MENU_COMMAND_KEY, MENU_KEY_SUPERSET, MENU_KEY_WHEN, MENU_OPEN_CONTEXT, toVsCodeKeys } from "./keybindingKeys";
+import { LAYOUTS } from "../keyboard/layouts";
+import { MENU_BEPO_CONTEXT, MENU_COMMAND_KEY, MENU_KEY_SUPERSET, MENU_KEY_WHEN, MENU_OPEN_CONTEXT, toVsCodeKeys } from "./keybindingKeys";
 
 export interface KeybindingEntry {
   key: string;
@@ -23,6 +24,39 @@ export const ENTRY_WHEN = `editorLangId == abc && editorTextFocus && !${MENU_OPE
 export const SELECT_ENTRY_KEY = "k";
 export const TRANSFORM_ENTRY_KEY = "h";
 
+/** The positions of the digit row that hold the keys 1 to 0, in the rows of the layouts. */
+const DIGIT_ROW_POSITIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+/**
+ * The keybindings that the BÉPO layout needs on its digit row.
+ * Because VS Code names these keys by their physical place, the key that types * sends 0, and the key that types 0 sends Shift and 0,
+ * so the keybindings of the US layout would read the wrong notation. Each physical key gets the notations of its BÉPO layers instead,
+ * and they apply only while the setting abc.keyboardLayout is bepo.
+ */
+export function buildBepoKeybindings(): KeybindingEntry[] {
+  const entries: KeybindingEntry[] = [];
+  const when = `${MENU_KEY_WHEN} && ${MENU_BEPO_CONTEXT}`;
+  for (const position of DIGIT_ROW_POSITIONS) {
+    const physical = LAYOUTS.qwerty.rows[0][position][0];
+    const bepo = LAYOUTS.bepo.rows[0][position];
+    const layers: Array<[string, string]> = [
+      [physical, bepo[0]],
+      [`shift+${physical}`, bepo[1]],
+      [`alt+${physical}`, bepo[2]],
+    ];
+    for (const [key, notation] of layers) {
+      if (MENU_KEY_SUPERSET.includes(notation)) entries.push({ key, command: MENU_COMMAND_KEY, args: { notation }, when });
+    }
+  }
+  return entries;
+}
+
+/** The keys of the digit row, which the BÉPO keybindings take over while that layout is chosen. */
+const DIGIT_ROW_KEYS: string[] = DIGIT_ROW_POSITIONS.flatMap((position) => {
+  const physical = LAYOUTS.qwerty.rows[0][position][0];
+  return [physical, `shift+${physical}`];
+});
+
 export function buildMenuKeybindings(): KeybindingEntry[] {
   const entries: KeybindingEntry[] = [
     { key: SELECT_ENTRY_KEY, command: "abc.menu.select", when: ENTRY_WHEN },
@@ -30,9 +64,12 @@ export function buildMenuKeybindings(): KeybindingEntry[] {
   ];
   for (const notation of MENU_KEY_SUPERSET) {
     for (const key of toVsCodeKeys(notation)) {
-      entries.push({ key, command: MENU_COMMAND_KEY, args: { notation }, when: MENU_KEY_WHEN });
+      // Because the BÉPO keybindings own the digit row while that layout is chosen, the US ones step aside there.
+      const when = DIGIT_ROW_KEYS.includes(key) ? `${MENU_KEY_WHEN} && !${MENU_BEPO_CONTEXT}` : MENU_KEY_WHEN;
+      entries.push({ key, command: MENU_COMMAND_KEY, args: { notation }, when });
     }
   }
+  entries.push(...buildBepoKeybindings());
   return entries;
 }
 

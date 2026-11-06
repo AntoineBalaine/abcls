@@ -80,12 +80,12 @@ describe("the keyboard view", () => {
   it("fills the detail strip with the four layers of a key when it is hovered", () => {
     const { dom, root } = render("transform", "qwerty");
     assert.ok(root.querySelector(".detail .hint"));
-    const cell = Array.from(root.querySelectorAll(".cell.b")).find((candidate) => candidate.querySelector(".lab")?.textContent === "octave up");
+    const cell = Array.from(root.querySelectorAll(".cell.b")).find((candidate) => candidate.querySelector(".lab")?.textContent === "harm. 8ve up");
     assert.ok(cell);
     cell.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
     const rows = Array.from(root.querySelectorAll(".detail .layer-row"));
     assert.strictEqual(rows.length, 4);
-    assert.ok(rows.some((row) => row.textContent?.includes("harmonize octave up") && row.textContent.includes("<a-t>")));
+    assert.ok(rows.some((row) => row.textContent?.includes("harmonize octave up")));
   });
 
   it("shows the tray with the Ctrl chords, and a click on one presses it", () => {

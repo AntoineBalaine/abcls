@@ -15,16 +15,16 @@ function capWith(model: ReturnType<typeof buildKeyboardModel>, symbol: string, l
 }
 
 describe("buildKeyboardModel on QWERTY", () => {
-  it("resolves the four layers of the t key in the transform menu", () => {
+  it("resolves the octave keys of the transform menu on the shifted layers of the comma and the period", () => {
     const model = buildKeyboardModel(DEFAULT_KEYMAP, openMenu("transform"), QWERTY);
-    const cap = capWith(model, "t");
-    assert.ok(cap);
-    assert.strictEqual(cap.layers[0].row?.label, "octave up");
-    assert.strictEqual(cap.layers[1].row?.label, "octave down");
-    assert.strictEqual(cap.layers[2].notation, "<a-t>");
-    assert.strictEqual(cap.layers[2].row?.label, "harmonize octave up");
-    assert.strictEqual(cap.layers[3].notation, "<a-T>");
-    assert.strictEqual(cap.layers[3].row?.label, "harmonize octave down");
+    assert.strictEqual(capWith(model, ".")?.layers[1].row?.label, "octave up");
+    assert.strictEqual(capWith(model, ",")?.layers[1].row?.label, "octave down");
+  });
+
+  it("resolves the harmonize octave keys of the transform menu on the square brackets", () => {
+    const model = buildKeyboardModel(DEFAULT_KEYMAP, openMenu("transform"), QWERTY);
+    assert.strictEqual(capWith(model, "]")?.layers[0].row?.label, "harmonize octave up");
+    assert.strictEqual(capWith(model, "[")?.layers[0].row?.label, "harmonize octave down");
   });
 
   it("shows the keys of the select menu on their base layer", () => {
@@ -102,7 +102,10 @@ describe("buildKeyboardModel on BÉPO", () => {
 
 describe("dead keys and spellings", () => {
   it("lets a dead AltGr layer carry the Alt chord, because a keybinding fires on the physical key whatever it types", () => {
-    const model = buildKeyboardModel(DEFAULT_KEYMAP, openMenu("transform"), BEPO);
+    const { keymap } = mergeKeymap(DEFAULT_KEYMAP, {
+      transform: { "<a-t>": { label: "alt t", category: "pitch", action: { kind: "command", name: "abc.altT" } } },
+    });
+    const model = buildKeyboardModel(keymap, openMenu("transform"), BEPO);
     const t = capWith(model, "t");
     assert.ok(t);
     assert.strictEqual(t.layers[2].symbol, "ᵉ");

@@ -45,7 +45,7 @@ describe("buildViewModel", () => {
 
   it("uses the short name of a node, or its label when it has none", () => {
     const model = buildViewModel(DEFAULT_KEYMAP, openMenu("transform"));
-    assert.strictEqual(model.rows.find((row) => row.notation === "<a-t>")?.short, "harm. 8ve up");
+    assert.strictEqual(model.rows.find((row) => row.notation === "]")?.short, "harm. 8ve up");
     assert.strictEqual(model.rows.find((row) => row.notation === "+")?.short, "semitone up");
   });
 

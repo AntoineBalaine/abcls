@@ -160,6 +160,8 @@ export function outsideSupersetWarning(keymap: Keymap): string | undefined {
 
 export const MENU_COMMAND_KEY = "abc.menu.key";
 export const MENU_OPEN_CONTEXT = "abc.modeMenuOpen";
+/** The context key that is true while the setting abc.keyboardLayout is bepo. */
+export const MENU_BEPO_CONTEXT = "abc.menuBepo";
 
 /**
  * The when clause of the menu keys. Because the keys are swallowed only where the menu can be used, a focus in the terminal,

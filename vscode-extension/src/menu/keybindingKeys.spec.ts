@@ -85,7 +85,10 @@ describe("the superset of menu keys", () => {
   });
 
   it("warns, with the snippet, about a key outside the superset", () => {
-    const transform: Group = { ...DEFAULT_KEYMAP.transform, children: { ...DEFAULT_KEYMAP.transform.children, "<a-<>": DEFAULT_KEYMAP.transform.children.t } };
+    const transform: Group = {
+      ...DEFAULT_KEYMAP.transform,
+      children: { ...DEFAULT_KEYMAP.transform.children, "<a-<>": DEFAULT_KEYMAP.transform.children[">"] },
+    };
     const keymap = { select: DEFAULT_KEYMAP.select, transform };
     assert.deepStrictEqual(keysOutsideSuperset(keymap), ["<a-<>"]);
     const warning = outsideSupersetWarning(keymap);
